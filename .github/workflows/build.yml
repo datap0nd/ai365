@@ -74,36 +74,72 @@ jobs:
           if (-not (Test-Path $installedDll)) {
             throw "Installed add-in DLL was not found."
           }
-          [void][Reflection.Assembly]::LoadFrom($installedDll)
-          $addinKey = "HKCU:\Software\Microsoft\Office\Outlook\Addins\OutlookLocalAIChat.AddIn"
-          if ((Get-ItemProperty $addinKey).LoadBehavior -ne 3) {
-            throw "Outlook add-in registration is missing or disabled."
+          $assembly = [Reflection.Assembly]::LoadFrom($installedDll)
+          $instance = $assembly.CreateInstance("OutlookLocalAIChat.AddIn")
+          if ($null -eq $instance) {
+            throw "The installed add-in class could not be instantiated."
           }
           $clsid = "{0D6E56F9-BE2D-4B94-B5E4-4C2DB0FD13E7}"
-          $serverKey = "HKCU:\Software\Classes\CLSID\$clsid\InprocServer32"
-          $server = Get-ItemProperty $serverKey
-          Write-Host "COM class: $($server.Class)"
-          Write-Host "COM assembly: $($server.Assembly)"
-          Write-Host "COM runtime: $($server.RuntimeVersion)"
-          Write-Host "COM codebase: $($server.CodeBase)"
-          $codeBasePath = ([Uri]$server.CodeBase).LocalPath
-          Write-Host "COM local path: $codeBasePath"
-          if (-not (Test-Path $codeBasePath)) {
-            throw "The registered COM codebase does not resolve to the installed DLL."
+          foreach ($view in @(
+            [Microsoft.Win32.RegistryView]::Registry64,
+            [Microsoft.Win32.RegistryView]::Registry32
+          )) {
+            $root = [Microsoft.Win32.RegistryKey]::OpenBaseKey(
+              [Microsoft.Win32.RegistryHive]::CurrentUser,
+              $view)
+            try {
+              $addin = $root.OpenSubKey(
+                "Software\Microsoft\Office\Outlook\Addins\OutlookLocalAIChat.AddIn")
+              if ($null -eq $addin -or $addin.GetValue("LoadBehavior") -ne 3) {
+                throw "Outlook add-in registration is missing in $view."
+              }
+              $server = $root.OpenSubKey(
+                "Software\Classes\CLSID\$clsid\InprocServer32")
+              if ($null -eq $server) {
+                throw "COM registration is missing in $view."
+              }
+              $codeBase = [string]$server.GetValue("CodeBase")
+              $codeBasePath = ([Uri]$codeBase).LocalPath
+              if (-not (Test-Path $codeBasePath)) {
+                throw "The $view COM codebase does not resolve to the installed DLL."
+              }
+            }
+            finally {
+              if ($null -ne $addin) { $addin.Dispose() }
+              if ($null -ne $server) { $server.Dispose() }
+              $root.Dispose()
+            }
           }
-          $addin64 = New-Object -ComObject OutlookLocalAIChat.AddIn
-          if ($null -eq $addin64) {
-            throw "64-bit COM activation failed."
+
+          # GitHub-hosted runners execute as a non-interactive elevated service.
+          # Windows intentionally ignores per-user COM classes in that context.
+          # Register the installed DLL temporarily per-machine to exercise the
+          # same managed class factory in both bitnesses, then remove it.
+          $regasm64 = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\RegAsm.exe"
+          $regasm32 = "$env:WINDIR\Microsoft.NET\Framework\v4.0.30319\RegAsm.exe"
+          try {
+            & $regasm64 $installedDll /codebase
+            if ($LASTEXITCODE -ne 0) { throw "64-bit RegAsm failed." }
+            $addin64 = New-Object -ComObject OutlookLocalAIChat.AddIn
+            if ($null -eq $addin64) { throw "64-bit COM activation failed." }
+            [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($addin64)
           }
-          [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($addin64)
-          $powershell32 = "$env:WINDIR\SysWOW64\WindowsPowerShell\v1.0\powershell.exe"
-          & $powershell32 -NoProfile -Command @'
+          finally {
+            & $regasm64 $installedDll /unregister
+          }
+          try {
+            & $regasm32 $installedDll /codebase
+            if ($LASTEXITCODE -ne 0) { throw "32-bit RegAsm failed." }
+            $powershell32 = "$env:WINDIR\SysWOW64\WindowsPowerShell\v1.0\powershell.exe"
+            & $powershell32 -NoProfile -Command @'
           $addin32 = New-Object -ComObject OutlookLocalAIChat.AddIn
           if ($null -eq $addin32) { throw "32-bit COM activation failed." }
           [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($addin32)
           '@
-          if ($LASTEXITCODE -ne 0) {
-            throw "32-bit COM activation failed."
+            if ($LASTEXITCODE -ne 0) { throw "32-bit COM activation failed." }
+          }
+          finally {
+            & $regasm32 $installedDll /unregister
           }
 
       - name: Upload installer artifact
