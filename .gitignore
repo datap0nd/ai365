@@ -5,6 +5,7 @@ artifacts/
 *.user
 *.suo
 *.nupkg
+*.snk
 TestResults/
 .DS_Store
 .impeccable/screenshots/

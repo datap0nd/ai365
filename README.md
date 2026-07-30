@@ -122,10 +122,15 @@ Requirements:
 Build the assembly and tests:
 
 ```powershell
+powershell -ExecutionPolicy Bypass -File scripts\Restore-StrongNameKey.ps1
 msbuild OutlookLocalAIChat.sln /m /p:Configuration=Release
 tests\GuardrailTests\bin\Release\GuardrailTests.exe
 powershell -ExecutionPolicy Bypass -File scripts\Test-Guardrails.ps1
 ```
+
+The repository stores the stable strong-name key as Base64 so local and CI builds
+use the same COM identity. A strong name is an assembly identity mechanism, not a
+trusted publisher signature.
 
 Build the installer:
 

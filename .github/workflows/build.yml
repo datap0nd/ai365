@@ -23,6 +23,10 @@ jobs:
       - name: Add MSBuild
         uses: microsoft/setup-msbuild@v2
 
+      - name: Restore stable COM strong-name key
+        shell: pwsh
+        run: ./scripts/Restore-StrongNameKey.ps1
+
       - name: Build solution
         run: msbuild OutlookLocalAIChat.sln /m /p:Configuration=Release
 
@@ -42,6 +46,9 @@ jobs:
           $registration = Get-Content managed-com.reg -Raw
           if (-not $registration.Contains("OutlookLocalAIChat.AddIn")) {
             throw "RegAsm did not export the add-in COM class."
+          }
+          if (-not $registration.Contains("PublicKeyToken=f51b005bfa6d7cc3")) {
+            throw "The add-in strong-name identity changed."
           }
           if ($registration.Contains("OutlookLocalAIChat.UI.ChatWindow")) {
             throw "A non-add-in class was exported to COM."

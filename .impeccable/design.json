@@ -1,0 +1,281 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-30T09:40:17Z",
+  "title": "Design System: Outlook Local AI Chat",
+  "extensions": {
+    "colorMeta": {
+      "action-blue": {
+        "role": "primary",
+        "displayName": "Action Blue",
+        "canonical": "#005fb8",
+        "tonalRamp": [
+          "#00172d",
+          "#002f5c",
+          "#00478a",
+          "#005fb8",
+          "#337fc6",
+          "#66a0d4",
+          "#99bfe2",
+          "#e5f1fb"
+        ]
+      },
+      "window": {
+        "role": "neutral",
+        "displayName": "Windows Canvas",
+        "canonical": "Canvas"
+      },
+      "window-text": {
+        "role": "neutral",
+        "displayName": "Windows Canvas Text",
+        "canonical": "CanvasText"
+      },
+      "control": {
+        "role": "neutral",
+        "displayName": "Windows Control Surface",
+        "canonical": "ButtonFace"
+      },
+      "control-text": {
+        "role": "neutral",
+        "displayName": "Windows Control Text",
+        "canonical": "ButtonText"
+      },
+      "highlight": {
+        "role": "primary",
+        "displayName": "Windows Highlight",
+        "canonical": "Highlight"
+      },
+      "highlight-text": {
+        "role": "neutral",
+        "displayName": "Windows Highlight Text",
+        "canonical": "HighlightText"
+      },
+      "secondary-text": {
+        "role": "neutral",
+        "displayName": "Secondary Text",
+        "canonical": "#505050",
+        "tonalRamp": [
+          "#262626",
+          "#3a3a3a",
+          "#505050",
+          "#666666",
+          "#808080",
+          "#a0a0a0",
+          "#c8c8c8",
+          "#eeeeee"
+        ]
+      },
+      "muted-surface": {
+        "role": "neutral",
+        "displayName": "Cool Utility Surface",
+        "canonical": "#f4f6f8",
+        "tonalRamp": [
+          "#24282c",
+          "#42484f",
+          "#626a73",
+          "#858e98",
+          "#aab2ba",
+          "#cdd3d9",
+          "#e5e9ed",
+          "#f4f6f8"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Windows Control Border",
+        "canonical": "ButtonBorder"
+      },
+      "error": {
+        "role": "primary",
+        "displayName": "Recoverable Error",
+        "canonical": "#a32626",
+        "tonalRamp": [
+          "#2b0909",
+          "#531313",
+          "#7b1c1c",
+          "#a32626",
+          "#b94e4e",
+          "#ce7979",
+          "#e3aaaa",
+          "#f8e4e4"
+        ]
+      },
+      "high-contrast-secondary": {
+        "role": "neutral",
+        "displayName": "Windows High-Contrast Secondary Text",
+        "canonical": "GrayText"
+      },
+      "high-contrast-error": {
+        "role": "primary",
+        "displayName": "Windows High-Contrast Error",
+        "canonical": "LinkText"
+      }
+    },
+    "typographyMeta": {
+      "title": {
+        "displayName": "Selected Message Title",
+        "purpose": "The selected email subject, inherited from the Windows message-box font and enlarged relative to the user's system setting."
+      },
+      "body": {
+        "displayName": "Utility Body",
+        "purpose": "Transcript, composer, settings fields, and other primary reading text."
+      },
+      "label": {
+        "displayName": "Utility Label",
+        "purpose": "Speaker names, settings labels, and the primary action."
+      },
+      "hint": {
+        "displayName": "Guidance and Status",
+        "purpose": "Metadata, disclosures, keyboard hints, and operational status without falling below the implementation's 8pt floor."
+      }
+    },
+    "shadows": [],
+    "motion": []
+  },
+  "components": [
+    {
+      "name": "Primary AI Action",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Starts the bounded AI request and changes to Cancel while that request is active.",
+      "html": "<button class=\"ds-btn-primary\" type=\"button\">Send to AI</button>",
+      "css": ".ds-btn-primary { min-width: 104px; height: 80px; border: 1px solid #005fb8; border-radius: 0; background: #005fb8; color: HighlightText; padding: 0 16px; font: 700 9pt system-ui, sans-serif; } .ds-btn-primary:hover { background: #004f99; } .ds-btn-primary:active { background: #003f7a; } .ds-btn-primary:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; } .ds-btn-primary:disabled { opacity: 0.55; } @media (forced-colors: active) { .ds-btn-primary { border-color: ButtonText; background: Highlight; color: HighlightText; forced-color-adjust: auto; } }"
+    },
+    {
+      "name": "Draft Action",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Opens an unsent Outlook draft after a complete assistant response exists.",
+      "html": "<button class=\"ds-btn-draft\" type=\"button\">Open reply draft</button>",
+      "css": ".ds-btn-draft { min-width: 132px; height: 34px; border: 1px solid ButtonBorder; border-radius: 0; background: Canvas; color: CanvasText; padding: 0 14px; font: 400 10pt system-ui, sans-serif; } .ds-btn-draft:hover { background: ButtonFace; } .ds-btn-draft:active { filter: brightness(0.96); } .ds-btn-draft:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; } .ds-btn-draft:disabled { color: GrayText; opacity: 0.7; } @media (forced-colors: active) { .ds-btn-draft { forced-color-adjust: auto; } }"
+    },
+    {
+      "name": "Toolbar Link Action",
+      "kind": "button",
+      "refersTo": "button-link",
+      "description": "Compact borderless utility action for refreshing the selected email or opening settings.",
+      "html": "<button class=\"ds-btn-link\" type=\"button\">Refresh email</button>",
+      "css": ".ds-btn-link { height: 28px; border: 0; border-radius: 0; background: Canvas; color: #005fb8; padding: 0 4px; font: 400 10pt system-ui, sans-serif; } .ds-btn-link:hover { text-decoration: underline; } .ds-btn-link:active { color: #003f7a; } .ds-btn-link:focus-visible { outline: 2px solid Highlight; outline-offset: 1px; } .ds-btn-link:disabled { color: GrayText; text-decoration: none; } @media (forced-colors: active) { .ds-btn-link { color: LinkText; forced-color-adjust: auto; } }"
+    },
+    {
+      "name": "Composer",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Multiline bounded prompt field with persistent keyboard guidance.",
+      "html": "<div class=\"ds-composer\"><textarea aria-label=\"Message to AI\"></textarea><span>Ask about this email or request draft text. Ctrl+Enter sends.</span></div>",
+      "css": ".ds-composer { display: grid; gap: 4px; width: 388px; color: CanvasText; font-family: system-ui, sans-serif; } .ds-composer textarea { min-height: 72px; resize: vertical; border: 1px solid ButtonBorder; border-radius: 0; background: Canvas; color: CanvasText; padding: 4px 6px; font: 400 10pt system-ui, sans-serif; } .ds-composer textarea:hover { border-color: CanvasText; } .ds-composer textarea:focus-visible { outline: 2px solid Highlight; outline-offset: 1px; } .ds-composer textarea:disabled { background: ButtonFace; color: GrayText; } .ds-composer span { color: #505050; font: 400 8pt system-ui, sans-serif; } @media (forced-colors: active) { .ds-composer span { color: GrayText; } }"
+    },
+    {
+      "name": "Selected Message Strip",
+      "kind": "card",
+      "description": "Anchors the conversation to one visible email subject and sender without card-like elevation.",
+      "html": "<section class=\"ds-message-strip\" aria-label=\"Selected email\"><strong>Quarterly planning follow-up</strong><span>From Alex Morgan &lt;alex@example.test&gt;</span></section>",
+      "css": ".ds-message-strip { display: grid; align-content: center; min-height: 52px; gap: 2px; border: 0; border-radius: 0; background: #f4f6f8; color: CanvasText; padding: 14px 18px 10px; font-family: system-ui, sans-serif; } .ds-message-strip strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12pt; line-height: 1.2; } .ds-message-strip span { overflow: hidden; color: #505050; text-overflow: ellipsis; white-space: nowrap; font-size: 9pt; } .ds-message-strip:focus-within { outline: 2px solid Highlight; outline-offset: -2px; } @media (forced-colors: active) { .ds-message-strip { background: ButtonFace; } .ds-message-strip span { color: GrayText; } }"
+    },
+    {
+      "name": "Plain-Text Transcript",
+      "kind": "custom",
+      "description": "Read-only conversation document with speaker labels and no chat bubbles, links, or executable output.",
+      "html": "<div class=\"ds-transcript\" role=\"log\" aria-label=\"AI chat conversation\"><p class=\"ds-system\">Selected email loaded. Ask a question or request draft text.</p><p><strong class=\"ds-you\">You</strong><br>Summarize the decision and draft a concise reply.</p><p><strong>Assistant</strong><br>Friday works for me. Please send the revised invitation.</p></div>",
+      "css": ".ds-transcript { min-height: 220px; overflow-y: auto; border: 0; border-radius: 0; background: Canvas; color: CanvasText; padding: 8px 18px; font: 400 10pt/1.4 system-ui, sans-serif; } .ds-transcript p { margin: 0 0 18px; } .ds-transcript strong { font-size: 9pt; } .ds-transcript .ds-you { color: #005fb8; } .ds-transcript .ds-system { color: #505050; font-size: 9pt; font-style: italic; } .ds-transcript:focus-visible { outline: 2px solid Highlight; outline-offset: -2px; } @media (forced-colors: active) { .ds-transcript .ds-you { color: LinkText; } .ds-transcript .ds-system { color: GrayText; } }"
+    },
+    {
+      "name": "Draft Disclosure",
+      "kind": "custom",
+      "description": "Persistent disclosure that defines exactly which assistant text enters a draft.",
+      "html": "<p class=\"ds-draft-disclosure\">Drafts use the entire latest assistant response.</p>",
+      "css": ".ds-draft-disclosure { margin: 0; background: Canvas; color: #505050; padding: 3px 18px 0; font: 400 8pt/1.3 system-ui, sans-serif; } .ds-draft-disclosure:focus-visible { outline: 2px solid Highlight; outline-offset: -2px; } @media (forced-colors: active) { .ds-draft-disclosure { color: GrayText; } }"
+    },
+    {
+      "name": "Status Band",
+      "kind": "custom",
+      "description": "Plain-language operational status that confirms scope, busy state, recovery, or unsent-draft outcome.",
+      "html": "<div class=\"ds-status\" role=\"status\">Response received. Draft actions require your click.</div>",
+      "css": ".ds-status { min-height: 38px; display: flex; align-items: center; border: 0; border-radius: 0; background: #f4f6f8; color: #505050; padding: 8px 18px; font: 400 9pt/1.3 system-ui, sans-serif; } .ds-status[data-state=\"error\"] { color: #a32626; } .ds-status:focus-visible { outline: 2px solid Highlight; outline-offset: -2px; } @media (forced-colors: active) { .ds-status { background: ButtonFace; color: GrayText; } .ds-status[data-state=\"error\"] { color: LinkText; } }"
+    },
+    {
+      "name": "Settings Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Stacked native field with a visible label and accessible description.",
+      "html": "<label class=\"ds-settings-field\"><strong>Endpoint or base URL</strong><input type=\"url\" aria-describedby=\"ds-endpoint-help\"><span id=\"ds-endpoint-help\">HTTPS endpoint or loopback HTTP base URL.</span></label>",
+      "css": ".ds-settings-field { display: grid; gap: 4px; width: 460px; color: ButtonText; font-family: system-ui, sans-serif; } .ds-settings-field strong { font: 700 9pt system-ui, sans-serif; } .ds-settings-field input { height: 34px; border: 1px solid ButtonBorder; border-radius: 0; background: Canvas; color: CanvasText; padding: 4px 6px; font: 400 10pt system-ui, sans-serif; } .ds-settings-field input:hover { border-color: CanvasText; } .ds-settings-field input:focus-visible { outline: 2px solid Highlight; outline-offset: 1px; } .ds-settings-field span { color: #505050; font: 400 8pt system-ui, sans-serif; } @media (forced-colors: active) { .ds-settings-field span { color: GrayText; } }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Guardrailed Desk Tool",
+    "overview": "Outlook Local AI Chat is a compact native Windows productivity utility. It should feel adjacent to classic Outlook, not like an AI showcase: familiar system typography, quiet white and cool-gray surfaces, square fields, restrained density, and blue reserved for direct actions.\n\nThe screen tells one ordered story: confirm which email is loaded, discuss that bounded plain-text snapshot, then deliberately open an unsent draft in Outlook. The visual hierarchy must keep this read/chat/draft-only boundary obvious. Model output is conversation content, never an executable command, and no control may imply that the utility can send mail.",
+    "keyCharacteristics": [
+      "Native Windows behavior and system settings take priority over decorative identity.",
+      "One selected-message strip anchors the current scope.",
+      "A large plain-text transcript carries the work without chat bubbles or HTML treatment.",
+      "The composer and AI action are visually bounded together.",
+      "Draft actions are separate, secondary, and enabled only when usable.",
+      "Disclosure and status text state what data is used and what action occurred."
+    ],
+    "rules": [
+      {
+        "name": "The System Color Rule",
+        "body": "System canvas, text, control, highlight, and border roles outrank fixed palette values whenever Windows high contrast is active.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Accent Rule",
+        "body": "Blue marks direct actions and the user's transcript label. It is not decoration and must not spread into background panels or assistant content.",
+        "section": "colors"
+      },
+      {
+        "name": "The Text-Plus-State Rule",
+        "body": "Color never carries status alone. Every busy, error, disabled, disclosure, and draft state also has explicit text or native control state.",
+        "section": "colors"
+      },
+      {
+        "name": "The System Font Rule",
+        "body": "Use SystemFonts.MessageBoxFont and relative size adjustments. Do not bundle a custom font or pin typography in a way that defeats Windows text scaling.",
+        "section": "typography"
+      },
+      {
+        "name": "The Plain-Text Rule",
+        "body": "Transcript content is plain text only. Do not render model output as HTML, rich cards, markdown actions, links, or executable affordances.",
+        "section": "typography"
+      },
+      {
+        "name": "The Ordered Boundary Rule",
+        "body": "Keep message identity, conversation, composer, draft controls, and status in that order. This sequence is the interface's security explanation.",
+        "section": "layout"
+      },
+      {
+        "name": "The Transcript-Breathes Rule",
+        "body": "Fixed utility bands yield height to the transcript. Never shrink the conversation into a decorative card or make drafting controls compete with it.",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat-Utility Rule",
+        "body": "App content is flat by default. Use tonal bands and native borders to separate regions, not card shadows or floating panels.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Native Rectangle Rule",
+        "body": "Keep controls square and familiar. Rounded chat bubbles, pill buttons, and oversized AI ornaments contradict the product's utility character.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "Do keep the selected-message identity visible before conversation content.",
+      "Do state that only the selected email is available to chat.",
+      "Do keep draft controls secondary, explicit, and disabled until a valid assistant response exists.",
+      "Do disclose that drafting uses the entire latest assistant response.",
+      "Do say \"unsent draft\" and \"for your review\" in successful draft status text.",
+      "Do inherit Windows system fonts, focus behavior, text scaling, and high-contrast colors.",
+      "Do preserve keyboard operation, including Ctrl+Enter to send, Enter to save settings, and Escape to cancel settings.",
+      "Do restore user input after request failure, timeout, cancellation, or changed-message discard when applicable."
+    ],
+    "donts": [
+      "Don't add a Send Mail control, auto-send behavior, scheduling, source-message mutation, or language that implies any of those capabilities.",
+      "Don't expose model tool calls, commands, HTML, clickable output, or rich interactive response cards.",
+      "Don't hide which email is loaded or allow a response for a changed email to enter the active conversation.",
+      "Don't rely on fixed colors when Windows high contrast is active.",
+      "Don't replace native focus and disabled states with color-only signals.",
+      "Don't use chat bubbles, avatars, glowing AI motifs, gradients, rounded cards, or ornamental motion."
+    ]
+  }
+}

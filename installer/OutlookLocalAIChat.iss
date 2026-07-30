@@ -6,7 +6,7 @@
 #define AppProgId "OutlookLocalAIChat.AddIn"
 #define AppClsid "{{0D6E56F9-BE2D-4B94-B5E4-4C2DB0FD13E7}"
 #define ManagedCategory "{{62C8FE65-4EBB-45E7-B440-6E39B2CDBF29}"
-#define AssemblyName "OutlookLocalAIChat, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"
+#define AssemblyName "OutlookLocalAIChat, Version=1.0.0.0, Culture=neutral, PublicKeyToken=f51b005bfa6d7cc3"
 
 [Setup]
 AppId={{6BA7BCA9-F17E-4B50-8734-242063264160}
