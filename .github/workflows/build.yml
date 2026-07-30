@@ -33,6 +33,14 @@ jobs:
         shell: pwsh
         run: ./scripts/Test-Guardrails.ps1
 
+      - name: Inspect .NET COM registration contract
+        shell: powershell
+        run: |
+          $assembly = Resolve-Path "src\OutlookLocalAIChat\bin\Release\OutlookLocalAIChat.dll"
+          & "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\RegAsm.exe" `
+            $assembly /codebase /regfile:managed-com.reg
+          Get-Content managed-com.reg
+
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup --no-progress --yes
