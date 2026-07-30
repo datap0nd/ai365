@@ -51,13 +51,4 @@ namespace OutlookLocalAIChat.Interop
         [return: MarshalAs(UnmanagedType.BStr)]
         string GetCustomUI([MarshalAs(UnmanagedType.BStr)] string ribbonId);
     }
-
-    [ComVisible(true)]
-    [Guid("AA71351D-3B67-4246-9B90-BC1D7F03C68D")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIDispatch)]
-    public interface IAddInCallbacks
-    {
-        [DispId(1)]
-        void OnOpenChat([MarshalAs(UnmanagedType.IDispatch)] object control);
-    }
 }

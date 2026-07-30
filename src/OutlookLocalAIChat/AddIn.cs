@@ -10,12 +10,10 @@ namespace OutlookLocalAIChat
     [ComVisible(true)]
     [Guid("0D6E56F9-BE2D-4B94-B5E4-4C2DB0FD13E7")]
     [ProgId("OutlookLocalAIChat.AddIn")]
-    [ClassInterface(ClassInterfaceType.None)]
-    [ComDefaultInterface(typeof(IAddInCallbacks))]
+    [ClassInterface(ClassInterfaceType.AutoDispatch)]
     public sealed class AddIn :
         IDTExtensibility2,
-        IRibbonExtensibility,
-        IAddInCallbacks
+        IRibbonExtensibility
     {
         private object _outlookApplication;
         private ChatWindow _chatWindow;
