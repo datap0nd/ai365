@@ -27,11 +27,45 @@ namespace OutlookLocalAIChat.UI
 {
     public sealed class ChatWindow : Form
     {
-        private static readonly Color OutlookBlue = Color.FromArgb(0, 95, 184);
-        private static readonly Color TextPrimary = Color.FromArgb(32, 31, 30);
-        private static readonly Color TextSecondary = Color.FromArgb(80, 80, 80);
-        private static readonly Color Border = Color.FromArgb(210, 210, 210);
-        private static readonly Color SurfaceMuted = Color.FromArgb(244, 246, 248);
+        private static Color OutlookBlue
+        {
+            get
+            {
+                return SystemInformation.HighContrast
+                    ? SystemColors.Highlight
+                    : Color.FromArgb(0, 95, 184);
+            }
+        }
+
+        private static Color TextPrimary
+        {
+            get { return SystemColors.WindowText; }
+        }
+
+        private static Color TextSecondary
+        {
+            get
+            {
+                return SystemInformation.HighContrast
+                    ? SystemColors.GrayText
+                    : Color.FromArgb(80, 80, 80);
+            }
+        }
+
+        private static Color Border
+        {
+            get { return SystemColors.ControlDark; }
+        }
+
+        private static Color SurfaceMuted
+        {
+            get
+            {
+                return SystemInformation.HighContrast
+                    ? SystemColors.Control
+                    : Color.FromArgb(244, 246, 248);
+            }
+        }
 
         private readonly object _outlookApplication;
         private readonly SettingsStore _settingsStore = new SettingsStore();
@@ -46,6 +80,8 @@ namespace OutlookLocalAIChat.UI
         private readonly Button _send = new Button();
         private readonly Button _replyDraft = new Button();
         private readonly Button _newDraft = new Button();
+        private Button _refresh;
+        private Button _settingsButton;
 
         private AppSettings _settings;
         private MessageSnapshot _message;
@@ -63,10 +99,10 @@ namespace OutlookLocalAIChat.UI
             StartPosition = FormStartPosition.CenterScreen;
             ClientSize = new Size(540, 720);
             MinimumSize = new Size(440, 580);
-            BackColor = Color.White;
+            BackColor = SystemColors.Window;
             ForeColor = TextPrimary;
-            Font = new Font("Segoe UI", 9F, FontStyle.Regular);
-            AutoScaleMode = AutoScaleMode.Dpi;
+            Font = SystemFonts.MessageBoxFont;
+            AutoScaleMode = AutoScaleMode.Font;
             ShowIcon = false;
             KeyPreview = true;
             KeyDown += WindowKeyDown;
@@ -78,6 +114,15 @@ namespace OutlookLocalAIChat.UI
 
         public void RefreshCurrentMessage()
         {
+            if (_busy)
+            {
+                _requestCancellation?.Cancel();
+                SetStatus(
+                    "Cancelling the current request. Refresh the email again when it stops.",
+                    false);
+                return;
+            }
+
             try
             {
                 var nextMessage =
@@ -134,7 +179,7 @@ namespace OutlookLocalAIChat.UI
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 118));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
 
             root.Controls.Add(BuildHeader(), 0, 0);
@@ -159,15 +204,18 @@ namespace OutlookLocalAIChat.UI
             _messageTitle.Dock = DockStyle.Top;
             _messageTitle.Height = 26;
             _messageTitle.Font = new Font(
-                "Segoe UI Semibold",
-                12F,
+                Font.FontFamily,
+                Font.Size + 3F,
                 FontStyle.Bold);
             _messageTitle.ForeColor = TextPrimary;
 
             _messageMeta.AutoEllipsis = true;
             _messageMeta.Dock = DockStyle.Top;
             _messageMeta.Height = 22;
-            _messageMeta.Font = new Font("Segoe UI", 9F, FontStyle.Regular);
+            _messageMeta.Font = new Font(
+                Font.FontFamily,
+                Font.Size,
+                FontStyle.Regular);
             _messageMeta.ForeColor = TextSecondary;
 
             header.Controls.Add(_messageMeta);
@@ -183,16 +231,16 @@ namespace OutlookLocalAIChat.UI
                 FlowDirection = FlowDirection.LeftToRight,
                 WrapContents = false,
                 Padding = new Padding(12, 4, 12, 2),
-                BackColor = Color.White
+                BackColor = SystemColors.Window
             };
 
-            var refresh = MakeLinkButton("Refresh email", 104);
-            refresh.Click += (sender, args) => RefreshCurrentMessage();
-            var settings = MakeLinkButton("Settings", 82);
-            settings.Click += SettingsClick;
+            _refresh = MakeLinkButton("Refresh email", 104);
+            _refresh.Click += (sender, args) => RefreshCurrentMessage();
+            _settingsButton = MakeLinkButton("Settings", 82);
+            _settingsButton.Click += SettingsClick;
 
-            toolbar.Controls.Add(refresh);
-            toolbar.Controls.Add(settings);
+            toolbar.Controls.Add(_refresh);
+            toolbar.Controls.Add(_settingsButton);
             return toolbar;
         }
 
@@ -200,20 +248,26 @@ namespace OutlookLocalAIChat.UI
         {
             _transcript.Dock = DockStyle.Fill;
             _transcript.BorderStyle = BorderStyle.None;
-            _transcript.BackColor = Color.White;
+            _transcript.BackColor = SystemColors.Window;
             _transcript.ForeColor = TextPrimary;
-            _transcript.Font = new Font("Segoe UI", 10F, FontStyle.Regular);
+            _transcript.Font = new Font(
+                Font.FontFamily,
+                Font.Size + 1F,
+                FontStyle.Regular);
             _transcript.ReadOnly = true;
             _transcript.DetectUrls = false;
             _transcript.HideSelection = false;
             _transcript.ScrollBars = RichTextBoxScrollBars.Vertical;
             _transcript.Margin = new Padding(18, 8, 18, 8);
+            _transcript.AccessibleName = "AI chat conversation";
+            _transcript.AccessibleDescription =
+                "Plain-text conversation about the selected Outlook email.";
 
             var frame = new Panel
             {
                 Dock = DockStyle.Fill,
                 Padding = new Padding(18, 8, 18, 8),
-                BackColor = Color.White
+                BackColor = SystemColors.Window
             };
             frame.Controls.Add(_transcript);
             return frame;
@@ -238,9 +292,15 @@ namespace OutlookLocalAIChat.UI
             _composer.Multiline = true;
             _composer.AcceptsReturn = true;
             _composer.ScrollBars = ScrollBars.Vertical;
-            _composer.Font = new Font("Segoe UI", 10F, FontStyle.Regular);
+            _composer.Font = new Font(
+                Font.FontFamily,
+                Font.Size + 1F,
+                FontStyle.Regular);
             _composer.BorderStyle = BorderStyle.FixedSingle;
             _composer.MaxLength = TextBoundary.MaxUserPromptCharacters;
+            _composer.AccessibleName = "Message to AI";
+            _composer.AccessibleDescription =
+                "Ask about the selected email or request draft text. Control Enter sends.";
 
             ConfigurePrimaryButton(_send, "Send to AI");
             _send.Dock = DockStyle.Fill;
@@ -251,8 +311,13 @@ namespace OutlookLocalAIChat.UI
             {
                 AutoSize = true,
                 ForeColor = TextSecondary,
-                Font = new Font("Segoe UI", 8F, FontStyle.Regular),
-                Text = "Ctrl+Enter sends. Conversation stays in memory.",
+                Font = new Font(
+                    Font.FontFamily,
+                    Math.Max(8F, Font.Size - 1F),
+                    FontStyle.Regular),
+                Text =
+                    "Ask about this email or request draft text. " +
+                    "Ctrl+Enter sends.",
                 Padding = new Padding(0, 3, 0, 0)
             };
 
@@ -265,13 +330,36 @@ namespace OutlookLocalAIChat.UI
 
         private Control BuildDraftActions()
         {
+            var panel = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 2,
+                Padding = new Padding(18, 3, 18, 3),
+                BackColor = SystemColors.Window
+            };
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
+            panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+            var disclosure = new Label
+            {
+                Dock = DockStyle.Fill,
+                ForeColor = TextSecondary,
+                Font = new Font(
+                    Font.FontFamily,
+                    Math.Max(8F, Font.Size - 1F),
+                    FontStyle.Regular),
+                Text = "Drafts use the entire latest assistant response.",
+                AccessibleName = "Draft content disclosure"
+            };
+
             var actions = new FlowLayoutPanel
             {
                 Dock = DockStyle.Fill,
                 FlowDirection = FlowDirection.RightToLeft,
                 WrapContents = false,
-                Padding = new Padding(18, 7, 18, 5),
-                BackColor = Color.White
+                Padding = new Padding(0, 2, 0, 0),
+                BackColor = SystemColors.Window
             };
 
             ConfigureSecondaryButton(_replyDraft, "Open reply draft", 132);
@@ -281,7 +369,9 @@ namespace OutlookLocalAIChat.UI
 
             actions.Controls.Add(_replyDraft);
             actions.Controls.Add(_newDraft);
-            return actions;
+            panel.Controls.Add(disclosure, 0, 0);
+            panel.Controls.Add(actions, 0, 1);
+            return panel;
         }
 
         private Control BuildStatusArea()
@@ -296,6 +386,8 @@ namespace OutlookLocalAIChat.UI
             _status.AutoEllipsis = true;
             _status.ForeColor = TextSecondary;
             _status.TextAlign = ContentAlignment.MiddleLeft;
+            _status.AccessibleName = "Chat status";
+            _status.AccessibleRole = AccessibleRole.StatusBar;
             panel.Controls.Add(_status);
             return panel;
         }
@@ -332,6 +424,10 @@ namespace OutlookLocalAIChat.UI
                 }
             }
 
+            var requestMessage = _message;
+            var requestEntryId = requestMessage.EntryId;
+            var requestStoreId = requestMessage.StoreId;
+            var transcriptStart = _transcript.TextLength;
             AppendTurn("You", prompt, OutlookBlue);
             _composer.Clear();
             SetBusy(true);
@@ -341,24 +437,42 @@ namespace OutlookLocalAIChat.UI
             {
                 var response = await _client.CompleteAsync(
                     _settings,
-                    _message,
+                    requestMessage,
                     _history,
                     prompt,
                     _requestCancellation.Token);
+
+                if (_message == null ||
+                    !_message.EntryId.Equals(
+                        requestEntryId,
+                        StringComparison.Ordinal) ||
+                    !_message.StoreId.Equals(
+                        requestStoreId,
+                        StringComparison.Ordinal))
+                {
+                    RestoreFailedPrompt(prompt, transcriptStart);
+                    SetStatus(
+                        "The selected email changed. The response was discarded.",
+                        true);
+                    return;
+                }
+
                 _history.Add(new ChatTurn("user", prompt));
                 _history.Add(new ChatTurn("assistant", response));
                 _lastAssistantText = response;
-                AppendTurn("Assistant", response, Color.FromArgb(60, 60, 60));
+                AppendTurn("Assistant", response, TextPrimary);
                 SetStatus(
                     "Response received. Draft actions require your click.",
                     false);
             }
             catch (OperationCanceledException)
             {
+                RestoreFailedPrompt(prompt, transcriptStart);
                 SetStatus("Request cancelled.", false);
             }
             catch (Exception exception)
             {
+                RestoreFailedPrompt(prompt, transcriptStart);
                 SetStatus(exception.Message, true);
                 Log.Error("CompleteAsync", exception);
             }
@@ -425,8 +539,10 @@ namespace OutlookLocalAIChat.UI
         private void AppendSystem(string text)
         {
             _transcript.SelectionStart = _transcript.TextLength;
-            _transcript.SelectionFont =
-                new Font("Segoe UI", 9F, FontStyle.Italic);
+            _transcript.SelectionFont = new Font(
+                SystemFonts.MessageBoxFont.FontFamily,
+                SystemFonts.MessageBoxFont.Size,
+                FontStyle.Italic);
             _transcript.SelectionColor = TextSecondary;
             _transcript.AppendText(text + Environment.NewLine + Environment.NewLine);
             ScrollTranscript();
@@ -435,12 +551,16 @@ namespace OutlookLocalAIChat.UI
         private void AppendTurn(string speaker, string text, Color headingColor)
         {
             _transcript.SelectionStart = _transcript.TextLength;
-            _transcript.SelectionFont =
-                new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
+            _transcript.SelectionFont = new Font(
+                SystemFonts.MessageBoxFont.FontFamily,
+                SystemFonts.MessageBoxFont.Size,
+                FontStyle.Bold);
             _transcript.SelectionColor = headingColor;
             _transcript.AppendText(speaker + Environment.NewLine);
-            _transcript.SelectionFont =
-                new Font("Segoe UI", 10F, FontStyle.Regular);
+            _transcript.SelectionFont = new Font(
+                SystemFonts.MessageBoxFont.FontFamily,
+                SystemFonts.MessageBoxFont.Size + 1F,
+                FontStyle.Regular);
             _transcript.SelectionColor = TextPrimary;
             _transcript.AppendText(
                 TextBoundary.PlainText(
@@ -459,11 +579,27 @@ namespace OutlookLocalAIChat.UI
             _transcript.ScrollToCaret();
         }
 
+        private void RestoreFailedPrompt(string prompt, int transcriptStart)
+        {
+            if (_transcript.TextLength > transcriptStart)
+            {
+                _transcript.Select(
+                    transcriptStart,
+                    _transcript.TextLength - transcriptStart);
+                _transcript.SelectedText = string.Empty;
+            }
+
+            _composer.Text = prompt;
+            _composer.SelectionStart = _composer.TextLength;
+        }
+
         private void SetBusy(bool busy)
         {
             _busy = busy;
             _send.Text = busy ? "Cancel" : "Send to AI";
             _composer.Enabled = !busy;
+            _refresh.Enabled = !busy;
+            _settingsButton.Enabled = !busy;
             UpdateDraftButtons();
             if (busy)
             {
@@ -483,7 +619,9 @@ namespace OutlookLocalAIChat.UI
         {
             _status.Text = text;
             _status.ForeColor = error
-                ? Color.FromArgb(163, 38, 38)
+                ? (SystemInformation.HighContrast
+                    ? SystemColors.HotTrack
+                    : Color.FromArgb(163, 38, 38))
                 : TextSecondary;
         }
 
@@ -511,10 +649,11 @@ namespace OutlookLocalAIChat.UI
                 Width = width,
                 Height = 28,
                 FlatStyle = FlatStyle.Flat,
-                BackColor = Color.White,
+                BackColor = SystemColors.Window,
                 ForeColor = OutlookBlue,
                 UseVisualStyleBackColor = false,
-                Margin = new Padding(0, 0, 6, 0)
+                Margin = new Padding(0, 0, 6, 0),
+                AccessibleName = text
             };
             button.FlatAppearance.BorderSize = 0;
             return button;
@@ -525,10 +664,14 @@ namespace OutlookLocalAIChat.UI
             button.Text = text;
             button.FlatStyle = FlatStyle.Flat;
             button.BackColor = OutlookBlue;
-            button.ForeColor = Color.White;
+            button.ForeColor = SystemColors.HighlightText;
             button.UseVisualStyleBackColor = false;
             button.FlatAppearance.BorderColor = OutlookBlue;
-            button.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
+            button.Font = new Font(
+                SystemFonts.MessageBoxFont.FontFamily,
+                SystemFonts.MessageBoxFont.Size,
+                FontStyle.Bold);
+            button.AccessibleName = text;
         }
 
         private static void ConfigureSecondaryButton(
@@ -540,11 +683,12 @@ namespace OutlookLocalAIChat.UI
             button.Width = width;
             button.Height = 34;
             button.FlatStyle = FlatStyle.Flat;
-            button.BackColor = Color.White;
+            button.BackColor = SystemColors.Window;
             button.ForeColor = TextPrimary;
             button.UseVisualStyleBackColor = false;
             button.FlatAppearance.BorderColor = Border;
             button.Margin = new Padding(8, 0, 0, 0);
+            button.AccessibleName = text;
         }
     }
 }

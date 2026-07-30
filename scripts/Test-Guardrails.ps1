@@ -30,6 +30,17 @@ foreach ($field in @('"tools"', '"tool_choice"', '"function_call"')) {
     }
 }
 
+foreach ($capability in @(
+    "DraftService",
+    "System.Diagnostics.Process",
+    "Process.Start",
+    "WebBrowser"
+)) {
+    if ($modelFacingSource.Contains($capability)) {
+        throw "Model-facing source references forbidden capability $capability."
+    }
+}
+
 $draftPath = Join-Path $sourceRoot "Outlook\DraftService.cs"
 $draftSource = Get-Content $draftPath -Raw
 if (-not $draftSource.Contains("replyMail.Save()") -or

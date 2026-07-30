@@ -24,9 +24,10 @@ namespace OutlookLocalAIChat.UI
             MaximizeBox = false;
             MinimizeBox = false;
             ShowIcon = false;
-            Font = new Font("Segoe UI", 9F, FontStyle.Regular);
-            BackColor = Color.FromArgb(250, 250, 250);
-            AutoScaleMode = AutoScaleMode.Dpi;
+            Font = SystemFonts.MessageBoxFont;
+            BackColor = SystemColors.Control;
+            ForeColor = SystemColors.ControlText;
+            AutoScaleMode = AutoScaleMode.Font;
 
             var layout = new TableLayoutPanel
             {
@@ -46,9 +47,12 @@ namespace OutlookLocalAIChat.UI
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
 
-            ConfigureField(_endpoint);
-            ConfigureField(_model);
-            ConfigureField(_apiKey);
+            ConfigureField(
+                _endpoint,
+                "AI endpoint",
+                "HTTPS endpoint or loopback HTTP base URL.");
+            ConfigureField(_model, "Model name", "Model identifier sent to the endpoint.");
+            ConfigureField(_apiKey, "API key", "Encrypted for the current Windows user.");
             _apiKey.UseSystemPasswordChar = true;
 
             layout.Controls.Add(FieldLabel("Endpoint or base URL"), 0, 0);
@@ -62,16 +66,24 @@ namespace OutlookLocalAIChat.UI
             {
                 AutoSize = true,
                 MaximumSize = new Size(460, 0),
-                ForeColor = Color.FromArgb(80, 80, 80),
+                ForeColor = SystemInformation.HighContrast
+                    ? SystemColors.GrayText
+                    : Color.FromArgb(80, 80, 80),
                 Text =
-                    "Use HTTPS, or HTTP only for a local endpoint. " +
-                    "The key is encrypted for your Windows account."
+                    "The selected email and recent conversation are sent to this " +
+                    "endpoint. Use HTTPS, or HTTP only for a local endpoint. " +
+                    "The key is encrypted for your Windows account.",
+                AccessibleName = "Endpoint data disclosure"
             };
             layout.Controls.Add(hint, 0, 6);
 
             _error.AutoSize = true;
-            _error.ForeColor = Color.FromArgb(163, 38, 38);
+            _error.ForeColor = SystemInformation.HighContrast
+                ? SystemColors.HotTrack
+                : Color.FromArgb(163, 38, 38);
             _error.Padding = new Padding(0, 10, 0, 0);
+            _error.AccessibleName = "Settings error";
+            _error.AccessibleRole = AccessibleRole.Alert;
             layout.Controls.Add(_error, 0, 7);
 
             var buttons = new FlowLayoutPanel
@@ -100,11 +112,19 @@ namespace OutlookLocalAIChat.UI
 
         public AppSettings SavedSettings { get; private set; }
 
-        private static void ConfigureField(TextBox field)
+        private static void ConfigureField(
+            TextBox field,
+            string accessibleName,
+            string accessibleDescription)
         {
             field.Dock = DockStyle.Fill;
             field.BorderStyle = BorderStyle.FixedSingle;
-            field.Font = new Font("Segoe UI", 10F, FontStyle.Regular);
+            field.Font = new Font(
+                SystemFonts.MessageBoxFont.FontFamily,
+                SystemFonts.MessageBoxFont.Size + 1F,
+                FontStyle.Regular);
+            field.AccessibleName = accessibleName;
+            field.AccessibleDescription = accessibleDescription;
         }
 
         private static Label FieldLabel(string text)
@@ -112,8 +132,11 @@ namespace OutlookLocalAIChat.UI
             return new Label
             {
                 AutoSize = true,
-                Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(35, 35, 35),
+                Font = new Font(
+                    SystemFonts.MessageBoxFont.FontFamily,
+                    SystemFonts.MessageBoxFont.Size,
+                    FontStyle.Bold),
+                ForeColor = SystemColors.ControlText,
                 Padding = new Padding(0, 0, 0, 4),
                 Text = text
             };
@@ -132,12 +155,17 @@ namespace OutlookLocalAIChat.UI
             };
             button.FlatAppearance.BorderSize = 1;
             button.BackColor = primary
-                ? Color.FromArgb(0, 95, 184)
-                : Color.White;
-            button.ForeColor = primary ? Color.White : Color.FromArgb(35, 35, 35);
+                ? (SystemInformation.HighContrast
+                    ? SystemColors.Highlight
+                    : Color.FromArgb(0, 95, 184))
+                : SystemColors.Window;
+            button.ForeColor = primary
+                ? SystemColors.HighlightText
+                : SystemColors.WindowText;
             button.FlatAppearance.BorderColor = primary
-                ? Color.FromArgb(0, 95, 184)
-                : Color.FromArgb(170, 170, 170);
+                ? button.BackColor
+                : SystemColors.ControlDark;
+            button.AccessibleName = text;
             return button;
         }
 

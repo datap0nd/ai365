@@ -39,7 +39,13 @@ jobs:
           $assembly = Resolve-Path "src\OutlookLocalAIChat\bin\Release\OutlookLocalAIChat.dll"
           & "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\RegAsm.exe" `
             $assembly /codebase /regfile:managed-com.reg
-          Get-Content managed-com.reg
+          $registration = Get-Content managed-com.reg -Raw
+          if (-not $registration.Contains("OutlookLocalAIChat.AddIn")) {
+            throw "RegAsm did not export the add-in COM class."
+          }
+          if ($registration.Contains("OutlookLocalAIChat.UI.ChatWindow")) {
+            throw "A non-add-in class was exported to COM."
+          }
 
       - name: Install Inno Setup
         shell: pwsh
@@ -57,10 +63,11 @@ jobs:
         run: |
           $installer = Resolve-Path "artifacts\OutlookLocalAIChatSetup.exe"
           Start-Process $installer -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
-          $installedDll = Join-Path $env:LOCALAPPDATA "Programs\Outlook Local AI Chat\OutlookLocalAIChat.dll"
+          $installedDll = Join-Path $env:LOCALAPPDATA "Programs\OutlookLocalAIChat\OutlookLocalAIChat.dll"
           if (-not (Test-Path $installedDll)) {
             throw "Installed add-in DLL was not found."
           }
+          [void][Reflection.Assembly]::LoadFrom($installedDll)
           $addinKey = "HKCU:\Software\Microsoft\Office\Outlook\Addins\OutlookLocalAIChat.AddIn"
           if ((Get-ItemProperty $addinKey).LoadBehavior -ne 3) {
             throw "Outlook add-in registration is missing or disabled."

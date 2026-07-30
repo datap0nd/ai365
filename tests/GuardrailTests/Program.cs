@@ -23,6 +23,7 @@ namespace GuardrailTests
                 Run("Remote HTTP endpoint is rejected", RemoteHttpIsRejected);
                 Run("Text boundary removes controls and truncates", TextIsBounded);
                 Run("Request exposes no model tools", RequestHasNoTools);
+                Run("Request schema is messages only", RequestSchemaIsMessagesOnly);
                 Run("Email is labeled as untrusted data", EmailIsUntrustedData);
                 Run("Conversation history is bounded", HistoryIsBounded);
                 Run("Draft service exposes no send capability", DraftHasNoSend);
@@ -95,6 +96,20 @@ namespace GuardrailTests
                 !json.Contains("\"function_call\""),
                 "Request contains function_call.");
             Assert(json.Contains("\"stream\":false"), "Streaming must be off.");
+        }
+
+        private static void RequestSchemaIsMessagesOnly()
+        {
+            var fields = typeof(ChatCompletionRequest)
+                .GetFields(BindingFlags.Instance | BindingFlags.Public)
+                .Select(field => field.Name)
+                .OrderBy(name => name)
+                .ToArray();
+            var expected = new[] { "messages", "model", "stream" };
+            Assert(
+                fields.SequenceEqual(expected),
+                "Model request capabilities changed: " +
+                string.Join(", ", fields));
         }
 
         private static void EmailIsUntrustedData()
