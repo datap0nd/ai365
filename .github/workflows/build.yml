@@ -154,13 +154,15 @@ jobs:
             & $regasm32 $installedDll /codebase
             if ($LASTEXITCODE -ne 0) { throw "32-bit RegAsm failed." }
             $powershell32 = "$env:WINDIR\SysWOW64\WindowsPowerShell\v1.0\powershell.exe"
-            & $powershell32 -NoProfile -Command @'
+            $smoke32 = Join-Path $env:RUNNER_TEMP "smoke-com-32.ps1"
+            @'
           $addin32 = New-Object -ComObject OutlookLocalAIChat.AddIn
           if ($null -eq $addin32) { throw "32-bit COM activation failed." }
           if ([Runtime.InteropServices.Marshal]::IsComObject($addin32)) {
             [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($addin32)
           }
-          '@
+          '@ | Set-Content $smoke32 -Encoding ASCII
+            & $powershell32 -NoProfile -File $smoke32
             if ($LASTEXITCODE -ne 0) { throw "32-bit COM activation failed." }
           }
           finally {
