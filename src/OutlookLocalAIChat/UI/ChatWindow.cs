@@ -468,7 +468,11 @@ namespace OutlookLocalAIChat.UI
             catch (OperationCanceledException)
             {
                 RestoreFailedPrompt(prompt, transcriptStart);
-                SetStatus("Request cancelled.", false);
+                SetStatus(
+                    _requestCancellation.IsCancellationRequested
+                        ? "Request cancelled."
+                        : "The AI endpoint timed out. Your prompt was restored.",
+                    !_requestCancellation.IsCancellationRequested);
             }
             catch (Exception exception)
             {

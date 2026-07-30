@@ -101,8 +101,8 @@ namespace GuardrailTests
         private static void RequestSchemaIsMessagesOnly()
         {
             var fields = typeof(ChatCompletionRequest)
-                .GetFields(BindingFlags.Instance | BindingFlags.Public)
-                .Select(field => field.Name)
+                .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+                .Select(property => property.Name)
                 .OrderBy(name => name)
                 .ToArray();
             var expected = new[] { "messages", "model", "stream" };
