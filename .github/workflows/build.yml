@@ -72,6 +72,18 @@ jobs:
           if ((Get-ItemProperty $addinKey).LoadBehavior -ne 3) {
             throw "Outlook add-in registration is missing or disabled."
           }
+          $clsid = "{0D6E56F9-BE2D-4B94-B5E4-4C2DB0FD13E7}"
+          $serverKey = "HKCU:\Software\Classes\CLSID\$clsid\InprocServer32"
+          $server = Get-ItemProperty $serverKey
+          Write-Host "COM class: $($server.Class)"
+          Write-Host "COM assembly: $($server.Assembly)"
+          Write-Host "COM runtime: $($server.RuntimeVersion)"
+          Write-Host "COM codebase: $($server.CodeBase)"
+          $codeBasePath = ([Uri]$server.CodeBase).LocalPath
+          Write-Host "COM local path: $codeBasePath"
+          if (-not (Test-Path $codeBasePath)) {
+            throw "The registered COM codebase does not resolve to the installed DLL."
+          }
           $addin64 = New-Object -ComObject OutlookLocalAIChat.AddIn
           if ($null -eq $addin64) {
             throw "64-bit COM activation failed."
