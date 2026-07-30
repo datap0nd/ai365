@@ -143,7 +143,9 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "64-bit RegAsm failed." }
             $addin64 = New-Object -ComObject OutlookLocalAIChat.AddIn
             if ($null -eq $addin64) { throw "64-bit COM activation failed." }
-            [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($addin64)
+            if ([Runtime.InteropServices.Marshal]::IsComObject($addin64)) {
+              [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($addin64)
+            }
           }
           finally {
             & $regasm64 $installedDll /unregister
@@ -155,7 +157,9 @@ jobs:
             & $powershell32 -NoProfile -Command @'
           $addin32 = New-Object -ComObject OutlookLocalAIChat.AddIn
           if ($null -eq $addin32) { throw "32-bit COM activation failed." }
-          [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($addin32)
+          if ([Runtime.InteropServices.Marshal]::IsComObject($addin32)) {
+            [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($addin32)
+          }
           '@
             if ($LASTEXITCODE -ne 0) { throw "32-bit COM activation failed." }
           }
