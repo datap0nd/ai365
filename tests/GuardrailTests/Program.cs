@@ -2,9 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Web.Script.Serialization;
+using OutlookLocalAIChat;
 using OutlookLocalAIChat.Chat;
 using OutlookLocalAIChat.Configuration;
+using OutlookLocalAIChat.Interop;
 using OutlookLocalAIChat.Outlook;
 using OutlookLocalAIChat.Security;
 
@@ -27,6 +30,9 @@ namespace GuardrailTests
                 Run("Email is labeled as untrusted data", EmailIsUntrustedData);
                 Run("Conversation history is bounded", HistoryIsBounded);
                 Run("Draft service exposes no send capability", DraftHasNoSend);
+                Run(
+                    "Office startup COM interfaces are dual",
+                    OfficeStartupInterfacesAreDual);
                 Console.WriteLine("PASS: " + _passed + " guardrail tests");
                 return 0;
             }
@@ -147,6 +153,57 @@ namespace GuardrailTests
                 methods.Contains("CreateNewDraft"),
                 "Draft service public capabilities changed: " +
                 string.Join(", ", methods));
+        }
+
+        private static void OfficeStartupInterfacesAreDual()
+        {
+            Assert(
+                typeof(IDTExtensibility2).IsImport,
+                "IDTExtensibility2 must be a COM-import interface.");
+            Assert(
+                typeof(IRibbonExtensibility).IsImport,
+                "IRibbonExtensibility must be a COM-import interface.");
+
+            AssertDual(typeof(IDTExtensibility2));
+            AssertDual(typeof(IRibbonExtensibility));
+
+            var addIn = new AddIn();
+            AssertComInterface(addIn, typeof(IDTExtensibility2));
+            AssertComInterface(addIn, typeof(IRibbonExtensibility));
+        }
+
+        private static void AssertDual(Type interfaceType)
+        {
+            var attribute = interfaceType
+                .GetCustomAttributes(typeof(TypeLibTypeAttribute), false)
+                .Cast<TypeLibTypeAttribute>()
+                .Single();
+            var expected =
+                TypeLibTypeFlags.FDispatchable |
+                TypeLibTypeFlags.FDual;
+            Assert(
+                (attribute.Value & expected) == expected,
+                interfaceType.Name + " must be a dual dispatch interface.");
+        }
+
+        private static void AssertComInterface(object instance, Type interfaceType)
+        {
+            var pointer = Marshal.GetComInterfaceForObject(
+                instance,
+                interfaceType);
+            try
+            {
+                Assert(
+                    pointer != IntPtr.Zero,
+                    interfaceType.Name + " was not exposed by the add-in.");
+            }
+            finally
+            {
+                if (pointer != IntPtr.Zero)
+                {
+                    Marshal.Release(pointer);
+                }
+            }
         }
 
         private static ChatCompletionRequest MakeRequest(
