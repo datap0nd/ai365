@@ -45,7 +45,7 @@ jobs:
             "installer\OutlookLocalAIChat.iss"
 
       - name: Smoke-test installer registration
-        shell: pwsh
+        shell: powershell
         run: |
           $installer = Resolve-Path "artifacts\OutlookLocalAIChatSetup.exe"
           Start-Process $installer -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
@@ -56,6 +56,20 @@ jobs:
           $addinKey = "HKCU:\Software\Microsoft\Office\Outlook\Addins\OutlookLocalAIChat.AddIn"
           if ((Get-ItemProperty $addinKey).LoadBehavior -ne 3) {
             throw "Outlook add-in registration is missing or disabled."
+          }
+          $addin64 = New-Object -ComObject OutlookLocalAIChat.AddIn
+          if ($null -eq $addin64) {
+            throw "64-bit COM activation failed."
+          }
+          [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($addin64)
+          $powershell32 = "$env:WINDIR\SysWOW64\WindowsPowerShell\v1.0\powershell.exe"
+          & $powershell32 -NoProfile -Command @'
+          $addin32 = New-Object -ComObject OutlookLocalAIChat.AddIn
+          if ($null -eq $addin32) { throw "32-bit COM activation failed." }
+          [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($addin32)
+          '@
+          if ($LASTEXITCODE -ne 0) {
+            throw "32-bit COM activation failed."
           }
 
       - name: Upload installer artifact

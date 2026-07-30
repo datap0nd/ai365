@@ -160,7 +160,7 @@ namespace OutlookLocalAIChat.UI
             _messageTitle.Height = 26;
             _messageTitle.Font = new Font(
                 "Segoe UI Semibold",
-                11F,
+                12F,
                 FontStyle.Bold);
             _messageTitle.ForeColor = TextPrimary;
 
@@ -251,6 +251,7 @@ namespace OutlookLocalAIChat.UI
             {
                 AutoSize = true,
                 ForeColor = TextSecondary,
+                Font = new Font("Segoe UI", 8F, FontStyle.Regular),
                 Text = "Ctrl+Enter sends. Conversation stays in memory.",
                 Padding = new Padding(0, 3, 0, 0)
             };
