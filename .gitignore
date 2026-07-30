@@ -1,0 +1,10 @@
+.vs/
+**/bin/
+**/obj/
+artifacts/
+*.user
+*.suo
+*.nupkg
+TestResults/
+.DS_Store
+.impeccable/screenshots/

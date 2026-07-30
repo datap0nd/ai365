@@ -1,0 +1,73 @@
+name: Build Windows installer
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Add MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build solution
+        run: msbuild OutlookLocalAIChat.sln /m /p:Configuration=Release
+
+      - name: Run guardrail tests
+        run: tests\GuardrailTests\bin\Release\GuardrailTests.exe
+
+      - name: Run static capability scan
+        shell: pwsh
+        run: ./scripts/Test-Guardrails.ps1
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress --yes
+
+      - name: Build single-file installer
+        shell: pwsh
+        run: |
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" `
+            "/DAppVersion=1.0.0" `
+            "installer\OutlookLocalAIChat.iss"
+
+      - name: Smoke-test installer registration
+        shell: pwsh
+        run: |
+          $installer = Resolve-Path "artifacts\OutlookLocalAIChatSetup.exe"
+          Start-Process $installer -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
+          $installedDll = Join-Path $env:LOCALAPPDATA "Programs\Outlook Local AI Chat\OutlookLocalAIChat.dll"
+          if (-not (Test-Path $installedDll)) {
+            throw "Installed add-in DLL was not found."
+          }
+          $addinKey = "HKCU:\Software\Microsoft\Office\Outlook\Addins\OutlookLocalAIChat.AddIn"
+          if ((Get-ItemProperty $addinKey).LoadBehavior -ne 3) {
+            throw "Outlook add-in registration is missing or disabled."
+          }
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OutlookLocalAIChatSetup
+          path: artifacts/OutlookLocalAIChatSetup.exe
+          if-no-files-found: error
+
+      - name: Attach installer to GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/OutlookLocalAIChatSetup.exe
+          generate_release_notes: true
