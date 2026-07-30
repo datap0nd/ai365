@@ -10,7 +10,8 @@ Outlook MCP.
 ## Install
 
 1. Close Outlook.
-2. Download `OutlookLocalAIChatSetup.exe` from the repository's Releases page.
+2. Download
+   [OutlookLocalAIChatSetup.exe](https://github.com/datap0nd/outlook-local-ai-chat/releases/latest/download/OutlookLocalAIChatSetup.exe).
 3. Run the installer for your Windows account.
 4. Start classic Outlook.
 5. Select an email and choose **AI Chat > Open AI Chat** on the ribbon.
