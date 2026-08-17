@@ -58,6 +58,9 @@ namespace GuardrailTests
                     "Extensionless pasted images are sniffed and read",
                     PastedImagesWithoutExtensionAreRead);
                 Run(
+                    "Oversized images are downscaled for vision input",
+                    OversizedImagesAreDownscaledForVision);
+                Run(
                     "Model catalog describes vision capability",
                     ModelCatalogDescribesVisionCapability);
                 Run("HTTPS endpoint is accepted", HttpsEndpointIsAccepted);
@@ -2010,6 +2013,86 @@ namespace GuardrailTests
                     loaded.VisionImages[0].DataUrl.StartsWith(
                         "data:image/png;base64,"),
                     "An extensionless pasted image was not sniffed as PNG.");
+            }
+            finally
+            {
+                if (File.Exists(pngPath))
+                {
+                    File.Delete(pngPath);
+                }
+            }
+        }
+
+        private static void OversizedImagesAreDownscaledForVision()
+        {
+            var pngPath = Path.Combine(
+                Path.GetTempPath(),
+                "MailAI-big-" + Guid.NewGuid().ToString("N") + ".png");
+            using (var bitmap = new System.Drawing.Bitmap(
+                1400,
+                1400,
+                System.Drawing.Imaging.PixelFormat.Format24bppRgb))
+            {
+                var bounds = new System.Drawing.Rectangle(
+                    0,
+                    0,
+                    1400,
+                    1400);
+                var data = bitmap.LockBits(
+                    bounds,
+                    System.Drawing.Imaging.ImageLockMode.WriteOnly,
+                    System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+                var noise = new byte[
+                    Math.Abs(data.Stride) * 1400];
+                new Random(42).NextBytes(noise);
+                Marshal.Copy(
+                    noise,
+                    0,
+                    data.Scan0,
+                    noise.Length);
+                bitmap.UnlockBits(data);
+                bitmap.Save(
+                    pngPath,
+                    System.Drawing.Imaging.ImageFormat.Png);
+            }
+
+            try
+            {
+                Assert(
+                    new FileInfo(pngPath).Length > 1536 * 1024,
+                    "The generated test image is too small to exercise downscaling.");
+
+                var attachments = new FakeOutlookAttachments();
+                attachments.Add(new FakeOutlookAttachment(
+                    "photo.png",
+                    pngPath));
+                var mail = new FakeSelectedMailItem(
+                    "big-image-entry",
+                    "Site photo")
+                {
+                    Attachments = attachments
+                };
+                var application = new FakeOutlookApplication();
+                application.Session.Register(
+                    "big-image-entry",
+                    "store",
+                    mail);
+                var snapshot = new MessageReader(application)
+                    .CaptureById("big-image-entry", "store");
+                var host = new MailboxToolHost(application, snapshot);
+                var loaded = host.Execute(
+                    MailboxCall(
+                        "read-big-image",
+                        MailboxToolCatalog.ReadMessages,
+                        "{\"handles\":[\"selected\"]}"));
+                Assert(
+                    loaded.VisionImages.Count == 1 &&
+                    loaded.VisionImages[0].DataUrl.StartsWith(
+                        "data:image/jpeg;base64,") &&
+                    loaded.VisionImages[0].DataUrl.Length <=
+                        EmailAttachmentReader.MaxImageDataUrlCharacters &&
+                    loaded.Content.Contains("downscaled"),
+                    "An oversized image was not downscaled into vision input.");
             }
             finally
             {

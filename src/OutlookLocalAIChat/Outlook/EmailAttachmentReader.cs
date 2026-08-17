@@ -49,6 +49,9 @@ namespace OutlookLocalAIChat.Outlook
     {
         public const int MaxAttachments = 10;
         public const int MaxBytesPerAttachment = 2 * 1024 * 1024;
+        // Images get a higher intake ceiling because oversized ones are
+        // downscaled locally before being sent as vision input.
+        public const int MaxImageBytesPerAttachment = 10 * 1024 * 1024;
         public const int MaxCharactersPerAttachment = 8000;
         public const int MaxTotalCharacters = 16000;
         // 1.5 MB of image bytes is ~2.1M base64 characters plus the
@@ -159,8 +162,13 @@ namespace OutlookLocalAIChat.Outlook
                         outlookAttachment.SaveAsFile(tempPath);
 
                         var fileInfo = new FileInfo(tempPath);
+                        var sizeLimit =
+                            ImageExtensions.Contains(extension) ||
+                            isExtensionless
+                                ? MaxImageBytesPerAttachment
+                                : MaxBytesPerAttachment;
                         if (!fileInfo.Exists ||
-                            fileInfo.Length > MaxBytesPerAttachment)
+                            fileInfo.Length > sizeLimit)
                         {
                             continue;
                         }
@@ -339,9 +347,6 @@ namespace OutlookLocalAIChat.Outlook
             string dataUrl = null;
             if (bytes.Length <= MaxImageBytesForBase64)
             {
-                builder.Append(
-                    "\nVision-capable models receive this image " +
-                    "through multimodal input after tool results.");
                 dataUrl =
                     "data:" +
                     mimeType +
@@ -350,9 +355,29 @@ namespace OutlookLocalAIChat.Outlook
             }
             else
             {
+                var downscaled = TryDownscaleToJpeg(path);
+                if (downscaled != null)
+                {
+                    builder.Append(
+                        "\nThe image was downscaled locally to fit " +
+                        "the vision size limit.");
+                    dataUrl =
+                        "data:image/jpeg;base64," +
+                        Convert.ToBase64String(downscaled);
+                }
+            }
+
+            if (dataUrl != null)
+            {
                 builder.Append(
-                    "\nImage exceeds the vision size limit. " +
-                    "Only metadata is included.");
+                    "\nVision-capable models receive this image " +
+                    "through multimodal input after tool results.");
+            }
+            else
+            {
+                builder.Append(
+                    "\nImage exceeds the vision size limit and could " +
+                    "not be downscaled. Only metadata is included.");
             }
 
             return new EmailAttachmentContent(
@@ -360,6 +385,102 @@ namespace OutlookLocalAIChat.Outlook
                 "image",
                 builder.ToString(),
                 dataUrl);
+        }
+
+        private static byte[] TryDownscaleToJpeg(string path)
+        {
+            try
+            {
+                using (var original =
+                    System.Drawing.Image.FromFile(path))
+                {
+                    var longSide = Math.Max(
+                        original.Width,
+                        original.Height);
+                    var targetSide = Math.Min(longSide, 2048);
+                    while (targetSide >= 256)
+                    {
+                        var scale = (double)targetSide / longSide;
+                        var width = Math.Max(
+                            1,
+                            (int)Math.Round(original.Width * scale));
+                        var height = Math.Max(
+                            1,
+                            (int)Math.Round(original.Height * scale));
+                        using (var bitmap =
+                            new System.Drawing.Bitmap(width, height))
+                        {
+                            using (var graphics =
+                                System.Drawing.Graphics.FromImage(
+                                    bitmap))
+                            {
+                                graphics.Clear(
+                                    System.Drawing.Color.White);
+                                graphics.InterpolationMode =
+                                    System.Drawing.Drawing2D
+                                        .InterpolationMode
+                                        .HighQualityBicubic;
+                                graphics.DrawImage(
+                                    original,
+                                    0,
+                                    0,
+                                    width,
+                                    height);
+                            }
+
+                            foreach (var quality in
+                                new long[] { 80, 55 })
+                            {
+                                var encoded = EncodeJpeg(
+                                    bitmap,
+                                    quality);
+                                if (encoded != null &&
+                                    encoded.Length <=
+                                    MaxImageBytesForBase64)
+                                {
+                                    return encoded;
+                                }
+                            }
+                        }
+
+                        targetSide /= 2;
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            return null;
+        }
+
+        private static byte[] EncodeJpeg(
+            System.Drawing.Bitmap bitmap,
+            long quality)
+        {
+            var encoder = System.Drawing.Imaging.ImageCodecInfo
+                .GetImageEncoders()
+                .FirstOrDefault(codec =>
+                    codec.FormatID ==
+                    System.Drawing.Imaging.ImageFormat.Jpeg.Guid);
+            if (encoder == null)
+            {
+                return null;
+            }
+
+            using (var parameters =
+                new System.Drawing.Imaging.EncoderParameters(1))
+            {
+                parameters.Param[0] =
+                    new System.Drawing.Imaging.EncoderParameter(
+                        System.Drawing.Imaging.Encoder.Quality,
+                        quality);
+                using (var stream = new MemoryStream())
+                {
+                    bitmap.Save(stream, encoder, parameters);
+                    return stream.ToArray();
+                }
+            }
         }
 
         private static EmailAttachmentContent ExtractSpreadsheet(
