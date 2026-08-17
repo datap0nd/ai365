@@ -33,6 +33,29 @@ jobs:
       - name: Build solution
         run: msbuild OutlookLocalAIChat.sln /m /p:Configuration=Release
 
+      - name: Verify WebView2 payload in build output
+        shell: pwsh
+        run: |
+          $bin = "src\OutlookLocalAIChat\bin\Release"
+          Get-ChildItem $bin -Recurse -Include *.dll |
+            ForEach-Object { Write-Host $_.FullName.Substring((Resolve-Path $bin).Path.Length + 1) }
+          foreach ($required in @(
+            "Microsoft.Web.WebView2.Core.dll",
+            "Microsoft.Web.WebView2.WinForms.dll"
+          )) {
+            if (-not (Test-Path (Join-Path $bin $required))) {
+              throw "Missing WebView2 assembly in build output: $required"
+            }
+          }
+          $loaders = Get-ChildItem $bin -Recurse -Filter WebView2Loader.dll
+          if ($loaders.Count -lt 1) {
+            throw "No WebView2Loader.dll found anywhere in the build output."
+          }
+          $x86 = $loaders | Where-Object { $_.FullName -match "win-x86" }
+          if (-not $x86 -and -not (Test-Path (Join-Path $bin "WebView2Loader.dll"))) {
+            throw "No x86-capable WebView2Loader.dll (Outlook is often 32-bit)."
+          }
+
       - name: Run guardrail tests
         run: tests\GuardrailTests\bin\Release\GuardrailTests.exe
 
@@ -76,6 +99,19 @@ jobs:
           $installedDll = Join-Path $env:LOCALAPPDATA "Programs\OutlookLocalAIChat\OutlookLocalAIChat.dll"
           if (-not (Test-Path $installedDll)) {
             throw "Installed add-in DLL was not found."
+          }
+          $installedDir = Split-Path $installedDll
+          foreach ($required in @(
+            "Microsoft.Web.WebView2.Core.dll",
+            "Microsoft.Web.WebView2.WinForms.dll"
+          )) {
+            if (-not (Test-Path (Join-Path $installedDir $required))) {
+              throw "Installer did not ship $required."
+            }
+          }
+          $installedLoaders = Get-ChildItem $installedDir -Recurse -Filter WebView2Loader.dll
+          if ($installedLoaders.Count -lt 1) {
+            throw "Installer did not ship any WebView2Loader.dll."
           }
           $assembly = [Reflection.Assembly]::LoadFrom($installedDll)
           $instance = $assembly.CreateInstance("OutlookLocalAIChat.AddIn")
