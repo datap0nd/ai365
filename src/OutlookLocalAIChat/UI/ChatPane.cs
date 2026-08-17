@@ -252,7 +252,7 @@ namespace OutlookLocalAIChat.UI
             if (messages == null || messages.Count == 0)
             {
                 throw new InvalidOperationException(
-                    "Select one to five emails in Outlook first.");
+                    "Select one to ten emails in Outlook first.");
             }
 
             if (messages.Count == 1)
@@ -280,7 +280,7 @@ namespace OutlookLocalAIChat.UI
                 case LocalSearchCommandKind.Help:
                     AppendContext(
                         "Use /search <person or topic> to replace the working set with " +
-                        "the newest five matching emails from Inbox and Sent Items. " +
+                        "the newest ten matching emails from Inbox and Sent Items. " +
                         "Use /search clear to remove the working set.");
                     SetStatus(
                         "Search help shown. No email context changed.",
@@ -318,7 +318,7 @@ namespace OutlookLocalAIChat.UI
 
             UseWaitCursor = true;
             SetStatus(
-                "Searching Outlook locally for the newest five matches...",
+                "Searching Outlook locally for the newest ten matches...",
                 false);
             try
             {
@@ -384,11 +384,13 @@ namespace OutlookLocalAIChat.UI
             _scopeMeta.Text =
                 "Working set: " +
                 _workingMessages.Count +
-                " of 5 emails";
+                " of " +
+                MailboxWorkingSet.MaxMessages +
+                " emails";
             ShowWorkingSetLayer(source, _workingMessages);
             AppendContext(
                 TextBoundary.SingleLine(source, 260) +
-                ". The five-email context layer is ready. " +
+                ". The ten-email context layer is ready. " +
                 "Search again to replace it if needed.");
             SetStatus(
                 "Working set ready. Run /search again to replace it, or ask MailAI to work on these emails.",
@@ -1159,7 +1161,7 @@ namespace OutlookLocalAIChat.UI
             _status.AccessibleName = "Chat status";
             _status.AccessibleRole = AccessibleRole.StatusBar;
             _status.Text =
-                "Mailbox reads are capped at five emails. MailAI cannot send.";
+                "Mailbox reads are capped at ten emails. MailAI cannot send.";
             panel.Controls.Add(_status);
             return panel;
         }
@@ -1714,11 +1716,11 @@ namespace OutlookLocalAIChat.UI
         {
             AppendStyledBlock(
                 "Ready",
-                "Ask across Inbox and Sent Items. MailAI loads no more than five " +
+                "Ask across Inbox and Sent Items. MailAI loads no more than ten " +
                 "email bodies. Add up to three bounded text files as external context.\n\n" +
                 "Try:\n" +
                 "- /search person or topic\n" +
-                "- Ctrl+click up to five emails, then click Add email or right-click Send to MailAI.\n" +
+                "- Ctrl+click up to ten emails, then click Add email or right-click Send to MailAI.\n" +
                 "- Drag selected Outlook emails onto MailAI, or drag supported text files here.\n" +
                 "- Ask MailAI to summarize or compare the working set.\n" +
                 "- Find a message and create a concise reply draft.\n" +

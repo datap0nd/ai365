@@ -65,14 +65,14 @@ the tool-call probe allows up to 90 seconds.
    The sidebar opens with `Selected: subject` at the top. Common `RE:`, `FW:`,
    and `FWD:` prefixes are hidden in that display.
 2. To choose a bounded group first, enter `/search person or topic`. MailAI
-   searches locally and keeps the newest five matching Inbox or Sent Items
+   searches locally and keeps the newest ten matching Inbox or Sent Items
    emails as the working set. No email body is sent during this command.
 3. Review the listed subjects and send another `/search` to replace the set if
-   it is wrong. Results appear in a collapsible working-set layer as five
+   it is wrong. Results appear in a collapsible working-set layer as ten
    distinct email cards with subject, sender, and date. Use `/search clear` to
    remove it. The layer collapses automatically when you send a normal AI
    prompt and can be reopened with **Show**.
-4. Alternatively, Ctrl+click one to five emails in Outlook, then choose
+4. Alternatively, Ctrl+click one to ten emails in Outlook, then choose
    **Add email**, right-click **Send to MailAI**, or drag the selected messages
    onto the MailAI pane. Multiple messages become the same locked working set.
 5. Use **Add files** or drag files from Windows Explorer to add up to three
@@ -82,7 +82,7 @@ the tool-call probe allows up to 90 seconds.
    characters, with 24,000 characters total.
 6. Ask a normal mailbox question. When a working set exists, the model can read
    only those emails. Without one, it may perform one bounded mailbox search
-   and load no more than five unique email bodies for the request. When a body
+   and load no more than ten unique email bodies for the request. When a body
    is loaded, MailAI also reads up to ten supported **email attachments** per
    message: images (PNG, JPEG, GIF, BMP, WebP, TIFF) and spreadsheets (XLSX,
    XLSM, CSV). Legacy `.xls` files are listed but not parsed. Attachments are
@@ -100,8 +100,8 @@ the tool-call probe allows up to 90 seconds.
 
 Selecting an email is optional for mailbox questions. When one is selected, the
 model receives its metadata and may request its body using the temporary
-`selected` handle. A two-to-five-email selection is stored as a locked working
-set with `context1` through `context5` handles. The conversation and working set
+`selected` handle. A two-to-ten-email selection is stored as a locked working
+set with `context1` through `context10` handles. The conversation and working set
 remain in memory until cleared or Outlook closes. `/search clear` removes the
 email working set but retains external files. **Clear** removes all context, and
 **New** starts a new conversation with no retained context.
@@ -120,7 +120,7 @@ scoped exception, not a general mutation permission.
 
 - A request without a working set exposes three read-only tools:
   `search_mailbox`, `read_messages`, and `read_thread`. A request with a locked
-  working set exposes only `read_messages`, and only for its five approved
+  working set exposes only `read_messages`, and only for its ten approved
   handles.
 - `create_draft` is added only when local code recognizes an explicit drafting
   instruction in the latest user-written prompt, such as "create a draft" or
@@ -170,7 +170,7 @@ See [SECURITY.md](SECURITY.md) for the full threat model.
 
 Every chat request initially sends the configured endpoint:
 
-- selected email metadata, or metadata for up to five working-set emails;
+- selected email metadata, or metadata for up to ten working-set emails;
 - up to 12 recent chat turns;
 - the current prompt;
 - up to three explicitly added bounded text files;
@@ -179,14 +179,14 @@ Every chat request initially sends the configured endpoint:
 
 The model may then request:
 
-- one search with up to five bounded result summaries from the primary Inbox
+- one search with up to ten bounded result summaries from the primary Inbox
   and Sent Items when no working set is locked;
-- no more than five unique message bodies across the entire request;
-- conversation messages only within that same request-wide five-body limit;
+- no more than ten unique message bodies across the entire request;
+- conversation messages only within that same request-wide ten-body limit;
 - at most four tool calls per round and four context-retrieval rounds.
 
 `/search` is handled locally before an LLM request is created. It returns at
-most five metadata matches and does not transmit bodies. A later normal prompt
+most ten metadata matches and does not transmit bodies. A later normal prompt
 sends the working-set metadata and exposes only the body-read tool for those
 exact handles.
 

@@ -143,7 +143,7 @@ $workingSetBoundarySource =
     $workingSetSource +
     $toolHostSource
 foreach ($requiredBoundary in @(
-    "public const int MaxMessages = 5",
+    "public const int MaxMessages = 10",
     "MAILBOX_WORKING_SET_LOCKED",
     "MAILBOX_CONTEXT_LIMIT_REACHED",
     "MAILBOX_SEARCH_LIMIT_REACHED",
@@ -151,7 +151,7 @@ foreach ($requiredBoundary in @(
     "_searchExecuted"
 )) {
     if (-not $workingSetBoundarySource.Contains($requiredBoundary)) {
-        throw "Five-message mailbox boundary is missing $requiredBoundary."
+        throw "Ten-message mailbox boundary is missing $requiredBoundary."
     }
 }
 

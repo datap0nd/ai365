@@ -25,10 +25,10 @@ final review.
 
 The add-in provides a native chat sidebar inside Outlook. A local `/search`
 command or Outlook multi-selection creates a reviewable working set of at most
-five emails. A normal prompt sends recent in-memory conversation plus optional
+ten emails. A normal prompt sends recent in-memory conversation plus optional
 selected-message or working-set metadata to a user-configured OpenAI-compatible
 endpoint. The model may request bounded read-only searches and message bodies
-from the primary Inbox and Sent Items, but it can never load more than five
+from the primary Inbox and Sent Items, but it can never load more than ten
 unique bodies per request. After the user explicitly arms one request, the model may
 create one unsent Outlook reply or new-message draft. That visible Outlook item
 then remains linked to the chat so later feedback updates the same draft.
@@ -48,10 +48,10 @@ locally linked item. The dedicated host exposes no send operation.
 
 - Microsoft Office Professional Plus 2021 with classic Outlook on Windows.
 - Per-user local installation is preferred.
-- The user opens MailAI from the ribbon or right-clicks one to five selected
+- The user opens MailAI from the ribbon or right-clicks one to ten selected
   emails and chooses **Send to MailAI**, then works in a right-docked Outlook
   Custom Task Pane. One selected email receives a temporary read handle. Two to
-  five selected emails become the locked working set.
+  ten selected emails become the locked working set.
 - Configuration is stored for the current Windows user. The API key is encrypted
   with Windows Data Protection API.
 - Conversations are kept in memory and disappear when Outlook closes or the user
@@ -60,10 +60,10 @@ locally linked item. The dedicated host exposes no send operation.
 ## Capabilities and Constraints
 
 - Search and read bounded context from the primary Inbox and Sent Items.
-- Handle `/search person or topic` locally, retain only the newest five metadata
+- Handle `/search person or topic` locally, retain only the newest ten metadata
   matches, show them as distinct collapsible context cards, and allow another
   `/search` to replace that set before an LLM call.
-- Accept Ctrl+click multi-selection of two to five Outlook emails as the same
+- Accept Ctrl+click multi-selection of two to ten Outlook emails as the same
   locked working set.
 - Hold a text conversation about the mailbox, a selected message, or a retrieved
   conversation.
@@ -74,7 +74,7 @@ locally linked item. The dedicated host exposes no send operation.
   selected source message. Never fall back to the latest mailbox item.
 - Never send, schedule, move, delete, mark, categorize, or modify the source email.
 - Without a working set, expose only `search_mailbox`, `read_messages`, and
-  `read_thread`, with one search and five unique bodies per request. With a
+  `read_thread`, with one search and ten unique bodies per request. With a
   working set, expose only `read_messages` for those approved handles.
   Conditionally expose `create_draft` for a locally recognized drafting request
   or `update_draft` for a locally recognized revision of the one linked draft,
@@ -116,7 +116,7 @@ fabricate them.
 
 - Capabilities, not prompts, define the security boundary.
 - Nothing leaves the active conversation and the locally or model-selected
-  five-email read boundary.
+  ten-email read boundary.
 - Drafting always ends in Outlook's normal editor with the user in control.
 - Local configuration should be inspectable, reversible, and per-user.
 - Familiar Windows behavior is more important than decorative novelty.

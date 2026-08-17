@@ -147,7 +147,7 @@ The palette is mostly Windows system color roles, with a fixed Outlook-adjacent 
 
 ## Layout
 
-The chat is a single-column, vertically stacked Outlook Custom Task Pane, initially 380 pixels wide with a 300-pixel minimum usable width. The top mailbox-scope strip is 92 pixels high and includes either the selected subject or five-email working-set count plus the exact active model, followed by a compact 38-pixel toolbar. When active, a collapsible 322-pixel context layer appears above the transcript. It shows bounded email cards and external text-file cards in one scrollable ledger. The transcript consumes all remaining flexible height. The 154-pixel composer band and 64-pixel status band remain anchored at the bottom.
+The chat is a single-column, vertically stacked Outlook Custom Task Pane, initially 380 pixels wide with a 300-pixel minimum usable width. The top mailbox-scope strip is 92 pixels high and includes either the selected subject or ten-email working-set count plus the exact active model, followed by a compact 38-pixel toolbar. When active, a collapsible 322-pixel context layer appears above the transcript. It shows bounded email cards and external text-file cards in one scrollable ledger. The transcript consumes all remaining flexible height. The 154-pixel composer band and 64-pixel status band remain anchored at the bottom.
 
 Horizontal content padding is 14 pixels in the sidebar work areas. The toolbar uses 8 pixels, while the modal settings form uses 24 pixels. Vertical rhythm is compact, generally 3 to 10 pixels between related controls. The transcript stays visually open and scrolls vertically instead of becoming a stack of cards.
 
@@ -184,14 +184,14 @@ Controls use square native geometry. Text fields have fixed single borders; flat
 ### Mailbox Scope Strip
 
 - **Character:** Quiet context anchor, not a card.
-- **Structure:** Muted full-width band with a bold "MailAI" title, an ellipsized optional `Selected: subject` or `Working set: N of 5 emails`, and exactly `Model: model_name`.
-- **State:** When no context is selected, the same region says mailbox search remains available. `/search person or topic` replaces the local five-email working set, while `/search clear` removes it.
+- **Structure:** Muted full-width band with a bold "MailAI" title, an ellipsized optional `Selected: subject` or `Working set: N of 10 emails`, and exactly `Model: model_name`.
+- **State:** When no context is selected, the same region says mailbox search remains available. `/search person or topic` replaces the local ten-email working set, while `/search clear` removes it.
 
 ### Toolbar Links
 
 - **Shape:** Borderless, square, 28-pixel-high buttons.
 - **Color:** White canvas with action-blue text in standard contrast.
-- **State:** Refresh selection, New chat, and Settings disable while a request is active. Refresh accepts one selected email or a Ctrl+click selection of up to five. Native focus and disabled rendering remain visible.
+- **State:** Refresh selection, New chat, and Settings disable while a request is active. Refresh accepts one selected email or a Ctrl+click selection of up to ten. Native focus and disabled rendering remain visible.
 
 ### Transcript
 
@@ -253,7 +253,7 @@ Controls use square native geometry. Text fields have fixed single borders; flat
 - **Do** state that Inbox and Sent Items are available only through bounded read tools.
 - **Do** keep the automatic local intent boundary visible and replace its guidance with linked-draft state after creation.
 - **Do** keep `Selected: subject` at the top and hide repeated `RE:`, `FW:`, and `FWD:` display prefixes.
-- **Do** cap `/search`, Outlook multi-selection, and request-wide body loading at five emails.
+- **Do** cap `/search`, Outlook multi-selection, and request-wide body loading at ten emails.
 - **Do** say "unsent draft" and "for your review" in successful draft status text.
 - **Do** inherit Windows system fonts, focus behavior, text scaling, and high-contrast colors.
 - **Do** preserve keyboard operation, including Ctrl+Enter to send, Enter to save settings, and Escape to cancel settings.

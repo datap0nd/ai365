@@ -283,7 +283,10 @@ namespace OutlookLocalAIChat.Outlook
                 " new message bodies. Request total: " +
                 _loadedBodyHandles.Count.ToString(
                     CultureInfo.InvariantCulture) +
-                " of 5.");
+                " of " +
+                MailboxWorkingSet.MaxMessages.ToString(
+                    CultureInfo.InvariantCulture) +
+                ".");
         }
 
         private MailboxToolResult ReadThread(
@@ -315,7 +318,9 @@ namespace OutlookLocalAIChat.Outlook
                 return Error(
                     callId,
                     "MAILBOX_CONTEXT_LIMIT_REACHED",
-                    "Five unique message bodies are already loaded for this request.");
+                    MailboxWorkingSet.MaxMessages.ToString(
+                        CultureInfo.InvariantCulture) +
+                    " unique message bodies are already loaded for this request.");
             }
 
             var conversation = _mailbox.ReadConversation(
@@ -358,7 +363,10 @@ namespace OutlookLocalAIChat.Outlook
                 " new conversation messages. Request total: " +
                 _loadedBodyHandles.Count.ToString(
                     CultureInfo.InvariantCulture) +
-                " of 5.");
+                " of " +
+                MailboxWorkingSet.MaxMessages.ToString(
+                    CultureInfo.InvariantCulture) +
+                ".");
         }
 
         private object SerializeMessage(

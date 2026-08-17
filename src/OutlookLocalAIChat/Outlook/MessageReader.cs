@@ -116,7 +116,7 @@ namespace OutlookLocalAIChat.Outlook
                 if (explorer == null)
                 {
                     throw new InvalidOperationException(
-                        "Open an Outlook mailbox view and select one to five emails.");
+                        "Open an Outlook mailbox view and select one to ten emails.");
                 }
 
                 dynamic activeExplorer = explorer;
@@ -180,7 +180,7 @@ namespace OutlookLocalAIChat.Outlook
                 if (count > MailboxWorkingSet.MaxMessages)
                 {
                     throw new InvalidOperationException(
-                        "Select no more than five emails before using Send to MailAI.");
+                        "Select no more than ten emails before using Send to MailAI.");
                 }
 
                 var messages = new List<MessageSnapshot>(count);

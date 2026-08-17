@@ -65,10 +65,10 @@ namespace GuardrailTests
                     "Local search command is explicit and bounded",
                     LocalSearchCommandIsBounded);
                 Run(
-                    "Working set exposes only five approved emails",
+                    "Working set exposes only ten approved emails",
                     WorkingSetIsStrictlyBounded);
                 Run(
-                    "Outlook multi-selection accepts one to five emails",
+                    "Outlook multi-selection accepts one to ten emails",
                     OutlookMultiSelectionIsBounded);
                 Run(
                     "Active Explorer selection is used for Send to MailAI",
@@ -457,8 +457,8 @@ namespace GuardrailTests
             Assert(
                 json.Contains("\"tools\"") &&
                 json.Contains("\"tool_choice\":\"auto\"") &&
-                json.Contains("\"maximum\":5") &&
-                json.Contains("\"maxItems\":5"),
+                json.Contains("\"maximum\":10") &&
+                json.Contains("\"maxItems\":10"),
                 "Request does not expose bounded mailbox tools.");
             Assert(json.Contains("\"stream\":false"), "Streaming must be off.");
 
@@ -502,7 +502,7 @@ namespace GuardrailTests
 
         private static void WorkingSetIsStrictlyBounded()
         {
-            var messages = Enumerable.Range(1, 7)
+            var messages = Enumerable.Range(1, 12)
                 .Select(index => new MessageSnapshot(
                     "entry-" + index,
                     "store",
@@ -515,11 +515,11 @@ namespace GuardrailTests
             var normalized = MailboxWorkingSet.Normalize(
                 messages.Concat(new[] { messages[0] }));
             Assert(
-                normalized.Count == 5 &&
-                MailboxWorkingSet.MaxMessages == 5 &&
+                normalized.Count == 10 &&
+                MailboxWorkingSet.MaxMessages == 10 &&
                 MailboxWorkingSet.HandleAt(0) == "context1" &&
-                MailboxWorkingSet.HandleAt(4) == "context5",
-                "The working-set normalization exceeded five unique emails.");
+                MailboxWorkingSet.HandleAt(9) == "context10",
+                "The working-set normalization exceeded ten unique emails.");
 
             var request = MakeRequest(
                 new List<ChatTurn>(),
@@ -537,7 +537,7 @@ namespace GuardrailTests
                 names.SequenceEqual(new[] { "read_messages" }) &&
                 reference.Contains("<working_email_set") &&
                 reference.Contains("context1") &&
-                reference.Contains("context5") &&
+                reference.Contains("context10") &&
                 !reference.Contains("private-body-") &&
                 system.Contains("working set") &&
                 system.Contains("Do not search"),
@@ -552,7 +552,9 @@ namespace GuardrailTests
                     "read-working-set",
                     MailboxToolCatalog.ReadMessages,
                     "{\"handles\":[\"context1\",\"context2\"," +
-                    "\"context3\",\"context4\",\"context5\"]}"));
+                    "\"context3\",\"context4\",\"context5\"," +
+                    "\"context6\",\"context7\",\"context8\"," +
+                    "\"context9\",\"context10\"]}"));
             var duplicate = host.Execute(
                 MailboxCall(
                     "read-duplicate",
@@ -569,15 +571,15 @@ namespace GuardrailTests
                     MailboxToolCatalog.ReadThread,
                     "{\"handle\":\"context1\"}"));
             Assert(
-                loaded.StatusText.Contains("Request total: 5 of 5") &&
+                loaded.StatusText.Contains("Request total: 10 of 10") &&
                 loaded.Content.Contains("private-body-1") &&
-                loaded.Content.Contains("private-body-5") &&
+                loaded.Content.Contains("private-body-10") &&
                 duplicate.Content.Contains("already_loaded") &&
                 lockedSearch.Content.Contains(
                     "MAILBOX_WORKING_SET_LOCKED") &&
                 lockedThread.Content.Contains(
                     "MAILBOX_WORKING_SET_LOCKED"),
-                "The working-set host bypassed its five-email lock.");
+                "The working-set host bypassed its ten-email lock.");
         }
 
         private static void OutlookMultiSelectionIsBounded()
@@ -608,12 +610,12 @@ namespace GuardrailTests
             catch (InvalidOperationException exception)
             {
                 overflow = exception.Message.Contains(
-                    "no more than five");
+                    "no more than ten");
             }
 
             Assert(
                 overflow,
-                "A selection larger than five emails was not rejected.");
+                "A selection larger than ten emails was not rejected.");
         }
 
         private static void ActiveExplorerSelectionIsUsed()

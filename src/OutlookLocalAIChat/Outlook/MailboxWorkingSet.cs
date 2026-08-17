@@ -6,7 +6,7 @@ namespace OutlookLocalAIChat.Outlook
 {
     public static class MailboxWorkingSet
     {
-        public const int MaxMessages = 5;
+        public const int MaxMessages = 10;
 
         public static string HandleAt(int index)
         {

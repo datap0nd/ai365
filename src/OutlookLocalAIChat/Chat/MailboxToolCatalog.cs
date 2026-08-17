@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using OutlookLocalAIChat.Outlook;
 
 namespace OutlookLocalAIChat.Chat
 {
@@ -60,7 +61,7 @@ namespace OutlookLocalAIChat.Chat
                                     IntegerSchema(
                                         "Maximum number of result summaries to return.",
                                         1,
-                                        5)
+                                        MailboxWorkingSet.MaxMessages)
                                 }
                             },
                             "query")
@@ -75,7 +76,7 @@ namespace OutlookLocalAIChat.Chat
                         description =
                             "Load the bounded plain-text bodies of messages returned by " +
                             "search_mailbox, the selected email, or the user-approved " +
-                            "five-message working set. At most five unique message bodies " +
+                            "ten-message working set. At most ten unique message bodies " +
                             "can be loaded in one request.",
                         parameters = ObjectSchema(
                             new Dictionary<string, object>
@@ -89,11 +90,11 @@ namespace OutlookLocalAIChat.Chat
                                             "items",
                                             StringSchema(
                                                 "A temporary handle returned by search_mailbox, " +
-                                                "selected, or context1 through context5 from the " +
+                                                "selected, or context1 through context10 from the " +
                                                 "user-approved working set.")
                                         },
                                         { "minItems", 1 },
-                                        { "maxItems", 5 }
+                                        { "maxItems", MailboxWorkingSet.MaxMessages }
                                     }
                                 }
                             },
@@ -108,7 +109,7 @@ namespace OutlookLocalAIChat.Chat
                         name = ReadThread,
                         description =
                             "Load bounded messages in the Outlook conversation containing " +
-                            "a searched or selected message, subject to the five-message " +
+                            "a searched or selected message, subject to the ten-message " +
                             "request-wide context cap.",
                         parameters = ObjectSchema(
                             new Dictionary<string, object>
