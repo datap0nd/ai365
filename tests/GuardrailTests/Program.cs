@@ -1761,14 +1761,14 @@ namespace GuardrailTests
             var description =
                 ModelCatalog.DescribeForSelection("qwen3-vl-30b");
             Assert(
-                description.Contains("Reads email images") &&
-                description.Contains("vision"),
+                description.Contains("Vision model") &&
+                description.Contains("email images"),
                 "Vision model guidance is incomplete: " + description);
 
             var overview = ModelCatalog.BuildGuideOverview();
             Assert(
-                overview.Contains("qwen3-vl-30b") &&
-                overview.Contains("Gauss"),
+                overview.Contains("Refresh models") &&
+                overview.Length < 80,
                 "The model guide overview is incomplete.");
         }
 

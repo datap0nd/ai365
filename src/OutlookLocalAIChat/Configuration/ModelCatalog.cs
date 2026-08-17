@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 
 namespace OutlookLocalAIChat.Configuration
 {
@@ -10,6 +9,7 @@ namespace OutlookLocalAIChat.Configuration
         internal ModelGuideEntry(
             string exampleId,
             string[] matchTokens,
+            string listLabel,
             string speed,
             string quality,
             bool readsEmailImages,
@@ -17,6 +17,7 @@ namespace OutlookLocalAIChat.Configuration
         {
             ExampleId = exampleId ?? string.Empty;
             MatchTokens = matchTokens ?? new string[0];
+            ListLabel = listLabel ?? string.Empty;
             Speed = speed ?? string.Empty;
             Quality = quality ?? string.Empty;
             ReadsEmailImages = readsEmailImages;
@@ -24,6 +25,8 @@ namespace OutlookLocalAIChat.Configuration
         }
 
         public string ExampleId { get; }
+
+        public string ListLabel { get; }
 
         public string Speed { get; }
 
@@ -37,16 +40,7 @@ namespace OutlookLocalAIChat.Configuration
 
         public string SummaryLine
         {
-            get
-            {
-                var imageNote = ReadsEmailImages
-                    ? "Reads email images (vision)"
-                    : "Spreadsheet attachments only; images stay as text metadata";
-                return ExampleId +
-                    " · " + Speed +
-                    " · " + Quality +
-                    " · " + imageNote;
-            }
+            get { return ListLabel; }
         }
     }
 
@@ -57,6 +51,7 @@ namespace OutlookLocalAIChat.Configuration
             new ModelGuideEntry(
                 "qwen3-vl-30b",
                 new[] { "qwen", "vl" },
+                "Vision model for email images",
                 "Medium",
                 "Very good",
                 true,
@@ -64,6 +59,7 @@ namespace OutlookLocalAIChat.Configuration
             new ModelGuideEntry(
                 "qwen3.6-35b-a3b",
                 new[] { "qwen", "35", "a3b" },
+                "Balanced everyday mailbox model",
                 "Medium",
                 "Very good",
                 false,
@@ -71,6 +67,7 @@ namespace OutlookLocalAIChat.Configuration
             new ModelGuideEntry(
                 "qwen3.8-27b",
                 new[] { "qwen", "27" },
+                "Lighter Qwen text model",
                 "Medium",
                 "Very good",
                 false,
@@ -78,6 +75,7 @@ namespace OutlookLocalAIChat.Configuration
             new ModelGuideEntry(
                 "gemma-4-31b-it",
                 new[] { "gemma", "31" },
+                "Strong Gemma drafting model",
                 "Medium",
                 "Very good",
                 false,
@@ -85,6 +83,7 @@ namespace OutlookLocalAIChat.Configuration
             new ModelGuideEntry(
                 "gemma-4-26b-a4b-it",
                 new[] { "gemma", "26", "a4b" },
+                "Fast Gemma for quick asks",
                 "Fast",
                 "Good",
                 false,
@@ -92,6 +91,7 @@ namespace OutlookLocalAIChat.Configuration
             new ModelGuideEntry(
                 "gpt-oss-20b",
                 new[] { "gpt", "oss", "20" },
+                "Fastest general text model",
                 "Fast",
                 "Good",
                 false,
@@ -99,6 +99,7 @@ namespace OutlookLocalAIChat.Configuration
             new ModelGuideEntry(
                 "gpt-oss-120b",
                 new[] { "gpt", "oss", "120" },
+                "Best quality, slowest model",
                 "Slow",
                 "Best",
                 false,
@@ -165,15 +166,7 @@ namespace OutlookLocalAIChat.Configuration
                     "Only vision models can interpret email images; spreadsheets are sent as extracted text for any model.";
             }
 
-            var builder = new StringBuilder();
-            builder.Append(profile.SummaryLine);
-            if (profile.Notes.Length > 0)
-            {
-                builder.Append("\n");
-                builder.Append(profile.Notes);
-            }
-
-            return builder.ToString();
+            return profile.ListLabel;
         }
 
         public static string FindBestVisionModel(
@@ -245,19 +238,7 @@ namespace OutlookLocalAIChat.Configuration
 
         public static string BuildGuideOverview()
         {
-            var lines = new List<string>
-            {
-                "Model guide (Refresh models loads IDs from your endpoint):"
-            };
-            foreach (var entry in MasterList)
-            {
-                lines.Add("• " + entry.SummaryLine);
-            }
-
-            lines.Add(
-                "Gauss and Gausso models are removed automatically. " +
-                "Use qwen3-vl-30b when the email includes images you need interpreted.");
-            return string.Join("\n", lines);
+            return "Refresh models, then pick from the guide.";
         }
 
         private static int MatchScore(
