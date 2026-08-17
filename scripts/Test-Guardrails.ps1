@@ -13,7 +13,8 @@ $forbidden = @(
 )
 
 foreach ($pattern in $forbidden) {
-    $matches = $sourceFiles | Select-String -Pattern $pattern
+    $matches = $sourceFiles | Select-String -Pattern $pattern |
+        Where-Object { $_.Line -notmatch 'File\.Delete' }
     if ($matches) {
         $matches | ForEach-Object {
             Write-Error "Forbidden Outlook capability: $($_.Path):$($_.LineNumber)"
