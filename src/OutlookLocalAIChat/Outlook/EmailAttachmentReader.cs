@@ -15,7 +15,8 @@ namespace OutlookLocalAIChat.Outlook
         public EmailAttachmentContent(
             string fileName,
             string kind,
-            string text)
+            string text,
+            string imageDataUrl = null)
         {
             FileName = TextBoundary.SingleLine(
                 fileName ?? string.Empty,
@@ -26,6 +27,9 @@ namespace OutlookLocalAIChat.Outlook
             Text = TextBoundary.PlainText(
                 text ?? string.Empty,
                 EmailAttachmentReader.MaxCharactersPerAttachment);
+            ImageDataUrl = TextBoundary.SingleLine(
+                imageDataUrl ?? string.Empty,
+                700000);
         }
 
         public string FileName { get; }
@@ -33,6 +37,8 @@ namespace OutlookLocalAIChat.Outlook
         public string Kind { get; }
 
         public string Text { get; }
+
+        public string ImageDataUrl { get; }
     }
 
     public static class EmailAttachmentReader
@@ -234,31 +240,40 @@ namespace OutlookLocalAIChat.Outlook
             string extension)
         {
             var bytes = File.ReadAllBytes(path);
+            var mimeType = ImageMimeType(extension);
             var builder = new StringBuilder();
             builder.Append("[Image attachment: ");
             builder.Append(fileName);
             builder.Append(", ");
             builder.Append(bytes.Length.ToString());
             builder.Append(" bytes, type ");
-            builder.Append(ImageMimeType(extension));
+            builder.Append(mimeType);
             builder.Append(']');
+
+            string dataUrl = null;
             if (bytes.Length <= MaxImageBytesForBase64)
             {
-                builder.Append("\nBase64:\n");
                 builder.Append(
-                    Convert.ToBase64String(bytes));
+                    "\nVision-capable models receive this image " +
+                    "through multimodal input after tool results.");
+                dataUrl =
+                    "data:" +
+                    mimeType +
+                    ";base64," +
+                    Convert.ToBase64String(bytes);
             }
             else
             {
                 builder.Append(
-                    "\nImage exceeds the inline base64 limit. " +
+                    "\nImage exceeds the vision size limit. " +
                     "Only metadata is included.");
             }
 
             return new EmailAttachmentContent(
                 fileName,
                 "image",
-                builder.ToString());
+                builder.ToString(),
+                dataUrl);
         }
 
         private static EmailAttachmentContent ExtractSpreadsheet(

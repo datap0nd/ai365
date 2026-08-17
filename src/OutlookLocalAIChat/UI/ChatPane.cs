@@ -1410,7 +1410,8 @@ namespace OutlookLocalAIChat.UI
                 ChatRequestFactory.AppendToolExchange(
                     request,
                     response,
-                    results);
+                    results,
+                    _settings.Model);
             }
 
             throw new AiEndpointException(

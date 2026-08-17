@@ -23,6 +23,7 @@ namespace OutlookLocalAIChat.UI
         private readonly CheckBox _allowInsecureHttp = new CheckBox();
         private readonly Label _transportWarning = new Label();
         private readonly Label _modelGuidance = new Label();
+        private readonly ListBox _modelGuide = new ListBox();
         private readonly Label _testStatus = new Label();
         private readonly CheckBox _useToneProfile = new CheckBox();
         private readonly RichTextBox _toneProfile = new RichTextBox();
@@ -64,8 +65,8 @@ namespace OutlookLocalAIChat.UI
 
             Text = "MailAI settings";
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new Size(700, 670);
-            MinimumSize = new Size(620, 620);
+            ClientSize = new Size(700, 760);
+            MinimumSize = new Size(620, 700);
             MaximizeBox = false;
             MinimizeBox = false;
             ShowIcon = false;
@@ -220,14 +221,16 @@ namespace OutlookLocalAIChat.UI
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 1,
-                RowCount = 12,
+                RowCount = 14,
                 Padding = new Padding(18, 16, 18, 12)
             };
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 96));
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -242,24 +245,27 @@ namespace OutlookLocalAIChat.UI
             layout.Controls.Add(_model, 0, 3);
             ConfigureSupportingLabel(_modelGuidance);
             layout.Controls.Add(_modelGuidance, 0, 4);
-            layout.Controls.Add(FieldLabel("API key"), 0, 5);
-            layout.Controls.Add(_apiKey, 0, 6);
-            layout.Controls.Add(_allowInsecureHttp, 0, 7);
+            layout.Controls.Add(FieldLabel("Model guide"), 0, 5);
+            ConfigureModelGuide();
+            layout.Controls.Add(_modelGuide, 0, 6);
+            layout.Controls.Add(FieldLabel("API key"), 0, 7);
+            layout.Controls.Add(_apiKey, 0, 8);
+            layout.Controls.Add(_allowInsecureHttp, 0, 9);
             ConfigureSupportingLabel(_transportWarning);
             _transportWarning.AccessibleRole = AccessibleRole.Alert;
-            layout.Controls.Add(_transportWarning, 0, 8);
+            layout.Controls.Add(_transportWarning, 0, 10);
 
             var hint = SupportingText(
                 "The endpoint receives your prompt, conversation, and only bounded " +
                 "context. MailAI exposes read tools and guarded draft creation only. " +
                 "It has no send, move, delete, or mailbox mutation capability.");
-            layout.Controls.Add(hint, 0, 9);
+            layout.Controls.Add(hint, 0, 11);
             ConfigureSupportingLabel(_testStatus);
             _testStatus.Text =
                 "Use Refresh models to load the model list from your endpoint. " +
                 "Check endpoint also verifies tool-call compatibility.";
             _testStatus.AccessibleRole = AccessibleRole.StatusBar;
-            layout.Controls.Add(_testStatus, 0, 10);
+            layout.Controls.Add(_testStatus, 0, 12);
 
             _checkEndpoint.Click += CheckEndpointClick;
             _refreshModels.Click += RefreshModelsClick;
@@ -271,7 +277,7 @@ namespace OutlookLocalAIChat.UI
             };
             checkRow.Controls.Add(_checkEndpoint);
             checkRow.Controls.Add(_refreshModels);
-            layout.Controls.Add(checkRow, 0, 11);
+            layout.Controls.Add(checkRow, 0, 13);
             page.Controls.Add(layout);
             return page;
         }
@@ -334,6 +340,65 @@ namespace OutlookLocalAIChat.UI
                 7);
             page.Controls.Add(layout);
             return page;
+        }
+
+        private void ConfigureModelGuide()
+        {
+            _modelGuide.Dock = DockStyle.Fill;
+            _modelGuide.IntegralHeight = false;
+            _modelGuide.BorderStyle = BorderStyle.FixedSingle;
+            _modelGuide.Font = new Font(
+                SystemFonts.MessageBoxFont.FontFamily,
+                SystemFonts.MessageBoxFont.Size,
+                FontStyle.Regular);
+            _modelGuide.AccessibleName = "Model guide";
+            _modelGuide.AccessibleDescription =
+                "Reference list of common local models with speed, quality, and vision notes. " +
+                "Double-click an entry to pick a matching discovered model.";
+            foreach (var entry in ModelCatalog.GuideEntries)
+            {
+                _modelGuide.Items.Add(entry);
+            }
+
+            _modelGuide.DisplayMember = "SummaryLine";
+            _modelGuide.SelectedIndexChanged += ModelGuideSelectionChanged;
+            _modelGuide.DoubleClick += ModelGuideDoubleClick;
+        }
+
+        private void ModelGuideSelectionChanged(
+            object sender,
+            EventArgs eventArgs)
+        {
+            var entry = _modelGuide.SelectedItem as ModelGuideEntry;
+            if (entry == null)
+            {
+                return;
+            }
+
+            _modelGuidance.Text = entry.SummaryLine +
+                "\n" +
+                entry.Notes;
+        }
+
+        private void ModelGuideDoubleClick(
+            object sender,
+            EventArgs eventArgs)
+        {
+            var entry = _modelGuide.SelectedItem as ModelGuideEntry;
+            if (entry == null)
+            {
+                return;
+            }
+
+            var discovered = ModelCatalog.FindMatchingDiscoveredId(
+                entry,
+                _model.Items.Cast<object>()
+                    .Select(item => item.ToString()));
+            if (discovered.Length > 0)
+            {
+                _model.Text = discovered;
+                UpdateModelGuidance();
+            }
         }
 
         private void ConfigureModelField()
@@ -728,12 +793,13 @@ namespace OutlookLocalAIChat.UI
                     var models = await _client.GetModelsAsync(
                         settings,
                         cancellation.Token);
-                    AddDiscoveredModels(models);
+                    var added = AddDiscoveredModels(models);
                     _testStatus.ForeColor = SuccessText;
                     _testStatus.Text =
                         "Loaded " +
-                        models.Count.ToString() +
-                        " generative models into the model list.";
+                        added.ToString() +
+                        " generative models into the model list. " +
+                        "Gauss and Gausso models are excluded automatically.";
                 }
             }
             catch (OperationCanceledException)
@@ -757,10 +823,16 @@ namespace OutlookLocalAIChat.UI
             }
         }
 
-        private void AddDiscoveredModels(IEnumerable<string> models)
+        private int AddDiscoveredModels(IEnumerable<string> models)
         {
+            var added = 0;
             foreach (var model in models ?? Enumerable.Empty<string>())
             {
+                if (ModelCatalog.IsDisallowedModel(model))
+                {
+                    continue;
+                }
+
                 if (!_model.Items.Cast<object>().Any(item =>
                     string.Equals(
                         item.ToString(),
@@ -768,8 +840,17 @@ namespace OutlookLocalAIChat.UI
                         StringComparison.OrdinalIgnoreCase)))
                 {
                     _model.Items.Add(model);
+                    added++;
                 }
             }
+
+            if (added > 0 && _model.Text.Trim().Length == 0)
+            {
+                _modelGuide.SelectedIndex = -1;
+            }
+
+            UpdateModelGuidance();
+            return added;
         }
 
         private void SetChecking(bool checking)
@@ -856,8 +937,34 @@ namespace OutlookLocalAIChat.UI
 
         private void UpdateModelGuidance()
         {
+            var text = _model.Text.Trim();
+            if (text.Length == 0)
+            {
+                _modelGuidance.Text = ModelCatalog.BuildGuideOverview();
+                _modelGuide.ClearSelected();
+                return;
+            }
+
             _modelGuidance.Text =
-                ModelSelectionPolicy.DescriptionFor(_model.Text);
+                ModelSelectionPolicy.DescriptionFor(text);
+
+            var profile = ModelCatalog.Resolve(text);
+            if (profile == null)
+            {
+                _modelGuide.ClearSelected();
+                return;
+            }
+
+            for (var index = 0; index < _modelGuide.Items.Count; index++)
+            {
+                if (_modelGuide.Items[index] == profile)
+                {
+                    _modelGuide.SelectedIndex = index;
+                    return;
+                }
+            }
+
+            _modelGuide.ClearSelected();
         }
 
         private void UpdateTransportWarning()

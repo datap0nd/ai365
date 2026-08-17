@@ -29,6 +29,15 @@ namespace GuardrailTests
         {
             try
             {
+                Run(
+                    "Gauss models are excluded from discovery",
+                    GaussModelsAreExcluded);
+                Run(
+                    "Vision models receive multimodal image follow-up",
+                    VisionModelsReceiveMultimodalFollowUp);
+                Run(
+                    "Model catalog describes vision capability",
+                    ModelCatalogDescribesVisionCapability);
                 Run("HTTPS endpoint is accepted", HttpsEndpointIsAccepted);
                 Run("Loopback HTTP endpoint is accepted", LoopbackHttpIsAccepted);
                 Run("Remote HTTP endpoint is rejected", RemoteHttpIsRejected);
@@ -270,8 +279,7 @@ namespace GuardrailTests
                     new List<ChatTurn>(),
                     "Help me reply.");
                 var reference =
-                    ((ChatCompletionInputMessage)
-                        request.messages[1]).content;
+                    MessageContent(request.messages[1]);
                 Assert(
                     reference.Contains("Supported attachments (1): budget.csv"),
                     "Attachment metadata was not exposed in the context reference.");
@@ -528,11 +536,9 @@ namespace GuardrailTests
                 .Select(tool => tool.function.name)
                 .ToArray();
             var reference =
-                ((ChatCompletionInputMessage)
-                    request.messages[1]).content;
+                MessageContent(request.messages[1]);
             var system =
-                ((ChatCompletionInputMessage)
-                    request.messages[0]).content;
+                MessageContent(request.messages[0]);
             Assert(
                 names.SequenceEqual(new[] { "read_messages" }) &&
                 reference.Contains("<working_email_set") &&
@@ -656,7 +662,7 @@ namespace GuardrailTests
                 new List<ChatTurn>(),
                 externalContext: documents);
             var reference =
-                ((ChatCompletionInputMessage)request.messages[1]).content;
+                MessageContent(request.messages[1]);
             Assert(
                 normalized.Count == ExternalContextDocument.MaxDocuments &&
                 total <= ExternalContextDocument.MaxTotalCharacters &&
@@ -682,7 +688,7 @@ namespace GuardrailTests
                 "local-model",
                 samples);
             var analysisBody =
-                ((ChatCompletionInputMessage)analysis.messages[1]).content;
+                MessageContent(analysis.messages[1]);
             var profile = "Write directly and close with Regards.";
             var ordinary = MakeRequest(
                 new List<ChatTurn>(),
@@ -692,9 +698,9 @@ namespace GuardrailTests
                 allowDraftCreate: true,
                 toneProfile: profile);
             var ordinarySystem =
-                ((ChatCompletionInputMessage)ordinary.messages[0]).content;
+                MessageContent(ordinary.messages[0]);
             var draftingSystem =
-                ((ChatCompletionInputMessage)drafting.messages[0]).content;
+                MessageContent(drafting.messages[0]);
             var cleaned = SentMailToneSampler.CleanBody(
                 "Thanks for the update.\n\nRegards,\nMe\n" +
                 "-----Original Message-----\nQuoted confidential history");
@@ -766,8 +772,7 @@ namespace GuardrailTests
             var json = new JavaScriptSerializer()
                 .Serialize(withPermission);
             var system =
-                ((ChatCompletionInputMessage)
-                    withPermission.messages[0]).content;
+                MessageContent(withPermission.messages[0]);
             Assert(
                 json.Contains("\"create_draft\"") &&
                 json.Contains("\"reply_handle\"") &&
@@ -794,8 +799,7 @@ namespace GuardrailTests
                 !withLinkedDraft.tools.Any(tool =>
                     tool.function.name ==
                     DraftToolCatalog.CreateDraft) &&
-                ((ChatCompletionInputMessage)
-                    withLinkedDraft.messages[2]).content.Contains(
+                MessageContent(withLinkedDraft.messages[2]).Contains(
                         "<linked_draft_reference>"),
                 "A linked draft did not replace create with the bounded update tool.");
 
@@ -815,7 +819,7 @@ namespace GuardrailTests
                         tool.function.name)) &&
                 !linkedWithoutUpdateIntent.messages
                     .OfType<ChatCompletionInputMessage>()
-                    .Any(message => message.content.Contains(
+                    .Any(message => MessageContent(message).Contains(
                         "<linked_draft_reference>")),
                 "A linked draft was exposed without local update intent.");
 
@@ -1200,8 +1204,7 @@ namespace GuardrailTests
         {
             var request = MakeRequest(new List<ChatTurn>());
             var context =
-                ((ChatCompletionInputMessage)request.messages[1])
-                .content;
+                MessageContent(request.messages[1]);
             Assert(
                 context.Contains("<selected_email_reference") &&
                 context.Contains("untrusted reference data") &&
@@ -1562,6 +1565,153 @@ namespace GuardrailTests
                 workingMessages,
                 externalContext,
                 toneProfile);
+        }
+
+        private static string MessageContent(object message)
+        {
+            return Convert.ToString(
+                ((ChatCompletionInputMessage)message).content) ??
+                string.Empty;
+        }
+
+        private static void GaussModelsAreExcluded()
+        {
+            const string response =
+                "{\"data\":[" +
+                "{\"id\":\"qwen3-vl-30b\"}," +
+                "{\"id\":\"gauss-vision-7b\"}," +
+                "{\"id\":\"my-gausso-model\"}," +
+                "{\"id\":\"gpt-oss-20b\"}]}";
+            using (var server = new FakeEndpoint(response))
+            using (var client = new OpenAiCompatibleClient())
+            {
+                var models = client.GetModelsAsync(
+                    EndpointSettings(server.BaseUrl),
+                    CancellationToken.None)
+                    .GetAwaiter()
+                    .GetResult();
+                server.Wait();
+
+                Assert(
+                    models.SequenceEqual(
+                        new[]
+                        {
+                            "gpt-oss-20b",
+                            "qwen3-vl-30b"
+                        }),
+                    "Gauss models were not excluded: " +
+                    string.Join(", ", models));
+            }
+
+            Assert(
+                ModelCatalog.IsDisallowedModel("gauss-vision-7b") &&
+                ModelCatalog.IsDisallowedModel("my-gausso-model") &&
+                !ModelCatalog.IsDisallowedModel("qwen3-vl-30b"),
+                "The Gauss filter did not classify model names correctly.");
+        }
+
+        private static void VisionModelsReceiveMultimodalFollowUp()
+        {
+            var pngPath = Path.Combine(
+                Path.GetTempPath(),
+                "MailAI-test-" + Guid.NewGuid().ToString("N") + ".png");
+            File.WriteAllBytes(
+                pngPath,
+                Convert.FromBase64String(
+                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ" +
+                    "AAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="));
+            try
+            {
+                var attachments = new FakeOutlookAttachments();
+                attachments.Add(new FakeOutlookAttachment(
+                    "scan.png",
+                    pngPath));
+                var mail = new FakeSelectedMailItem(
+                    "vision-entry",
+                    "Invoice scan")
+                {
+                    Attachments = attachments
+                };
+                var application = new FakeOutlookApplication();
+                application.Session.Register(
+                    "vision-entry",
+                    "store",
+                    mail);
+                var snapshot = new MessageReader(application)
+                    .CaptureById("vision-entry", "store");
+                var host = new MailboxToolHost(application, snapshot);
+                var loaded = host.Execute(
+                    MailboxCall(
+                        "read-vision",
+                        MailboxToolCatalog.ReadMessages,
+                        "{\"handles\":[\"selected\"]}"));
+                Assert(
+                    loaded.VisionImages.Count == 1 &&
+                    loaded.VisionImages[0].FileName == "scan.png" &&
+                    loaded.VisionImages[0].DataUrl.StartsWith(
+                        "data:image/png;base64,") &&
+                    loaded.Content.Contains("vision_available") &&
+                    !loaded.Content.Contains("base64,"),
+                    "Vision image payloads were not separated from tool JSON.");
+
+                var request = ChatRequestFactory.Create(
+                    "qwen3-vl-30b",
+                    snapshot,
+                    new List<ChatTurn>(),
+                    "What is in the attachment?");
+                ChatRequestFactory.AppendToolExchange(
+                    request,
+                    new ChatCompletionResponseMessage
+                    {
+                        role = "assistant",
+                        content = string.Empty,
+                        tool_calls = new List<ChatToolCall>
+                        {
+                            MailboxCall(
+                                "read-vision",
+                                MailboxToolCatalog.ReadMessages,
+                                "{\"handles\":[\"selected\"]}")
+                        }
+                    },
+                    new List<MailboxToolResult> { loaded },
+                    "qwen3-vl-30b");
+                var body = new JavaScriptSerializer()
+                    .Serialize(request);
+                Assert(
+                    body.Contains("\"type\":\"image_url\"") &&
+                    body.Contains("data:image/png;base64,") &&
+                    body.Contains("scan.png"),
+                    "Vision follow-up did not append multimodal image content.");
+            }
+            finally
+            {
+                if (File.Exists(pngPath))
+                {
+                    File.Delete(pngPath);
+                }
+            }
+        }
+
+        private static void ModelCatalogDescribesVisionCapability()
+        {
+            Assert(
+                ModelCatalog.SupportsVision("qwen3-vl-30b") &&
+                !ModelCatalog.SupportsVision("qwen3.6-35b-a3b") &&
+                ModelCatalog.GuideEntries.Count >= 7,
+                "The model catalog vision flags are incomplete.");
+
+            var description =
+                ModelCatalog.DescribeForSelection("qwen3-vl-30b");
+            Assert(
+                description.Contains("Reads email images") &&
+                description.Contains("vision"),
+                "Vision model guidance is incomplete: " + description);
+
+            var overview = ModelCatalog.BuildGuideOverview();
+            Assert(
+                overview.Contains("qwen3-vl-30b") &&
+                overview.Contains("Gauss"),
+                "The model guide overview is incomplete.");
         }
 
         private static void Assert(bool condition, string message)
