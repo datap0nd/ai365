@@ -179,7 +179,8 @@ namespace OutlookLocalAIChat.Outlook
                             new EmailAttachmentContent(
                                 fileName,
                                 extracted.Kind,
-                                boundedText));
+                                boundedText,
+                                extracted.ImageDataUrl));
                         totalCharacters += boundedText.Length;
                     }
                     catch
