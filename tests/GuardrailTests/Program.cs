@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -60,6 +61,9 @@ namespace GuardrailTests
                 Run(
                     "Oversized images are downscaled for vision input",
                     OversizedImagesAreDownscaledForVision);
+                Run(
+                    "PDF, PowerPoint, and Word attachments are extracted",
+                    DocumentAttachmentsAreExtracted);
                 Run(
                     "Model catalog describes vision capability",
                     ModelCatalogDescribesVisionCapability);
@@ -2019,6 +2023,119 @@ namespace GuardrailTests
                 if (File.Exists(pngPath))
                 {
                     File.Delete(pngPath);
+                }
+            }
+        }
+
+        private static void DocumentAttachmentsAreExtracted()
+        {
+            var temp = Path.Combine(
+                Path.GetTempPath(),
+                "MetoMail-docs-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(temp);
+            var pptxPath = Path.Combine(temp, "deck.pptx");
+            var docxPath = Path.Combine(temp, "notes.docx");
+            var pdfPath = Path.Combine(temp, "invoice.pdf");
+            try
+            {
+                const string drawingNamespace =
+                    "http://schemas.openxmlformats.org/drawingml/2006/main";
+                WriteZipEntry(
+                    pptxPath,
+                    "ppt/slides/slide1.xml",
+                    "<p:sld xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\" " +
+                    "xmlns:a=\"" + drawingNamespace + "\">" +
+                    "<p:cSld><p:spTree><p:sp><p:txBody>" +
+                    "<a:p><a:r><a:t>Quarterly revenue plan</a:t></a:r></a:p>" +
+                    "</p:txBody></p:sp></p:spTree></p:cSld></p:sld>");
+                WriteZipEntry(
+                    docxPath,
+                    "word/document.xml",
+                    "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">" +
+                    "<w:body><w:p><w:r><w:t>Contract terms baseline</w:t></w:r></w:p>" +
+                    "</w:body></w:document>");
+                File.WriteAllText(
+                    pdfPath,
+                    "%PDF-1.4\n1 0 obj << /Length 96 >>\nstream\n" +
+                    "BT /F1 12 Tf (Invoice total 12345 dollars for " +
+                    "consulting services rendered in July) Tj ET\n" +
+                    "endstream\nendobj\ntrailer\n%%EOF",
+                    Encoding.ASCII);
+
+                var attachments = new FakeOutlookAttachments();
+                attachments.Add(new FakeOutlookAttachment(
+                    "deck.pptx",
+                    pptxPath));
+                attachments.Add(new FakeOutlookAttachment(
+                    "notes.docx",
+                    docxPath));
+                attachments.Add(new FakeOutlookAttachment(
+                    "invoice.pdf",
+                    pdfPath));
+                var mail = new FakeSelectedMailItem(
+                    "document-entry",
+                    "Project documents")
+                {
+                    Attachments = attachments
+                };
+                var application = new FakeOutlookApplication();
+                application.Session.Register(
+                    "document-entry",
+                    "store",
+                    mail);
+                var snapshot = new MessageReader(application)
+                    .CaptureById("document-entry", "store");
+                Assert(
+                    snapshot.AttachmentNames.Count == 3,
+                    "Document attachments were not listed in metadata: " +
+                    string.Join(", ", snapshot.AttachmentNames));
+
+                var host = new MailboxToolHost(application, snapshot);
+                var loaded = host.Execute(
+                    MailboxCall(
+                        "read-documents",
+                        MailboxToolCatalog.ReadMessages,
+                        "{\"handles\":[\"selected\"]}"));
+                Assert(
+                    loaded.Content.Contains("Quarterly revenue plan") &&
+                    loaded.Content.Contains("[Slide 1]"),
+                    "PowerPoint slide text was not extracted.");
+                Assert(
+                    loaded.Content.Contains("Contract terms baseline"),
+                    "Word document text was not extracted.");
+                Assert(
+                    loaded.Content.Contains(
+                        "Invoice total 12345 dollars for " +
+                        "consulting services rendered in July"),
+                    "PDF text was not extracted.");
+            }
+            finally
+            {
+                if (Directory.Exists(temp))
+                {
+                    Directory.Delete(temp, true);
+                }
+            }
+        }
+
+        private static void WriteZipEntry(
+            string zipPath,
+            string entryName,
+            string xml)
+        {
+            using (var archive = ZipFile.Open(
+                zipPath,
+                ZipArchiveMode.Create))
+            {
+                var entry = archive.CreateEntry(entryName);
+                using (var stream = entry.Open())
+                using (var writer = new StreamWriter(
+                    stream,
+                    Encoding.UTF8))
+                {
+                    writer.Write(
+                        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
+                        xml);
                 }
             }
         }

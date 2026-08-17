@@ -76,6 +76,23 @@ namespace OutlookLocalAIChat.Outlook
                 },
                 StringComparer.OrdinalIgnoreCase);
 
+        private static readonly HashSet<string> DocumentExtensions =
+            new HashSet<string>(
+                new[]
+                {
+                    ".pdf", ".pptx", ".docx", ".ppt", ".doc"
+                },
+                StringComparer.OrdinalIgnoreCase);
+
+        private static readonly HashSet<string> TextExtensions =
+            new HashSet<string>(
+                new[]
+                {
+                    ".txt", ".md", ".log", ".json",
+                    ".xml", ".html", ".htm"
+                },
+                StringComparer.OrdinalIgnoreCase);
+
         public static IReadOnlyList<EmailAttachmentContent> Read(
             object outlookApplication,
             MessageSnapshot message)
@@ -164,6 +181,7 @@ namespace OutlookLocalAIChat.Outlook
                         var fileInfo = new FileInfo(tempPath);
                         var sizeLimit =
                             ImageExtensions.Contains(extension) ||
+                            DocumentExtensions.Contains(extension) ||
                             isExtensionless
                                 ? MaxImageBytesPerAttachment
                                 : MaxBytesPerAttachment;
@@ -234,7 +252,14 @@ namespace OutlookLocalAIChat.Outlook
         public static bool IsSupportedExtension(string extension)
         {
             return ImageExtensions.Contains(extension) ||
-                   ExcelExtensions.Contains(extension);
+                   ExcelExtensions.Contains(extension) ||
+                   DocumentExtensions.Contains(extension) ||
+                   TextExtensions.Contains(extension);
+        }
+
+        public static bool IsImageExtension(string extension)
+        {
+            return ImageExtensions.Contains(extension);
         }
 
         private static EmailAttachmentContent ExtractContent(
@@ -255,10 +280,519 @@ namespace OutlookLocalAIChat.Outlook
                 return ExtractSpreadsheet(path, fileName, extension);
             }
 
+            if (DocumentExtensions.Contains(extension))
+            {
+                return ExtractDocument(path, fileName, extension);
+            }
+
+            if (TextExtensions.Contains(extension))
+            {
+                return new EmailAttachmentContent(
+                    fileName,
+                    "text",
+                    ReadTextFile(path));
+            }
+
             var sniffedMimeType = SniffImageMimeType(path);
             return sniffedMimeType != null
                 ? ExtractImage(path, fileName, sniffedMimeType)
                 : null;
+        }
+
+        private static EmailAttachmentContent ExtractDocument(
+            string path,
+            string fileName,
+            string extension)
+        {
+            var kind = "document";
+            string text;
+            try
+            {
+                switch (extension.ToLowerInvariant())
+                {
+                    case ".pdf":
+                        kind = "pdf";
+                        text = ExtractPdfText(path);
+                        if (CountReadableCharacters(text) < 40)
+                        {
+                            text =
+                                "[PDF attachment: " + fileName +
+                                ". No machine-readable text could be " +
+                                "extracted. The PDF is likely scanned " +
+                                "pages or uses embedded font encodings. " +
+                                "Ask the user to export it as text or " +
+                                "paste the content into the email.]";
+                        }
+                        else
+                        {
+                            text =
+                                "[PDF attachment: " + fileName +
+                                " - best-effort text extraction; layout " +
+                                "and some characters may be lost]\n" +
+                                text;
+                        }
+
+                        break;
+                    case ".pptx":
+                        kind = "powerpoint";
+                        text = ExtractPptxText(path);
+                        break;
+                    case ".docx":
+                        kind = "word";
+                        text = ExtractDocxText(path);
+                        break;
+                    default:
+                        text =
+                            "[Office attachment: " + fileName +
+                            ". Legacy binary " + extension +
+                            " files are listed but not parsed. Save " +
+                            "as .pptx, .docx, or PDF for text " +
+                            "extraction.]";
+                        break;
+                }
+            }
+            catch
+            {
+                text =
+                    "[Attachment: " + fileName +
+                    ". The file could not be parsed for text.]";
+            }
+
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                text =
+                    "[Attachment: " + fileName +
+                    ". No readable text was extracted.]";
+            }
+
+            return new EmailAttachmentContent(
+                fileName,
+                kind,
+                text);
+        }
+
+        private static string ExtractPptxText(string path)
+        {
+            using (var zip = ZipFile.OpenRead(path))
+            {
+                XNamespace drawingNamespace =
+                    "http://schemas.openxmlformats.org/drawingml/2006/main";
+                var slides = zip.Entries
+                    .Where(entry =>
+                        entry.FullName.StartsWith(
+                            "ppt/slides/slide",
+                            StringComparison.OrdinalIgnoreCase) &&
+                        entry.FullName.EndsWith(
+                            ".xml",
+                            StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(entry => SlideNumber(entry.FullName))
+                    .ToList();
+                var builder = new StringBuilder();
+                foreach (var slide in slides)
+                {
+                    XDocument document;
+                    using (var stream = slide.Open())
+                    {
+                        document = XDocument.Load(stream);
+                    }
+
+                    builder.AppendLine(
+                        "[Slide " +
+                        SlideNumber(slide.FullName).ToString() +
+                        "]");
+                    foreach (var paragraph in document.Descendants(
+                        drawingNamespace + "p"))
+                    {
+                        var text = string.Concat(
+                            paragraph
+                                .Descendants(drawingNamespace + "t")
+                                .Select(node => node.Value));
+                        if (text.Trim().Length > 0)
+                        {
+                            builder.AppendLine(text);
+                        }
+                    }
+
+                    if (builder.Length >= MaxCharactersPerAttachment)
+                    {
+                        break;
+                    }
+                }
+
+                return builder.ToString();
+            }
+        }
+
+        private static int SlideNumber(string entryName)
+        {
+            var digits = new StringBuilder();
+            foreach (var character in entryName)
+            {
+                if (char.IsDigit(character))
+                {
+                    digits.Append(character);
+                }
+                else if (digits.Length > 0)
+                {
+                    break;
+                }
+            }
+
+            int number;
+            return int.TryParse(digits.ToString(), out number)
+                ? number
+                : 0;
+        }
+
+        private static string ExtractDocxText(string path)
+        {
+            using (var zip = ZipFile.OpenRead(path))
+            {
+                var entry = zip.GetEntry("word/document.xml");
+                if (entry == null)
+                {
+                    return string.Empty;
+                }
+
+                XDocument document;
+                using (var stream = entry.Open())
+                {
+                    document = XDocument.Load(stream);
+                }
+
+                XNamespace wordNamespace =
+                    "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+                var builder = new StringBuilder();
+                foreach (var paragraph in document.Descendants(
+                    wordNamespace + "p"))
+                {
+                    var text = string.Concat(
+                        paragraph
+                            .Descendants(wordNamespace + "t")
+                            .Select(node => node.Value));
+                    if (text.Trim().Length > 0)
+                    {
+                        builder.AppendLine(text);
+                    }
+
+                    if (builder.Length >= MaxCharactersPerAttachment)
+                    {
+                        break;
+                    }
+                }
+
+                return builder.ToString();
+            }
+        }
+
+        private static string ExtractPdfText(string path)
+        {
+            var bytes = File.ReadAllBytes(path);
+            var builder = new StringBuilder();
+            var index = 0;
+            while (builder.Length < MaxCharactersPerAttachment)
+            {
+                var streamStart = FindPdfStreamKeyword(bytes, index);
+                if (streamStart < 0)
+                {
+                    break;
+                }
+
+                var dataStart = streamStart + 6;
+                if (dataStart < bytes.Length &&
+                    bytes[dataStart] == (byte)'\r')
+                {
+                    dataStart++;
+                }
+
+                if (dataStart < bytes.Length &&
+                    bytes[dataStart] == (byte)'\n')
+                {
+                    dataStart++;
+                }
+
+                var streamEnd = FindSequence(
+                    bytes,
+                    dataStart,
+                    "endstream");
+                if (streamEnd < 0)
+                {
+                    break;
+                }
+
+                var data = new byte[streamEnd - dataStart];
+                Array.Copy(
+                    bytes,
+                    dataStart,
+                    data,
+                    0,
+                    data.Length);
+                AppendPdfTextOperators(
+                    TryInflate(data) ?? data,
+                    builder);
+                index = streamEnd + 9;
+            }
+
+            return builder.ToString();
+        }
+
+        private static int FindPdfStreamKeyword(
+            byte[] bytes,
+            int startIndex)
+        {
+            var index = startIndex;
+            while (true)
+            {
+                var found = FindSequence(bytes, index, "stream");
+                if (found < 0)
+                {
+                    return -1;
+                }
+
+                var isEndstream = found >= 3 &&
+                    bytes[found - 3] == (byte)'e' &&
+                    bytes[found - 2] == (byte)'n' &&
+                    bytes[found - 1] == (byte)'d';
+                if (!isEndstream)
+                {
+                    return found;
+                }
+
+                index = found + 6;
+            }
+        }
+
+        private static int FindSequence(
+            byte[] bytes,
+            int startIndex,
+            string keyword)
+        {
+            for (var index = Math.Max(0, startIndex);
+                 index <= bytes.Length - keyword.Length;
+                 index++)
+            {
+                var match = true;
+                for (var offset = 0;
+                     offset < keyword.Length;
+                     offset++)
+                {
+                    if (bytes[index + offset] !=
+                        (byte)keyword[offset])
+                    {
+                        match = false;
+                        break;
+                    }
+                }
+
+                if (match)
+                {
+                    return index;
+                }
+            }
+
+            return -1;
+        }
+
+        private static byte[] TryInflate(byte[] data)
+        {
+            try
+            {
+                var offset = data.Length > 2 && data[0] == 0x78
+                    ? 2
+                    : 0;
+                using (var input = new MemoryStream(
+                    data,
+                    offset,
+                    data.Length - offset))
+                using (var deflate = new DeflateStream(
+                    input,
+                    CompressionMode.Decompress))
+                using (var output = new MemoryStream())
+                {
+                    var buffer = new byte[8192];
+                    var total = 0;
+                    while (true)
+                    {
+                        var read = deflate.Read(
+                            buffer,
+                            0,
+                            buffer.Length);
+                        if (read <= 0)
+                        {
+                            break;
+                        }
+
+                        total += read;
+                        if (total > 4 * 1024 * 1024)
+                        {
+                            break;
+                        }
+
+                        output.Write(buffer, 0, read);
+                    }
+
+                    var inflated = output.ToArray();
+                    return inflated.Length > 0 ? inflated : null;
+                }
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static readonly System.Text.RegularExpressions.Regex
+            PdfLiteralString =
+                new System.Text.RegularExpressions.Regex(
+                    "\\(((?:\\\\.|[^\\\\()])*)\\)\\s*(?:Tj|')",
+                    System.Text.RegularExpressions.RegexOptions
+                        .Compiled,
+                    TimeSpan.FromSeconds(2));
+
+        private static readonly System.Text.RegularExpressions.Regex
+            PdfArrayString =
+                new System.Text.RegularExpressions.Regex(
+                    "\\[((?:\\((?:\\\\.|[^\\\\()])*\\)|[^\\]])*)\\]\\s*TJ",
+                    System.Text.RegularExpressions.RegexOptions
+                        .Compiled,
+                    TimeSpan.FromSeconds(2));
+
+        private static readonly System.Text.RegularExpressions.Regex
+            PdfInnerLiteral =
+                new System.Text.RegularExpressions.Regex(
+                    "\\(((?:\\\\.|[^\\\\()])*)\\)",
+                    System.Text.RegularExpressions.RegexOptions
+                        .Compiled,
+                    TimeSpan.FromSeconds(2));
+
+        private static void AppendPdfTextOperators(
+            byte[] data,
+            StringBuilder builder)
+        {
+            string content;
+            try
+            {
+                content = Encoding
+                    .GetEncoding("ISO-8859-1")
+                    .GetString(data);
+            }
+            catch
+            {
+                return;
+            }
+
+            if (content.IndexOf("BT", StringComparison.Ordinal) < 0)
+            {
+                return;
+            }
+
+            try
+            {
+                foreach (System.Text.RegularExpressions.Match match in
+                    PdfLiteralString.Matches(content))
+                {
+                    AppendPdfLiteral(
+                        match.Groups[1].Value,
+                        builder);
+                }
+
+                foreach (System.Text.RegularExpressions.Match match in
+                    PdfArrayString.Matches(content))
+                {
+                    foreach (System.Text.RegularExpressions.Match
+                        inner in PdfInnerLiteral.Matches(
+                            match.Groups[1].Value))
+                    {
+                        AppendPdfLiteral(
+                            inner.Groups[1].Value,
+                            builder);
+                    }
+
+                    builder.Append(' ');
+                }
+            }
+            catch (System.Text.RegularExpressions
+                .RegexMatchTimeoutException)
+            {
+            }
+        }
+
+        private static void AppendPdfLiteral(
+            string escaped,
+            StringBuilder builder)
+        {
+            var text = new StringBuilder(escaped.Length);
+            for (var index = 0; index < escaped.Length; index++)
+            {
+                var character = escaped[index];
+                if (character != '\\')
+                {
+                    text.Append(character);
+                    continue;
+                }
+
+                index++;
+                if (index >= escaped.Length)
+                {
+                    break;
+                }
+
+                var next = escaped[index];
+                if (next == 'n' || next == 'r')
+                {
+                    text.Append('\n');
+                }
+                else if (next == 't')
+                {
+                    text.Append('\t');
+                }
+                else if (next >= '0' && next <= '7')
+                {
+                    var octal = 0;
+                    var digits = 0;
+                    while (digits < 3 &&
+                           index < escaped.Length &&
+                           escaped[index] >= '0' &&
+                           escaped[index] <= '7')
+                    {
+                        octal = octal * 8 +
+                            (escaped[index] - '0');
+                        index++;
+                        digits++;
+                    }
+
+                    index--;
+                    if (octal >= 32 && octal < 256)
+                    {
+                        text.Append((char)octal);
+                    }
+                }
+                else
+                {
+                    text.Append(next);
+                }
+            }
+
+            var value = text.ToString();
+            if (value.Trim().Length > 0)
+            {
+                builder.Append(value);
+                builder.Append(' ');
+            }
+        }
+
+        private static int CountReadableCharacters(string text)
+        {
+            var count = 0;
+            foreach (var character in text ?? string.Empty)
+            {
+                if (char.IsLetterOrDigit(character))
+                {
+                    count++;
+                }
+            }
+
+            return count;
         }
 
         private static string SniffImageMimeType(string path)

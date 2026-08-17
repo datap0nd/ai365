@@ -132,13 +132,8 @@ namespace OutlookLocalAIChat.Configuration
 
         private static bool IsImageAttachmentName(string fileName)
         {
-            var extension = Path.GetExtension(
-                fileName ?? string.Empty);
-            return EmailAttachmentReader.IsSupportedExtension(extension) &&
-                   !extension.Equals(".csv", StringComparison.OrdinalIgnoreCase) &&
-                   !extension.Equals(".xlsx", StringComparison.OrdinalIgnoreCase) &&
-                   !extension.Equals(".xlsm", StringComparison.OrdinalIgnoreCase) &&
-                   !extension.Equals(".xls", StringComparison.OrdinalIgnoreCase);
+            return EmailAttachmentReader.IsImageExtension(
+                Path.GetExtension(fileName ?? string.Empty));
         }
     }
 }
