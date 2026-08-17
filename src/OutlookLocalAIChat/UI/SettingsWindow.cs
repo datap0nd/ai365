@@ -24,7 +24,6 @@ namespace OutlookLocalAIChat.UI
         private readonly Label _transportWarning = new Label();
         private readonly CheckBox _switchVisionForImages = new CheckBox();
         private readonly Label _modelGuidance = new Label();
-        private readonly ListBox _modelGuide = new ListBox();
         private readonly Label _testStatus = new Label();
         private readonly CheckBox _useToneProfile = new CheckBox();
         private readonly RichTextBox _toneProfile = new RichTextBox();
@@ -239,7 +238,7 @@ namespace OutlookLocalAIChat.UI
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 ColumnCount = 1,
-                RowCount = 14,
+                RowCount = 12,
                 Padding = new Padding(18, 16, 18, 12),
                 Width = 640
             };
@@ -251,10 +250,8 @@ namespace OutlookLocalAIChat.UI
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
@@ -287,16 +284,13 @@ namespace OutlookLocalAIChat.UI
 
             ConfigureSupportingLabel(_modelGuidance);
             layout.Controls.Add(_modelGuidance, 0, 6);
-            layout.Controls.Add(FieldLabel("Model guide"), 0, 7);
-            ConfigureModelGuide();
-            layout.Controls.Add(_modelGuide, 0, 8);
-            layout.Controls.Add(_switchVisionForImages, 0, 9);
-            layout.Controls.Add(FieldLabel("API key"), 0, 10);
-            layout.Controls.Add(_apiKey, 0, 11);
-            layout.Controls.Add(_allowInsecureHttp, 0, 12);
+            layout.Controls.Add(_switchVisionForImages, 0, 7);
+            layout.Controls.Add(FieldLabel("API key"), 0, 8);
+            layout.Controls.Add(_apiKey, 0, 9);
+            layout.Controls.Add(_allowInsecureHttp, 0, 10);
             ConfigureSupportingLabel(_transportWarning);
             _transportWarning.AccessibleRole = AccessibleRole.Alert;
-            layout.Controls.Add(_transportWarning, 0, 13);
+            layout.Controls.Add(_transportWarning, 0, 11);
             page.Controls.Add(layout);
             return page;
         }
@@ -359,63 +353,6 @@ namespace OutlookLocalAIChat.UI
                 7);
             page.Controls.Add(layout);
             return page;
-        }
-
-        private void ConfigureModelGuide()
-        {
-            _modelGuide.Dock = DockStyle.Fill;
-            _modelGuide.IntegralHeight = false;
-            _modelGuide.BorderStyle = BorderStyle.FixedSingle;
-            _modelGuide.Font = new Font(
-                SystemFonts.MessageBoxFont.FontFamily,
-                SystemFonts.MessageBoxFont.Size,
-                FontStyle.Regular);
-            _modelGuide.AccessibleName = "Model guide";
-            _modelGuide.AccessibleDescription =
-                "Reference list of common local models with speed, quality, and vision notes. " +
-                "Double-click an entry to pick a matching discovered model.";
-            foreach (var entry in ModelCatalog.GuideEntries)
-            {
-                _modelGuide.Items.Add(entry);
-            }
-
-            _modelGuide.DisplayMember = "ListLabel";
-            _modelGuide.SelectedIndexChanged += ModelGuideSelectionChanged;
-            _modelGuide.DoubleClick += ModelGuideDoubleClick;
-        }
-
-        private void ModelGuideSelectionChanged(
-            object sender,
-            EventArgs eventArgs)
-        {
-            var entry = _modelGuide.SelectedItem as ModelGuideEntry;
-            if (entry == null)
-            {
-                return;
-            }
-
-            _modelGuidance.Text = entry.ListLabel;
-        }
-
-        private void ModelGuideDoubleClick(
-            object sender,
-            EventArgs eventArgs)
-        {
-            var entry = _modelGuide.SelectedItem as ModelGuideEntry;
-            if (entry == null)
-            {
-                return;
-            }
-
-            var discovered = ModelCatalog.FindMatchingDiscoveredId(
-                entry,
-                _model.Items.Cast<object>()
-                    .Select(item => item.ToString()));
-            if (discovered.Length > 0)
-            {
-                _model.Text = discovered;
-                UpdateModelGuidance();
-            }
         }
 
         private void ConfigureModelField()
@@ -899,11 +836,6 @@ namespace OutlookLocalAIChat.UI
                 }
             }
 
-            if (added > 0 && _model.Text.Trim().Length == 0)
-            {
-                _modelGuide.SelectedIndex = -1;
-            }
-
             UpdateModelGuidance();
             return added;
         }
@@ -996,31 +928,14 @@ namespace OutlookLocalAIChat.UI
             var text = _model.Text.Trim();
             if (text.Length == 0)
             {
-                _modelGuidance.Text = ModelCatalog.BuildGuideOverview();
-                _modelGuide.ClearSelected();
+                _modelGuidance.Text =
+                    "Use Refresh models, then choose a model that supports tool calls. " +
+                    "Use a vision model (name contains vl) for email images.";
                 return;
             }
 
             _modelGuidance.Text =
                 ModelSelectionPolicy.DescriptionFor(text);
-
-            var profile = ModelCatalog.Resolve(text);
-            if (profile == null)
-            {
-                _modelGuide.ClearSelected();
-                return;
-            }
-
-            for (var index = 0; index < _modelGuide.Items.Count; index++)
-            {
-                if (_modelGuide.Items[index] == profile)
-                {
-                    _modelGuide.SelectedIndex = index;
-                    return;
-                }
-            }
-
-            _modelGuide.ClearSelected();
         }
 
         private void UpdateTransportWarning()

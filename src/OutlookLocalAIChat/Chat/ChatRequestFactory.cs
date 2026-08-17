@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using OutlookLocalAIChat.Configuration;
 using OutlookLocalAIChat.Outlook;
 using OutlookLocalAIChat.Security;
 
@@ -57,7 +58,8 @@ namespace OutlookLocalAIChat.Chat
                         allowDraftCreate && activeDraft == null,
                         allowDraftUpdate && activeDraft != null,
                         hasWorkingSet,
-                        toneProfile)
+                        toneProfile,
+                        model)
                 },
                 new ChatCompletionInputMessage
                 {
@@ -170,9 +172,15 @@ namespace OutlookLocalAIChat.Chat
             bool allowDraftCreate,
             bool allowDraftUpdate,
             bool hasWorkingSet,
-            string toneProfile)
+            string toneProfile,
+            string model)
         {
             var boundary = SystemBoundary +
+                (ModelCatalog.IsVisionCapable(model)
+                    ? " This request uses a vision-capable model. Email image attachments " +
+                      "from read_messages are provided as visual input. Describe and answer " +
+                      "from those images when the user asks about them."
+                    : string.Empty) +
                 (hasWorkingSet
                     ? " A user-approved working set of no more than ten emails is locked for this request. Use only read_messages with its supplied context handles. Do not search the mailbox or expand conversation threads."
                     : " At most ten unique message bodies may be loaded in one request. Perform no more than one mailbox search.");

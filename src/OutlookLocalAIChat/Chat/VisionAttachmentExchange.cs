@@ -12,7 +12,7 @@ namespace OutlookLocalAIChat.Chat
             IReadOnlyList<MailboxToolResult> toolResults)
         {
             if (request == null ||
-                !ModelCatalog.SupportsVision(modelId) ||
+                !ModelCatalog.IsVisionCapable(modelId) ||
                 toolResults == null ||
                 toolResults.Count == 0)
             {

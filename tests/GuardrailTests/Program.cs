@@ -30,6 +30,12 @@ namespace GuardrailTests
             try
             {
                 Run(
+                    "Vision-capable models are detected broadly",
+                    VisionCapableModelsAreDetectedBroadly);
+                Run(
+                    "Vision prefetch injects image input",
+                    VisionPrefetchInjectsImageInput);
+                Run(
                     "Vision auto-switch picks the best discovered model",
                     VisionAutoSwitchPicksBestDiscoveredModel);
                 Run(
@@ -1575,6 +1581,76 @@ namespace GuardrailTests
             return Convert.ToString(
                 ((ChatCompletionInputMessage)message).content) ??
                 string.Empty;
+        }
+
+        private static void VisionCapableModelsAreDetectedBroadly()
+        {
+            Assert(
+                ModelCatalog.IsVisionCapable("qwen3-vl-30b") &&
+                ModelCatalog.IsVisionCapable("Qwen3-VL-30B-Instruct") &&
+                ModelCatalog.IsVisionCapable("my-vision-model") &&
+                !ModelCatalog.IsVisionCapable("gpt-oss-20b") &&
+                !ModelCatalog.IsVisionCapable("text-embedding-vl"),
+                "Vision capability detection is too narrow or too broad.");
+        }
+
+        private static void VisionPrefetchInjectsImageInput()
+        {
+            var pngPath = Path.Combine(
+                Path.GetTempPath(),
+                "MailAI-prefetch-" + Guid.NewGuid().ToString("N") + ".png");
+            File.WriteAllBytes(
+                pngPath,
+                Convert.FromBase64String(
+                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ" +
+                    "AAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="));
+            try
+            {
+                var attachments = new FakeOutlookAttachments();
+                attachments.Add(new FakeOutlookAttachment(
+                    "scan.png",
+                    pngPath));
+                var mail = new FakeSelectedMailItem(
+                    "prefetch-entry",
+                    "Invoice scan")
+                {
+                    Attachments = attachments
+                };
+                var application = new FakeOutlookApplication();
+                application.Session.Register(
+                    "prefetch-entry",
+                    "store",
+                    mail);
+                var snapshot = new MessageReader(application)
+                    .CaptureById("prefetch-entry", "store");
+                var request = ChatRequestFactory.Create(
+                    "qwen3-vl-30b",
+                    snapshot,
+                    new List<ChatTurn>(),
+                    "Summarize the image.");
+                var host = new MailboxToolHost(application, snapshot);
+                Assert(
+                    VisionImagePrefetch.TryInject(
+                        request,
+                        "qwen3-vl-30b",
+                        host,
+                        snapshot,
+                        null),
+                    "Vision prefetch did not inject image context.");
+                var body = new JavaScriptSerializer()
+                    .Serialize(request);
+                Assert(
+                    body.Contains("\"type\":\"image_url\"") &&
+                    body.Contains("data:image/png;base64,"),
+                    "Prefetched request is missing multimodal image content.");
+            }
+            finally
+            {
+                if (File.Exists(pngPath))
+                {
+                    File.Delete(pngPath);
+                }
+            }
         }
 
         private static void VisionAutoSwitchPicksBestDiscoveredModel()
