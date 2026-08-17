@@ -211,7 +211,7 @@ namespace OutlookLocalAIChat.Configuration
 
             if (IsDisallowedModel(value))
             {
-                return "This model is hidden because MailAI excludes Gauss and Gausso variants.";
+                return "This model is not available in MailAI.";
             }
 
             var profile = Resolve(value);

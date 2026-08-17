@@ -66,8 +66,7 @@ input, use a `vl` model instead. Text-only models get spreadsheet text and
 image metadata only, and the chat will say so if you ask about an image.
 Optional: enable **Auto-switch to vision for images** to temporarily use a
 discovered vision model while keeping your everyday text model saved. Save after
-**Refresh models** so auto-switch knows which vision models are available. Gauss
-and Gausso model IDs are removed automatically during refresh.
+**Refresh models** so auto-switch knows which vision models are available.
 
 Embedding-only models are excluded from discovery. **Check endpoint** verifies
 authentication with a lightweight `search_mailbox` tool-call probe. It does not

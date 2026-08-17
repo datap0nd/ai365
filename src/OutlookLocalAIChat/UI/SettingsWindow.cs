@@ -855,10 +855,13 @@ namespace OutlookLocalAIChat.UI
                     var added = AddDiscoveredModels(models);
                     _testStatus.ForeColor = SuccessText;
                     _testStatus.Text =
-                        "Loaded " +
-                        added.ToString() +
-                        " generative models into the model list. " +
-                        "Gauss and Gausso models are excluded automatically.";
+                        "Model list refreshed: " +
+                        _model.Items.Count.ToString() +
+                        " models available" +
+                        (added > 0
+                            ? " (" + added.ToString() + " new)"
+                            : "") +
+                        ".";
                 }
             }
             catch (OperationCanceledException)
