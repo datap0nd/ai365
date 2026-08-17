@@ -259,11 +259,40 @@ namespace OutlookLocalAIChat.Outlook
                     TextBoundary.PlainText(
                         SafeString(() => mail.Body),
                         TextBoundary.MaxMessageBodyCharacters),
-                    CaptureAttachmentNames(mail));
+                    CaptureAttachmentNames(mail),
+                    CountRemoteImages(
+                        SafeString(() => mail.HTMLBody)));
             }
             finally
             {
                 Release(parent);
+            }
+        }
+
+        internal static int CountRemoteImages(string htmlBody)
+        {
+            if (string.IsNullOrEmpty(htmlBody))
+            {
+                return 0;
+            }
+
+            // Web-hosted images exist only as URLs; the message stores no
+            // image bytes, so MailAI can never read them. Embedded images
+            // use cid: sources and arrive through the Attachments path.
+            var bounded = htmlBody.Length > 512 * 1024
+                ? htmlBody.Substring(0, 512 * 1024)
+                : htmlBody;
+            try
+            {
+                return System.Text.RegularExpressions.Regex.Matches(
+                    bounded,
+                    "<img\\b[^>]*?src\\s*=\\s*[\"']?https?://",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase,
+                    TimeSpan.FromSeconds(2)).Count;
+            }
+            catch (System.Text.RegularExpressions.RegexMatchTimeoutException)
+            {
+                return 0;
             }
         }
 

@@ -51,6 +51,9 @@ namespace GuardrailTests
                     "Vision image limits are enforced",
                     VisionImageLimitsAreEnforced);
                 Run(
+                    "Web-hosted body images are disclosed as unreadable",
+                    WebHostedImagesAreDisclosed);
+                Run(
                     "Model catalog describes vision capability",
                     ModelCatalogDescribesVisionCapability);
                 Run("HTTPS endpoint is accepted", HttpsEndpointIsAccepted);
@@ -1960,6 +1963,60 @@ namespace GuardrailTests
                 "Omitted images are not disclosed to the model.");
         }
 
+        private static void WebHostedImagesAreDisclosed()
+        {
+            var mail = new FakeSelectedMailItem(
+                "remote-image-entry",
+                "Newsletter")
+            {
+                HTMLBody =
+                    "<html><body>" +
+                    "<a href=\"https://example.test/offer\">" +
+                    "<img src=\"https://cdn.example.test/banner.jpg\"></a>" +
+                    "<img src='https://cdn.example.test/photo.png'>" +
+                    "<img src=\"cid:signature-logo\">" +
+                    "</body></html>"
+            };
+            var application = new FakeOutlookApplication();
+            application.Session.Register(
+                "remote-image-entry",
+                "store",
+                mail);
+            var snapshot = new MessageReader(application)
+                .CaptureById("remote-image-entry", "store");
+            Assert(
+                snapshot.RemoteImageCount == 2,
+                "Web-hosted image detection counted " +
+                snapshot.RemoteImageCount +
+                " instead of 2 (cid images must not count).");
+
+            var request = ChatRequestFactory.Create(
+                "qwen3-vl-30b",
+                snapshot,
+                new List<ChatTurn>(),
+                "Summarize the image in this email.");
+            var reference = MessageContent(request.messages[1]);
+            Assert(
+                reference.Contains(
+                    "Web-hosted images referenced by URL: 2"),
+                "The message reference does not disclose web-hosted images.");
+
+            var host = new MailboxToolHost(application, snapshot);
+            var loaded = host.Execute(
+                MailboxCall(
+                    "read-remote",
+                    MailboxToolCatalog.ReadMessages,
+                    "{\"handles\":[\"selected\"]}"));
+            Assert(
+                loaded.Content.Contains(
+                    "web_hosted_images_not_included"),
+                "The tool result does not disclose web-hosted images.");
+            Assert(
+                loaded.Content.Contains("web_hosted_images_note") &&
+                loaded.Content.Contains("cannot view them"),
+                "The tool result is missing the web-hosted image note.");
+        }
+
         private static int CountToken(string text, string token)
         {
             var count = 0;
@@ -2224,6 +2281,8 @@ namespace GuardrailTests
         public string To { get; } = "recipient@example.test";
 
         public string Body { get; } = "Message body";
+
+        public string HTMLBody { get; set; } = string.Empty;
 
         public DateTime ReceivedTime { get; }
 

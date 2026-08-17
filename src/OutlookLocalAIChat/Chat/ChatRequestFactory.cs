@@ -251,7 +251,9 @@ namespace OutlookLocalAIChat.Chat
                     "result. When the user asks what an image shows, answer from that " +
                     "visual input and refer to each image by its attachment filename. " +
                     "If the image is in a message whose body is not loaded yet, call " +
-                    "read_messages for that message first.";
+                    "read_messages for that message first. Web-hosted images referenced " +
+                    "by URL are not stored in the email and can never be viewed; say so " +
+                    "plainly when the user asks about one.";
             }
 
             if (imagesExpected)
@@ -363,7 +365,21 @@ namespace OutlookLocalAIChat.Chat
                 "To: " + TextBoundary.PlainText(message.Recipients, 2000) + "\n" +
                 "Received: " + (message.ReceivedAt?.ToString("O") ?? "unknown") +
                 BuildAttachmentReference(message.AttachmentNames) +
+                BuildRemoteImageReference(message.RemoteImageCount) +
                 "\n</selected_email_reference>";
+        }
+
+        private static string BuildRemoteImageReference(
+            int remoteImageCount)
+        {
+            if (remoteImageCount <= 0)
+            {
+                return string.Empty;
+            }
+
+            return "\nWeb-hosted images referenced by URL: " +
+                remoteImageCount +
+                " (not stored in the email; MailAI cannot view them)";
         }
 
         private static string BuildAttachmentReference(
@@ -406,7 +422,8 @@ namespace OutlookLocalAIChat.Chat
                     "To: " + TextBoundary.PlainText(message.Recipients, 2000) + "\n" +
                     "Received: " +
                     (message.ReceivedAt?.ToString("O") ?? "unknown") +
-                    BuildAttachmentReference(message.AttachmentNames));
+                    BuildAttachmentReference(message.AttachmentNames) +
+                    BuildRemoteImageReference(message.RemoteImageCount));
             }
 
             lines.Add("</working_email_set>");

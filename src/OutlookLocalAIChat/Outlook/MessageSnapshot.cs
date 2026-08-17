@@ -16,7 +16,8 @@ namespace OutlookLocalAIChat.Outlook
             string recipients,
             DateTime? receivedAt,
             string body,
-            IReadOnlyList<string> attachmentNames = null)
+            IReadOnlyList<string> attachmentNames = null,
+            int remoteImageCount = 0)
         {
             EntryId = entryId ?? string.Empty;
             StoreId = storeId ?? string.Empty;
@@ -27,6 +28,7 @@ namespace OutlookLocalAIChat.Outlook
             Body = body ?? string.Empty;
             AttachmentNames = attachmentNames ??
                 EmptyAttachmentNames;
+            RemoteImageCount = Math.Max(0, remoteImageCount);
         }
 
         public string EntryId { get; }
@@ -44,6 +46,8 @@ namespace OutlookLocalAIChat.Outlook
         public string Body { get; }
 
         public IReadOnlyList<string> AttachmentNames { get; }
+
+        public int RemoteImageCount { get; }
 
         public bool CanReply
         {

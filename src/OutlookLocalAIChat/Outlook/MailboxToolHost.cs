@@ -405,6 +405,17 @@ namespace OutlookLocalAIChat.Outlook
                 }
             };
 
+            if (message.RemoteImageCount > 0)
+            {
+                payload["web_hosted_images_not_included"] =
+                    message.RemoteImageCount;
+                payload["web_hosted_images_note"] =
+                    "The message body references web-hosted images by URL. " +
+                    "Their bytes are not stored in the email, so MailAI " +
+                    "cannot view them. Only embedded images and attachments " +
+                    "are readable.";
+            }
+
             var attachments = _mailbox.ReadAttachments(message);
             if (attachments.Count > 0)
             {
