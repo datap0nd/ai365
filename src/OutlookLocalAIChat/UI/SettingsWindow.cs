@@ -113,9 +113,7 @@ namespace OutlookLocalAIChat.UI
             }
 
             _endpoint.Text = current?.BaseUrl ?? string.Empty;
-            _model.Text = string.IsNullOrWhiteSpace(current?.Model)
-                ? ModelSelectionPolicy.RecommendedModel
-                : current.Model;
+            _model.Text = current?.Model ?? string.Empty;
             _apiKey.Text = current?.ApiKey ?? string.Empty;
             _allowInsecureHttp.Checked =
                 current?.AllowInsecureHttp ?? false;
@@ -370,8 +368,18 @@ namespace OutlookLocalAIChat.UI
             _useRecommended.Click +=
                 (sender, args) =>
                 {
-                    _model.Text =
-                        ModelSelectionPolicy.RecommendedModel;
+                    var recommendation =
+                        ModelSelectionPolicy.ChooseRecommended(
+                            _model.Items.Cast<string>());
+                    if (recommendation.Length == 0)
+                    {
+                        _error.Text =
+                            "[MODELS_NOT_DISCOVERED] Check the endpoint to discover available models first.";
+                        return;
+                    }
+
+                    _error.Text = string.Empty;
+                    _model.Text = recommendation;
                     _model.Focus();
                 };
             panel.Controls.Add(_model, 0, 0);
@@ -603,10 +611,10 @@ namespace OutlookLocalAIChat.UI
 
             _error.Text = string.Empty;
             var settings = ReadFormSettings();
-            if (!settings.IsConfigured)
+            if (!settings.HasConnectionSettings)
             {
                 _error.Text =
-                    "[CONFIGURATION_INCOMPLETE] Enter a valid endpoint, model, and API key first.";
+                    "[CONFIGURATION_INCOMPLETE] Enter a valid endpoint and API key first.";
                 return;
             }
 
@@ -625,12 +633,28 @@ namespace OutlookLocalAIChat.UI
                         settings,
                         _checkCancellation.Token);
                     AddDiscoveredModels(models);
+                    var recommendation =
+                        ModelSelectionPolicy.ChooseRecommended(models);
+                    if (recommendation.Length > 0 &&
+                        string.IsNullOrWhiteSpace(_model.Text))
+                    {
+                        _model.Text = recommendation;
+                        UpdateModelGuidance();
+                    }
                 }
                 catch (AiEndpointException exception)
                 {
                     discoveryNote =
                         " Model discovery was unavailable [" + exception.Code +
                         "], so the entered model was tested directly.";
+                }
+
+                settings = ReadFormSettings();
+                if (settings.Model.Trim().Length == 0)
+                {
+                    throw new AiEndpointException(
+                        "MODEL_REQUIRED",
+                        "Choose a model or run Check endpoint after model discovery returns at least one generative model.");
                 }
 
                 _testStatus.Text =

@@ -6,8 +6,7 @@ namespace OutlookLocalAIChat.Configuration
     {
         public string BaseUrl { get; set; } = string.Empty;
 
-        public string Model { get; set; } =
-            ModelSelectionPolicy.RecommendedModel;
+        public string Model { get; set; } = string.Empty;
 
         public string ApiKey { get; set; } = string.Empty;
 
@@ -24,6 +23,19 @@ namespace OutlookLocalAIChat.Configuration
                 Uri endpoint;
                 return Model.Trim().Length > 0 &&
                        ApiKey.Trim().Length > 0 &&
+                       TryGetChatCompletionsUri(
+                           BaseUrl,
+                           AllowInsecureHttp,
+                           out endpoint);
+            }
+        }
+
+        public bool HasConnectionSettings
+        {
+            get
+            {
+                Uri endpoint;
+                return ApiKey.Trim().Length > 0 &&
                        TryGetChatCompletionsUri(
                            BaseUrl,
                            AllowInsecureHttp,

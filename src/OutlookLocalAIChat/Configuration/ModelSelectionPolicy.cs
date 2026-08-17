@@ -20,7 +20,7 @@ namespace OutlookLocalAIChat.Configuration
 
         public static IReadOnlyList<string> Presets
         {
-            get { return PreferredModels; }
+            get { return Array.Empty<string>(); }
         }
 
         public static bool IsGenerativeModel(string model)

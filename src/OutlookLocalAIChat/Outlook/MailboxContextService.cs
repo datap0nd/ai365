@@ -65,6 +65,14 @@ namespace OutlookLocalAIChat.Outlook
                 .ToArray();
         }
 
+        public IReadOnlyList<EmailAttachmentContent> ReadAttachments(
+            MessageSnapshot message)
+        {
+            return EmailAttachmentReader.Read(
+                _outlookApplication,
+                message);
+        }
+
         public IReadOnlyList<MessageSnapshot> ReadConversation(
             MessageSnapshot source,
             int maxMessages)

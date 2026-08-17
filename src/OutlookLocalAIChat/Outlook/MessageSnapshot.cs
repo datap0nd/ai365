@@ -1,9 +1,13 @@
 using System;
+using System.Collections.Generic;
 
 namespace OutlookLocalAIChat.Outlook
 {
     public sealed class MessageSnapshot
     {
+        private static readonly string[] EmptyAttachmentNames =
+            new string[0];
+
         public MessageSnapshot(
             string entryId,
             string storeId,
@@ -11,7 +15,8 @@ namespace OutlookLocalAIChat.Outlook
             string sender,
             string recipients,
             DateTime? receivedAt,
-            string body)
+            string body,
+            IReadOnlyList<string> attachmentNames = null)
         {
             EntryId = entryId ?? string.Empty;
             StoreId = storeId ?? string.Empty;
@@ -20,6 +25,8 @@ namespace OutlookLocalAIChat.Outlook
             Recipients = recipients ?? string.Empty;
             ReceivedAt = receivedAt;
             Body = body ?? string.Empty;
+            AttachmentNames = attachmentNames ??
+                EmptyAttachmentNames;
         }
 
         public string EntryId { get; }
@@ -35,6 +42,8 @@ namespace OutlookLocalAIChat.Outlook
         public DateTime? ReceivedAt { get; }
 
         public string Body { get; }
+
+        public IReadOnlyList<string> AttachmentNames { get; }
 
         public bool CanReply
         {

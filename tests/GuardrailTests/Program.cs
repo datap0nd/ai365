@@ -42,6 +42,15 @@ namespace GuardrailTests
                     "Recommended model balances capability and speed",
                     RecommendedModelIsStable);
                 Run(
+                    "Default model is empty on install",
+                    DefaultModelIsEmptyOnInstall);
+                Run(
+                    "Model presets stay empty until endpoint discovery",
+                    ModelPresetsAreEmptyOnInstall);
+                Run(
+                    "Email attachments are bounded and readable",
+                    EmailAttachmentsAreBounded);
+                Run(
                     "Model selection never recommends Gauss variants",
                     GaussModelsAreNeverRecommended);
                 Run(
@@ -230,6 +239,93 @@ namespace GuardrailTests
             Assert(
                 chosen == "qwen3.5-35b-a3b",
                 "The balanced model was not preferred: " + chosen);
+        }
+
+        private static void DefaultModelIsEmptyOnInstall()
+        {
+            var settings = new AppSettings();
+            Assert(
+                settings.Model == string.Empty &&
+                !settings.IsConfigured,
+                "A fresh install should start without a configured model.");
+        }
+
+        private static void ModelPresetsAreEmptyOnInstall()
+        {
+            Assert(
+                ModelSelectionPolicy.Presets.Count == 0,
+                "Model presets should stay empty until endpoint discovery.");
+        }
+
+        private static void EmailAttachmentsAreBounded()
+        {
+            Assert(
+                EmailAttachmentReader.MaxAttachments == 10,
+                "Email attachments should allow up to ten files.");
+
+            var csvPath = Path.Combine(
+                Path.GetTempPath(),
+                "MailAI-test-" + Guid.NewGuid().ToString("N") + ".csv");
+            File.WriteAllText(
+                csvPath,
+                "Name,Amount\nWidget,42\nGadget,17");
+            try
+            {
+                var attachments = new FakeOutlookAttachments();
+                attachments.Add(new FakeOutlookAttachment(
+                    "budget.csv",
+                    csvPath));
+                var mail = new FakeSelectedMailItem(
+                    "attachment-entry",
+                    "Quarterly report")
+                {
+                    Attachments = attachments
+                };
+                var application = new FakeOutlookApplication();
+                application.Session.Register(
+                    "attachment-entry",
+                    "store",
+                    mail);
+                var snapshot = MessageReader.CaptureItem(mail);
+                Assert(
+                    snapshot.AttachmentNames.Count == 1 &&
+                    snapshot.AttachmentNames[0] == "budget.csv",
+                    "Supported attachment names were not captured.");
+
+                var request = ChatRequestFactory.Create(
+                    "local-model",
+                    snapshot,
+                    new List<ChatTurn>(),
+                    "Help me reply.");
+                var reference =
+                    ((ChatCompletionInputMessage)
+                        request.messages[1]).content;
+                Assert(
+                    reference.Contains("Supported attachments (1): budget.csv"),
+                    "Attachment metadata was not exposed in the context reference.");
+
+                var host = new MailboxToolHost(
+                    application,
+                    snapshot);
+                var loaded = host.Execute(
+                    MailboxCall(
+                        "read-attachment",
+                        MailboxToolCatalog.ReadMessages,
+                        "{\"handles\":[\"selected\"]}"));
+                Assert(
+                    loaded.Content.Contains("\"attachments\"") &&
+                    loaded.Content.Contains("budget.csv") &&
+                    loaded.Content.Contains("Widget") &&
+                    loaded.Content.Contains("Gadget"),
+                    "Attachment content was not loaded through read_messages.");
+            }
+            finally
+            {
+                if (File.Exists(csvPath))
+                {
+                    File.Delete(csvPath);
+                }
+            }
         }
 
         private static void GaussModelsAreNeverRecommended()
@@ -1704,6 +1800,7 @@ namespace GuardrailTests
             Subject = subject;
             Parent = new FakeMailFolder();
             ReceivedTime = DateTime.UtcNow;
+            Attachments = new FakeOutlookAttachments();
         }
 
         public string MessageClass { get; } = "IPM.Note";
@@ -1728,6 +1825,49 @@ namespace GuardrailTests
         public DateTime CreationTime { get; } = DateTime.MinValue;
 
         public FakeMailFolder Parent { get; }
+
+        public FakeOutlookAttachments Attachments { get; set; }
+    }
+
+    public sealed class FakeOutlookAttachments
+    {
+        private readonly List<FakeOutlookAttachment> _items =
+            new List<FakeOutlookAttachment>();
+
+        public int Count
+        {
+            get { return _items.Count; }
+        }
+
+        public void Add(FakeOutlookAttachment attachment)
+        {
+            _items.Add(attachment);
+        }
+
+        public FakeOutlookAttachment Item(int index)
+        {
+            return _items[index - 1];
+        }
+    }
+
+    public sealed class FakeOutlookAttachment
+    {
+        private readonly string _sourcePath;
+
+        public FakeOutlookAttachment(
+            string fileName,
+            string sourcePath)
+        {
+            FileName = fileName;
+            _sourcePath = sourcePath;
+        }
+
+        public string FileName { get; }
+
+        public void SaveAsFile(string path)
+        {
+            File.Copy(_sourcePath, path, true);
+        }
     }
 
     public sealed class FakeMailFolder

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
 using OutlookLocalAIChat.Security;
 
@@ -257,11 +258,73 @@ namespace OutlookLocalAIChat.Outlook
                     receivedAt,
                     TextBoundary.PlainText(
                         SafeString(() => mail.Body),
-                        TextBoundary.MaxMessageBodyCharacters));
+                        TextBoundary.MaxMessageBodyCharacters),
+                    CaptureAttachmentNames(mail));
             }
             finally
             {
                 Release(parent);
+            }
+        }
+
+        private static string[] CaptureAttachmentNames(dynamic mail)
+        {
+            object attachments = null;
+            try
+            {
+                attachments = mail.Attachments;
+                if (attachments == null)
+                {
+                    return new string[0];
+                }
+
+                dynamic outlookAttachments = attachments;
+                var count = Math.Min(
+                    Convert.ToInt32(outlookAttachments.Count),
+                    EmailAttachmentReader.MaxAttachments);
+                var names = new List<string>(count);
+                for (var index = 1; index <= count; index++)
+                {
+                    object attachment = null;
+                    try
+                    {
+                        attachment = outlookAttachments.Item(index);
+                        dynamic outlookAttachment = attachment;
+                        var fileName = SafeString(
+                            () => outlookAttachment.FileName);
+                        if (fileName.Length == 0)
+                        {
+                            continue;
+                        }
+
+                        var extension = System.IO.Path.GetExtension(
+                            fileName);
+                        if (!EmailAttachmentReader.IsSupportedExtension(
+                            extension))
+                        {
+                            continue;
+                        }
+
+                        names.Add(
+                            TextBoundary.SingleLine(fileName, 180));
+                    }
+                    finally
+                    {
+                        Release(attachment);
+                    }
+                }
+
+                return names
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+            }
+            catch
+            {
+                return new string[0];
+            }
+            finally
+            {
+                Release(attachments);
             }
         }
 

@@ -366,7 +366,7 @@ namespace OutlookLocalAIChat.Outlook
             MessageSnapshot message,
             int maximumBodyCharacters)
         {
-            return new Dictionary<string, object>
+            var payload = new Dictionary<string, object>
             {
                 { "handle", handle },
                 { "subject", message.Subject },
@@ -384,6 +384,26 @@ namespace OutlookLocalAIChat.Outlook
                         maximumBodyCharacters)
                 }
             };
+
+            var attachments = _mailbox.ReadAttachments(message);
+            if (attachments.Count > 0)
+            {
+                var serialized = new List<object>(attachments.Count);
+                foreach (var attachment in attachments)
+                {
+                    serialized.Add(
+                        new Dictionary<string, object>
+                        {
+                            { "filename", attachment.FileName },
+                            { "kind", attachment.Kind },
+                            { "content", attachment.Text }
+                        });
+                }
+
+                payload["attachments"] = serialized;
+            }
+
+            return payload;
         }
 
         private string Register(MessageSnapshot message)
