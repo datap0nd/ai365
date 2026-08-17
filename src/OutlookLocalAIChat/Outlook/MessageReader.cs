@@ -494,8 +494,30 @@ namespace OutlookLocalAIChat.Outlook
                             continue;
                         }
 
-                        // Every attachment is listed; read_messages
-                        // notes the ones that cannot be converted.
+                        long attachmentSize;
+                        try
+                        {
+                            attachmentSize = Convert.ToInt64(
+                                outlookAttachment.Size);
+                        }
+                        catch
+                        {
+                            attachmentSize = 0;
+                        }
+
+                        if (EmailAttachmentReader
+                            .IsLikelySignatureImage(
+                                attachment,
+                                System.IO.Path.GetExtension(
+                                    fileName),
+                                attachmentSize))
+                        {
+                            continue;
+                        }
+
+                        // Every other attachment is listed;
+                        // read_messages notes the ones that cannot
+                        // be converted.
                         names.Add(
                             TextBoundary.SingleLine(fileName, 180));
                     }

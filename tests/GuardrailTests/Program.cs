@@ -77,6 +77,9 @@ namespace GuardrailTests
                     "Local files load as bounded context or vision input",
                     LocalFilesLoadAsContext);
                 Run(
+                    "Small inline signature images are ignored",
+                    SignatureImagesAreIgnored);
+                Run(
                     "Model catalog describes vision capability",
                     ModelCatalogDescribesVisionCapability);
                 Run("HTTPS endpoint is accepted", HttpsEndpointIsAccepted);
@@ -2039,6 +2042,85 @@ namespace GuardrailTests
             }
         }
 
+        private static void SignatureImagesAreIgnored()
+        {
+            var pngPath = Path.Combine(
+                Path.GetTempPath(),
+                "MetoAI-sig-" + Guid.NewGuid().ToString("N") + ".png");
+            File.WriteAllBytes(
+                pngPath,
+                Convert.FromBase64String(
+                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ" +
+                    "AAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="));
+            try
+            {
+                var attachments = new FakeOutlookAttachments();
+                attachments.Add(new FakeOutlookAttachment(
+                    "logo.png",
+                    pngPath)
+                {
+                    Size = 2048,
+                    PropertyAccessor = new FakePropertyAccessor
+                    {
+                        Hidden = true,
+                        ContentId = "logo@signature"
+                    }
+                });
+                attachments.Add(new FakeOutlookAttachment(
+                    "screenshot.png",
+                    pngPath)
+                {
+                    Size = 500000,
+                    PropertyAccessor = new FakePropertyAccessor
+                    {
+                        Hidden = true,
+                        ContentId = "shot@body"
+                    }
+                });
+                var mail = new FakeSelectedMailItem(
+                    "signature-entry",
+                    "Weekly update")
+                {
+                    Attachments = attachments
+                };
+                var application = new FakeOutlookApplication();
+                application.Session.Register(
+                    "signature-entry",
+                    "store",
+                    mail);
+                var snapshot = new MessageReader(application)
+                    .CaptureById("signature-entry", "store");
+                Assert(
+                    snapshot.AttachmentNames.Count == 1 &&
+                    snapshot.AttachmentNames[0] == "screenshot.png",
+                    "Signature images should be excluded from metadata: " +
+                    string.Join(", ", snapshot.AttachmentNames));
+
+                var host = new MailboxToolHost(application, snapshot);
+                var loaded = host.Execute(
+                    MailboxCall(
+                        "read-signature",
+                        MailboxToolCatalog.ReadMessages,
+                        "{\"handles\":[\"selected\"]}"));
+                Assert(
+                    loaded.VisionImages.Count == 1 &&
+                    loaded.VisionImages[0].FileName ==
+                        "screenshot.png",
+                    "Only the large inline image should reach vision input.");
+                Assert(
+                    loaded.Content.Contains(
+                        "ignored as signature graphics"),
+                    "The skipped signature image was not disclosed.");
+            }
+            finally
+            {
+                if (File.Exists(pngPath))
+                {
+                    File.Delete(pngPath);
+                }
+            }
+        }
+
         private static void LocalFilesLoadAsContext()
         {
             var temp = Path.Combine(
@@ -3109,9 +3191,42 @@ namespace GuardrailTests
 
         public string FileName { get; }
 
+        public int Size { get; set; }
+
+        public object PropertyAccessor { get; set; }
+
         public void SaveAsFile(string path)
         {
             File.Copy(_sourcePath, path, true);
+        }
+    }
+
+    public sealed class FakePropertyAccessor
+    {
+        public bool Hidden { get; set; }
+
+        public string ContentId { get; set; } = string.Empty;
+
+        public object GetProperty(string schema)
+        {
+            if (schema.EndsWith("0x7FFE000B"))
+            {
+                return Hidden;
+            }
+
+            if (schema.EndsWith("0x3712001F"))
+            {
+                if (ContentId.Length == 0)
+                {
+                    throw new InvalidOperationException(
+                        "The property does not exist.");
+                }
+
+                return ContentId;
+            }
+
+            throw new InvalidOperationException(
+                "Unknown property.");
         }
     }
 

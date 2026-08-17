@@ -57,6 +57,10 @@ namespace OutlookLocalAIChat.Outlook
         // 1.5 MB of image bytes is ~2.1M base64 characters plus the
         // data URL prefix; the two limits must move together.
         public const int MaxImageDataUrlCharacters = 2200000;
+        // Inline images at or under this size are treated as signature
+        // graphics (logos, banners) and skipped; pasted screenshots and
+        // photos are far larger and always kept.
+        public const int SignatureImageMaxBytes = 64 * 1024;
         private const int MaxImageBytesForBase64 = 1536 * 1024;
 
         private static readonly HashSet<string> ImageExtensions =
@@ -143,6 +147,7 @@ namespace OutlookLocalAIChat.Outlook
                     MaxAttachments);
                 var results = new List<EmailAttachmentContent>(count);
                 var totalCharacters = 0;
+                var signatureImagesSkipped = 0;
                 for (var index = 1;
                      index <= count &&
                      totalCharacters < MaxTotalCharacters;
@@ -162,6 +167,15 @@ namespace OutlookLocalAIChat.Outlook
                         }
 
                         var extension = Path.GetExtension(fileName);
+                        if (IsLikelySignatureImage(
+                            attachment,
+                            extension,
+                            SafeLong(() => outlookAttachment.Size)))
+                        {
+                            signatureImagesSkipped++;
+                            continue;
+                        }
+
                         // Every attachment is saved and attempted;
                         // unknown extensions are identified by content
                         // and unreadable ones produce a visible note.
@@ -256,6 +270,17 @@ namespace OutlookLocalAIChat.Outlook
                     }
                 }
 
+                if (signatureImagesSkipped > 0)
+                {
+                    results.Add(new EmailAttachmentContent(
+                        "signature-images",
+                        "note",
+                        "[" + signatureImagesSkipped.ToString() +
+                        " small inline image" +
+                        (signatureImagesSkipped == 1 ? "" : "s") +
+                        " ignored as signature graphics.]"));
+                }
+
                 return results;
             }
             catch
@@ -267,6 +292,85 @@ namespace OutlookLocalAIChat.Outlook
                 Release(attachments);
                 Release(item);
                 Release(session);
+            }
+        }
+
+        internal static bool IsLikelySignatureImage(
+            object attachment,
+            string extension,
+            long sizeBytes)
+        {
+            if (!ImageExtensions.Contains(extension) ||
+                sizeBytes <= 0 ||
+                sizeBytes > SignatureImageMaxBytes)
+            {
+                return false;
+            }
+
+            return IsInlineAttachment(attachment);
+        }
+
+        private static bool IsInlineAttachment(object attachment)
+        {
+            object accessor = null;
+            try
+            {
+                dynamic outlookAttachment = attachment;
+                accessor = outlookAttachment.PropertyAccessor;
+                if (accessor == null)
+                {
+                    return false;
+                }
+
+                dynamic propertyAccessor = accessor;
+                try
+                {
+                    // PR_ATTACHMENT_HIDDEN
+                    var hidden = propertyAccessor.GetProperty(
+                        "http://schemas.microsoft.com/mapi/proptag/0x7FFE000B");
+                    if (hidden is bool && (bool)hidden)
+                    {
+                        return true;
+                    }
+                }
+                catch
+                {
+                }
+
+                try
+                {
+                    // PR_ATTACH_CONTENT_ID marks cid-referenced
+                    // inline body images.
+                    var contentId = Convert.ToString(
+                        propertyAccessor.GetProperty(
+                            "http://schemas.microsoft.com/mapi/proptag/0x3712001F"));
+                    return !string.IsNullOrEmpty(contentId);
+                }
+                catch
+                {
+                }
+
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+            finally
+            {
+                Release(accessor);
+            }
+        }
+
+        private static long SafeLong(Func<object> reader)
+        {
+            try
+            {
+                return Convert.ToInt64(reader());
+            }
+            catch
+            {
+                return 0;
             }
         }
 
