@@ -74,6 +74,9 @@ namespace GuardrailTests
                     "Legacy Office, RTF, and unknown attachments are handled",
                     LegacyAndUnknownAttachmentsAreHandled);
                 Run(
+                    "Local files load as bounded context or vision input",
+                    LocalFilesLoadAsContext);
+                Run(
                     "Model catalog describes vision capability",
                     ModelCatalogDescribesVisionCapability);
                 Run("HTTPS endpoint is accepted", HttpsEndpointIsAccepted);
@@ -2032,6 +2035,61 @@ namespace GuardrailTests
                 if (File.Exists(pngPath))
                 {
                     File.Delete(pngPath);
+                }
+            }
+        }
+
+        private static void LocalFilesLoadAsContext()
+        {
+            var temp = Path.Combine(
+                Path.GetTempPath(),
+                "MetoMail-local-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(temp);
+            try
+            {
+                var pngPath = Path.Combine(temp, "photo.png");
+                File.WriteAllBytes(
+                    pngPath,
+                    Convert.FromBase64String(
+                        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ" +
+                        "AAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="));
+                var image = EmailAttachmentReader.LoadLocalFile(
+                    pngPath);
+                Assert(
+                    image != null &&
+                    image.ImageDataUrl.StartsWith(
+                        "data:image/png;base64,"),
+                    "A local image did not load as vision input.");
+                var thumbnail =
+                    EmailAttachmentReader.BuildThumbnailDataUrl(
+                        pngPath);
+                Assert(
+                    thumbnail != null &&
+                    thumbnail.StartsWith("data:image/jpeg;base64,"),
+                    "A local image did not produce a tray thumbnail.");
+
+                var pdfPath = Path.Combine(temp, "report.pdf");
+                File.WriteAllText(
+                    pdfPath,
+                    "%PDF-1.4\n1 0 obj << /Length 96 >>\nstream\n" +
+                    "BT /F1 12 Tf (Quarterly spending summary for " +
+                    "the operations department) Tj ET\n" +
+                    "endstream\nendobj\ntrailer\n%%EOF",
+                    Encoding.ASCII);
+                var document = EmailAttachmentReader.LoadLocalFile(
+                    pdfPath);
+                Assert(
+                    document != null &&
+                    document.Text.Contains(
+                        "Quarterly spending summary for the " +
+                        "operations department"),
+                    "A local PDF did not load as extracted text.");
+            }
+            finally
+            {
+                if (Directory.Exists(temp))
+                {
+                    Directory.Delete(temp, true);
                 }
             }
         }

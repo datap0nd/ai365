@@ -35,6 +35,22 @@ namespace OutlookLocalAIChat.UI
     public sealed class ChatPane : UserControl
     {
         private const int MaxTranscriptEvents = 400;
+        private const int MaxExternalImages = 4;
+
+        private sealed class ExternalImageContext
+        {
+            public ExternalImageContext(
+                VisionImagePayload payload,
+                string thumbnail)
+            {
+                Payload = payload;
+                Thumbnail = thumbnail ?? string.Empty;
+            }
+
+            public VisionImagePayload Payload { get; }
+
+            public string Thumbnail { get; }
+        }
 
         private readonly SettingsStore _settingsStore =
             new SettingsStore();
@@ -48,6 +64,8 @@ namespace OutlookLocalAIChat.UI
             new List<MessageSnapshot>();
         private readonly List<ExternalContextDocument> _externalContext =
             new List<ExternalContextDocument>();
+        private readonly List<ExternalImageContext> _externalImages =
+            new List<ExternalImageContext>();
         private readonly List<string> _transcriptEvents =
             new List<string>();
         private readonly WebView2 _webView = new WebView2();
@@ -272,6 +290,20 @@ namespace OutlookLocalAIChat.UI
                         break;
                     case "clearContext":
                         HandleClearContext();
+                        break;
+                    case "removeContext":
+                        object kindValue;
+                        object indexValue;
+                        message.TryGetValue("kind", out kindValue);
+                        message.TryGetValue("index", out indexValue);
+                        int removeIndex;
+                        int.TryParse(
+                            Convert.ToString(indexValue),
+                            out removeIndex);
+                        HandleRemoveContext(
+                            Convert.ToString(kindValue) ??
+                            string.Empty,
+                            removeIndex);
                         break;
                     case "emailDrop":
                         if (!_busy)
@@ -536,21 +568,62 @@ namespace OutlookLocalAIChat.UI
         private void PushContextToWeb()
         {
             var items = new List<object>();
+            if (_selectedMessage != null)
+            {
+                var selectedCard =
+                    (Dictionary<string, object>)
+                    BuildWorkingSetCard(0, _selectedMessage);
+                selectedCard["kind"] = "selected";
+                selectedCard["index"] = 0;
+                selectedCard["badge"] = "@";
+                items.Add(selectedCard);
+            }
+
             for (var index = 0;
                  index < _workingMessages.Count;
                  index++)
             {
-                items.Add(BuildWorkingSetCard(
-                    index,
-                    _workingMessages[index]));
+                var card =
+                    (Dictionary<string, object>)
+                    BuildWorkingSetCard(
+                        index,
+                        _workingMessages[index]);
+                card["kind"] = "email";
+                card["index"] = index;
+                items.Add(card);
             }
 
             for (var index = 0;
                  index < _externalContext.Count;
                  index++)
             {
-                items.Add(BuildExternalContextCard(
-                    _externalContext[index]));
+                var card =
+                    (Dictionary<string, object>)
+                    BuildExternalContextCard(
+                        _externalContext[index]);
+                card["kind"] = "file";
+                card["index"] = index;
+                items.Add(card);
+            }
+
+            for (var index = 0;
+                 index < _externalImages.Count;
+                 index++)
+            {
+                var image = _externalImages[index];
+                items.Add(new Dictionary<string, object>
+                {
+                    { "kind", "image" },
+                    { "index", index },
+                    {
+                        "title",
+                        TextBoundary.SingleLine(
+                            image.Payload.FileName,
+                            120)
+                    },
+                    { "subtitle", "image - vision input" },
+                    { "thumb", image.Thumbnail }
+                });
             }
 
             PostToWeb(new Dictionary<string, object>
@@ -558,6 +631,64 @@ namespace OutlookLocalAIChat.UI
                 { "type", "context" },
                 { "items", items }
             });
+        }
+
+        private void HandleRemoveContext(string kind, int index)
+        {
+            if (_busy)
+            {
+                return;
+            }
+
+            switch (kind)
+            {
+                case "selected":
+                    _selectedMessage = null;
+                    break;
+                case "email":
+                    if (index >= 0 &&
+                        index < _workingMessages.Count)
+                    {
+                        _workingMessages.RemoveAt(index);
+                    }
+
+                    break;
+                case "file":
+                    if (index >= 0 &&
+                        index < _externalContext.Count)
+                    {
+                        _externalContext.RemoveAt(index);
+                    }
+
+                    break;
+                case "image":
+                    if (index >= 0 &&
+                        index < _externalImages.Count)
+                    {
+                        _externalImages.RemoveAt(index);
+                    }
+
+                    break;
+            }
+
+            if (_selectedMessage == null &&
+                _workingMessages.Count == 0)
+            {
+                SetScopeUnavailable(
+                    "No context - use /search or select emails");
+            }
+            else if (_workingMessages.Count > 0)
+            {
+                SetScope(
+                    "Working set: " +
+                    _workingMessages.Count +
+                    " of " +
+                    MailboxWorkingSet.MaxMessages +
+                    " emails");
+            }
+
+            RefreshContextLayer("External files");
+            SetStatus("Removed from context", false);
         }
 
         private object BuildWorkingSetCard(
@@ -771,6 +902,7 @@ namespace OutlookLocalAIChat.UI
 
             _workingMessages.Clear();
             _externalContext.Clear();
+            _externalImages.Clear();
             _selectedMessage = null;
             RefreshContextLayer("External files");
             SetScopeUnavailable(
@@ -822,7 +954,7 @@ namespace OutlookLocalAIChat.UI
                 Multiselect = true,
                 CheckFileExists = true,
                 Filter =
-                    "Supported text files|*.txt;*.md;*.csv;*.json;*.xml;*.html;*.htm;*.log;*.yaml;*.yml;*.ini|" +
+                    "Supported files|*.txt;*.md;*.csv;*.json;*.xml;*.html;*.htm;*.log;*.pdf;*.docx;*.pptx;*.xlsx;*.xlsm;*.xls;*.doc;*.ppt;*.rtf;*.eml;*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp;*.tif;*.tiff|" +
                     "All files|*.*"
             })
             {
@@ -833,29 +965,98 @@ namespace OutlookLocalAIChat.UI
             }
         }
 
+        // Any supported file type is accepted: documents run through the
+        // same bounded extractors as email attachments, and images become
+        // vision input with a tray thumbnail. ExternalContextLoader
+        // remains the strict text-only path for programmatic use.
         private void AddExternalFiles(IEnumerable<string> paths)
         {
             try
             {
-                var loaded = ExternalContextLoader.LoadFiles(paths);
-                var combined = new List<ExternalContextDocument>(
-                    _externalContext);
-                combined.AddRange(loaded);
-                var normalized =
-                    ExternalContextDocument.Normalize(combined);
-                _externalContext.Clear();
-                foreach (var document in normalized)
+                var added = 0;
+                foreach (var path in
+                    paths ?? new string[0])
                 {
-                    _externalContext.Add(document);
+                    if (string.IsNullOrWhiteSpace(path))
+                    {
+                        continue;
+                    }
+
+                    var content =
+                        EmailAttachmentReader.LoadLocalFile(path);
+                    if (content == null)
+                    {
+                        continue;
+                    }
+
+                    if (content.ImageDataUrl.Length > 0)
+                    {
+                        if (_externalImages.Count >=
+                            MaxExternalImages)
+                        {
+                            SetStatus(
+                                "Image limit reached (" +
+                                MaxExternalImages + ")",
+                                true);
+                            continue;
+                        }
+
+                        _externalImages.Add(
+                            new ExternalImageContext(
+                                new VisionImagePayload(
+                                    content.FileName,
+                                    content.ImageDataUrl),
+                                EmailAttachmentReader
+                                    .BuildThumbnailDataUrl(path)));
+                        AppendContext(
+                            "Added image " + content.FileName);
+                        added++;
+                        continue;
+                    }
+
+                    if (content.Text.Length == 0)
+                    {
+                        continue;
+                    }
+
+                    var combined =
+                        new List<ExternalContextDocument>(
+                            _externalContext);
+                    combined.Add(new ExternalContextDocument(
+                        content.FileName,
+                        content.Text));
+                    var normalized =
+                        ExternalContextDocument.Normalize(combined);
+                    if (normalized.Count <= _externalContext.Count)
+                    {
+                        SetStatus(
+                            "Document limit reached (" +
+                            ExternalContextDocument.MaxDocuments +
+                            " files, bounded text)",
+                            true);
+                        continue;
+                    }
+
+                    _externalContext.Clear();
+                    foreach (var document in normalized)
+                    {
+                        _externalContext.Add(document);
+                    }
+
+                    AppendContext("Added " + content.FileName);
+                    added++;
                 }
 
                 RefreshContextLayer("External files");
-                SetStatus(
-                    _externalContext.Count +
-                    (_externalContext.Count == 1
-                        ? " context file ready"
-                        : " context files ready"),
-                    false);
+                if (added > 0)
+                {
+                    SetStatus(
+                        added +
+                        (added == 1
+                            ? " item added"
+                            : " items added"),
+                        false);
+                }
             }
             catch (Exception exception)
             {
@@ -1087,6 +1288,13 @@ namespace OutlookLocalAIChat.UI
                 new List<MessageSnapshot>(_workingMessages);
             var requestExternalContext =
                 new List<ExternalContextDocument>(_externalContext);
+            var requestExternalImages =
+                new List<VisionImagePayload>();
+            foreach (var image in _externalImages)
+            {
+                requestExternalImages.Add(image.Payload);
+            }
+
             var hasLinkedDraft =
                 _draftTools != null &&
                 _draftTools.HasActiveDraft;
@@ -1107,6 +1315,7 @@ namespace OutlookLocalAIChat.UI
                     requestSelectedMessage,
                     requestWorkingMessages,
                     requestExternalContext,
+                    requestExternalImages,
                     prompt,
                     draftAuthorization,
                     _requestCancellation.Token);
@@ -1182,6 +1391,7 @@ namespace OutlookLocalAIChat.UI
             MessageSnapshot selectedMessage,
             IReadOnlyList<MessageSnapshot> workingMessages,
             IReadOnlyList<ExternalContextDocument> externalContext,
+            IReadOnlyList<VisionImagePayload> externalImages,
             string prompt,
             OneShotDraftAuthorization draftAuthorization,
             CancellationToken cancellationToken)
@@ -1191,7 +1401,8 @@ namespace OutlookLocalAIChat.UI
                 : null;
             var imagesExpected = ModelRouting.ContextMayIncludeImages(
                 selectedMessage,
-                workingMessages);
+                workingMessages) ||
+                externalImages.Count > 0;
             var activeModel = ModelRouting.ResolveForRequest(
                 _settings,
                 imagesExpected);
@@ -1237,6 +1448,21 @@ namespace OutlookLocalAIChat.UI
                     workingMessages))
             {
                 SetStatus("Images attached for vision", false);
+            }
+
+            if (externalImages.Count > 0)
+            {
+                VisionAttachmentExchange.AppendVisionContext(
+                    request,
+                    activeModel,
+                    new[]
+                    {
+                        new MailboxToolResult(
+                            "external_files",
+                            string.Empty,
+                            string.Empty,
+                            externalImages)
+                    });
             }
 
             for (var round = 0;
@@ -1344,6 +1570,7 @@ namespace OutlookLocalAIChat.UI
             _history.Clear();
             _workingMessages.Clear();
             _externalContext.Clear();
+            _externalImages.Clear();
             _transcriptEvents.Clear();
             _draftTools?.Dispose();
             _draftTools = _outlookApplication == null
@@ -1356,7 +1583,7 @@ namespace OutlookLocalAIChat.UI
             PushContextToWeb();
             RefreshSelectedMessage();
             UpdateDraftState();
-            SetStatus("New chat", false);
+            SetStatus("Chat and context cleared", false);
         }
 
         private void HandleSetModel(string model)

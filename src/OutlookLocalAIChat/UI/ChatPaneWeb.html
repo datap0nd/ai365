@@ -77,62 +77,71 @@
   }
   nav button:hover { background: var(--card); color: var(--text); }
 
-  #chips {
-    background: var(--bg2);
-    border-bottom: 1px solid var(--border);
-    padding: 6px 14px 8px;
-    flex-shrink: 0;
-    max-height: 180px;
-    overflow-y: auto;
+  #tray {
+    display: none;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 0 0 8px;
   }
-  #chipsHead {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 6px;
-  }
-  #chipsTitle { color: var(--dim); font-size: 11px; font-weight: 600; }
-  #chipsHead button {
-    background: none;
-    border: none;
-    color: var(--dim);
-    font: inherit;
-    font-size: 11px;
-    cursor: pointer;
-  }
-  #chipsHead button:hover { color: var(--error); }
-  #chipsList { display: flex; flex-direction: column; gap: 4px; }
-  .chip {
-    background: var(--card);
-    border-radius: 8px;
-    padding: 6px 10px;
+  #tray.on { display: flex; }
+  .tchip {
     display: flex;
     align-items: center;
     gap: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 5px 6px 5px 8px;
+    max-width: 240px;
     animation: fadein 0.15s ease-out;
   }
-  .chip .n {
-    color: var(--accent);
-    font-size: 11px;
-    font-weight: 700;
+  .tchip .thumb {
+    width: 34px;
+    height: 34px;
+    border-radius: 7px;
+    object-fit: cover;
     flex-shrink: 0;
-    width: 16px;
   }
-  .chip .t { min-width: 0; flex: 1; }
-  .chip .t1 {
-    font-size: 12px;
+  .tchip .glyph {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+  .tchip .t { min-width: 0; }
+  .tchip .t1 {
+    font-size: 11.5px;
     font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    max-width: 150px;
   }
-  .chip .t2 {
-    font-size: 11px;
+  .tchip .t2 {
+    font-size: 10px;
     color: var(--dim);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    max-width: 150px;
   }
+  .tchip .tx {
+    background: none;
+    border: none;
+    color: var(--dim);
+    font-size: 13px;
+    cursor: pointer;
+    padding: 2px 5px;
+    border-radius: 6px;
+    flex-shrink: 0;
+  }
+  .tchip .tx:hover { color: var(--error); background: var(--card2); }
 
   main {
     flex: 1;
@@ -219,9 +228,53 @@
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: 12px;
-    padding: 8px 8px 8px 12px;
+    padding: 8px 8px 8px 8px;
     transition: border-color 0.15s;
   }
+  #btnPlus {
+    background: transparent;
+    color: var(--dim);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    width: 30px;
+    height: 30px;
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.12s, color 0.12s;
+  }
+  #btnPlus:hover { background: var(--card2); color: var(--text); }
+  #btnPlus.open { background: var(--card2); color: var(--accent); }
+  footer { position: relative; }
+  #plusMenu {
+    position: absolute;
+    left: 14px;
+    bottom: 100%;
+    margin-bottom: -2px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    min-width: 200px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    z-index: 20;
+    animation: fadein 0.12s ease-out;
+  }
+  #plusMenu button {
+    background: none;
+    border: none;
+    color: var(--text);
+    font: inherit;
+    font-size: 12.5px;
+    text-align: left;
+    padding: 8px 10px;
+    border-radius: 7px;
+    cursor: pointer;
+  }
+  #plusMenu button:hover { background: var(--card2); }
   #composerCard:focus-within { border-color: var(--accent); }
   #input {
     flex: 1;
@@ -331,25 +384,22 @@
     <div id="draft">Say "create a draft" to open one. MetoMail can never send.</div>
   </div>
   <nav>
-    <button id="btnAddEmail" title="Add the emails selected in Outlook">+ Email</button>
-    <button id="btnAddFiles" title="Add text files as context">+ Files</button>
-    <button id="btnNew" title="Start a new chat">New</button>
+    <button id="btnClearChat"
+            title="Clears everything: the conversation, working set, files, images, and the draft link">Clear chat</button>
     <button id="btnSettings" title="Settings">Settings</button>
   </nav>
 </header>
 
-<section id="chips" hidden>
-  <div id="chipsHead">
-    <span id="chipsTitle">Context</span>
-    <button id="btnClear">Clear</button>
-  </div>
-  <div id="chipsList"></div>
-</section>
-
 <main id="chat"></main>
 
 <footer>
+  <div id="tray"></div>
+  <div id="plusMenu" hidden>
+    <button id="menuAddEmail">&#9993;&#xFE0E;&nbsp; Add selected emails</button>
+    <button id="menuAddFiles">&#128206;&#xFE0E;&nbsp; Add files or pictures</button>
+  </div>
   <div id="composerCard">
+    <button id="btnPlus" title="Add emails, files, or pictures to the context">+</button>
     <textarea id="input" rows="1" placeholder="Message MetoMail..." maxlength="4000"></textarea>
     <button id="btnSend" title="Send">&#8593;</button>
   </div>
@@ -372,9 +422,7 @@
   var draftEl = document.getElementById("draft");
   var modelEl = document.getElementById("model");
   var visionBadge = document.getElementById("visionBadge");
-  var chips = document.getElementById("chips");
-  var chipsList = document.getElementById("chipsList");
-  var chipsTitle = document.getElementById("chipsTitle");
+  var tray = document.getElementById("tray");
   var typing = null;
   var busy = false;
   var modelVision = {};
@@ -467,8 +515,9 @@
     body.appendChild(document.createTextNode(
       "Chat with your mailbox - local models, nothing is ever sent.\n\n"));
     line("/search", " a person or topic to build a working set");
-    line("+ Email", " adds the emails selected in Outlook (up to 10)");
-    line("+ Files", " adds text files as context");
+    line("+", " adds selected emails, files, or pictures to the context");
+    body.appendChild(document.createTextNode(
+      "Or drag emails, attachments, or files straight in.\n"));
     body.appendChild(document.createTextNode(
       "Ask about emails, attachments, images, or invites.\n"));
     line("\"create a draft\"", " writes one - it always opens unsent");
@@ -520,29 +569,63 @@
   }
 
   function setContext(items) {
-    while (chipsList.firstChild) {
-      chipsList.removeChild(chipsList.firstChild);
+    while (tray.firstChild) { tray.removeChild(tray.firstChild); }
+    var list = items || [];
+    tray.classList.toggle("on", list.length > 0);
+    for (var i = 0; i < list.length; i++) {
+      tray.appendChild(buildChip(list[i]));
     }
-    var count = (items || []).length;
-    chips.hidden = count === 0;
-    chipsTitle.textContent =
-      "Context - " + count + (count === 1 ? " item" : " items");
-    for (var i = 0; i < count; i++) {
-      var item = items[i];
-      var chip = el("div", "chip");
-      var n = el("div", "n");
-      n.textContent = item.badge || String(i + 1);
-      var t = el("div", "t");
-      var t1 = el("div", "t1");
-      t1.textContent = item.title || "";
-      var t2 = el("div", "t2");
-      t2.textContent = item.subtitle || "";
-      t.appendChild(t1);
-      t.appendChild(t2);
-      chip.appendChild(n);
-      chip.appendChild(t);
-      chipsList.appendChild(chip);
+    if (list.length > 1) {
+      var clearAll = el("div", "tchip");
+      var clearBtn = document.createElement("button");
+      clearBtn.className = "tx";
+      clearBtn.textContent = "Clear all";
+      clearBtn.title = "Remove all context";
+      clearBtn.addEventListener("click", function () {
+        post("clearContext");
+      });
+      clearAll.appendChild(clearBtn);
+      tray.appendChild(clearAll);
     }
+  }
+
+  function buildChip(item) {
+    var chip = el("div", "tchip");
+    if (item.kind === "image" &&
+        item.thumb &&
+        item.thumb.indexOf("data:image/") === 0) {
+      var img = document.createElement("img");
+      img.className = "thumb";
+      img.src = item.thumb;
+      img.alt = "";
+      chip.appendChild(img);
+    } else {
+      var glyph = el("div", "glyph");
+      glyph.textContent =
+        item.kind === "email" || item.kind === "selected"
+          ? "\u2709"
+          : (item.kind === "image" ? "\u25A3" : "\u25A4");
+      chip.appendChild(glyph);
+    }
+    var t = el("div", "t");
+    var t1 = el("div", "t1");
+    t1.textContent = item.title || "";
+    var t2 = el("div", "t2");
+    t2.textContent = item.subtitle || "";
+    t.appendChild(t1);
+    t.appendChild(t2);
+    chip.appendChild(t);
+    var remove = document.createElement("button");
+    remove.className = "tx";
+    remove.textContent = "\u00D7";
+    remove.title = "Remove from context";
+    (function (kind, index) {
+      remove.addEventListener("click", function () {
+        post("removeContext", { kind: kind, index: index });
+      });
+    })(item.kind, item.index);
+    chip.appendChild(remove);
+    return chip;
   }
 
   function clearChat() {
@@ -601,16 +684,32 @@
     updateVisionBadge();
     post("setModel", { model: modelEl.value });
   });
-  document.getElementById("btnAddEmail")
-    .addEventListener("click", function () { post("addEmail"); });
-  document.getElementById("btnAddFiles")
-    .addEventListener("click", function () { post("addFiles"); });
-  document.getElementById("btnNew")
+  document.getElementById("btnClearChat")
     .addEventListener("click", function () { post("newChat"); });
   document.getElementById("btnSettings")
     .addEventListener("click", function () { post("openSettings"); });
-  document.getElementById("btnClear")
-    .addEventListener("click", function () { post("clearContext"); });
+  var plusMenu = document.getElementById("plusMenu");
+  var btnPlus = document.getElementById("btnPlus");
+  function closePlusMenu() {
+    plusMenu.hidden = true;
+    btnPlus.classList.remove("open");
+  }
+  btnPlus.addEventListener("click", function (event) {
+    event.stopPropagation();
+    plusMenu.hidden = !plusMenu.hidden;
+    btnPlus.classList.toggle("open", !plusMenu.hidden);
+  });
+  document.addEventListener("click", closePlusMenu);
+  document.getElementById("menuAddEmail")
+    .addEventListener("click", function () {
+      closePlusMenu();
+      post("addEmail");
+    });
+  document.getElementById("menuAddFiles")
+    .addEventListener("click", function () {
+      closePlusMenu();
+      post("addFiles");
+    });
 
   // Drag-and-drop: the drop gesture is forwarded to the host. Outlook
   // email drags (virtual .msg files, or drags exposing no files) map to

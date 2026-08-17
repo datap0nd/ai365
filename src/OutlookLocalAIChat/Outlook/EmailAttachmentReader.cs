@@ -270,6 +270,109 @@ namespace OutlookLocalAIChat.Outlook
             }
         }
 
+        // Loads a user-chosen local file through the same bounded
+        // extraction pipeline as email attachments (documents become
+        // text, images become vision input). User-initiated only.
+        public static EmailAttachmentContent LoadLocalFile(string path)
+        {
+            try
+            {
+                var fileName = Path.GetFileName(path ?? string.Empty);
+                if (fileName.Length == 0)
+                {
+                    return null;
+                }
+
+                var info = new FileInfo(path);
+                if (!info.Exists)
+                {
+                    return null;
+                }
+
+                var extension = Path.GetExtension(fileName);
+                var sizeLimit =
+                    ExcelExtensions.Contains(extension) ||
+                    TextExtensions.Contains(extension)
+                        ? MaxBytesPerAttachment
+                        : MaxImageBytesPerAttachment;
+                if (info.Length > sizeLimit)
+                {
+                    return new EmailAttachmentContent(
+                        fileName,
+                        "unreadable",
+                        "[File: " + fileName + ", " +
+                        info.Length.ToString() +
+                        " bytes. Too large for MetoMail to read.]");
+                }
+
+                var extracted = ExtractContent(
+                    path,
+                    fileName,
+                    extension);
+                return extracted ?? new EmailAttachmentContent(
+                    fileName,
+                    "unreadable",
+                    "[File: " + fileName +
+                    ". This file type could not be converted to " +
+                    "text or image input.]");
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        // Small JPEG preview for attachment tray thumbnails.
+        public static string BuildThumbnailDataUrl(string path)
+        {
+            try
+            {
+                using (var original =
+                    System.Drawing.Image.FromFile(path))
+                {
+                    var longSide = Math.Max(
+                        original.Width,
+                        original.Height);
+                    var scale = longSide > 96
+                        ? 96.0 / longSide
+                        : 1.0;
+                    var width = Math.Max(
+                        1,
+                        (int)Math.Round(original.Width * scale));
+                    var height = Math.Max(
+                        1,
+                        (int)Math.Round(original.Height * scale));
+                    using (var bitmap =
+                        new System.Drawing.Bitmap(width, height))
+                    {
+                        using (var graphics =
+                            System.Drawing.Graphics.FromImage(
+                                bitmap))
+                        {
+                            graphics.Clear(
+                                System.Drawing.Color.White);
+                            graphics.DrawImage(
+                                original,
+                                0,
+                                0,
+                                width,
+                                height);
+                        }
+
+                        var encoded = EncodeJpeg(bitmap, 70);
+                        return encoded == null
+                            ? null
+                            : "data:image/jpeg;base64," +
+                              Convert.ToBase64String(encoded);
+                    }
+                }
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         public static bool IsSupportedExtension(string extension)
         {
             return ImageExtensions.Contains(extension) ||
