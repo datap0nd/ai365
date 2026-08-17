@@ -7,7 +7,7 @@ using OutlookLocalAIChat.Security;
 
 namespace OutlookLocalAIChat.Chat
 {
-    internal static class VisionImagePrefetch
+    public static class VisionImagePrefetch
     {
         private const string PrefetchToolCallId = "prefetch_images";
 

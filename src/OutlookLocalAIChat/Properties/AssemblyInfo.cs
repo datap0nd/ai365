@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 [assembly: AssemblyTitle("MailAI")]
@@ -11,4 +10,3 @@ using System.Runtime.InteropServices;
 [assembly: Guid("2D659014-84E1-4DFD-BAD1-C4BD16FB2D8A")]
 [assembly: AssemblyVersion("1.1.0.0")]
 [assembly: AssemblyFileVersion("1.10.3.0")]
-[assembly: InternalsVisibleTo("GuardrailTests")]
