@@ -174,13 +174,13 @@ namespace OutlookLocalAIChat.Outlook
                 if (count < 1)
                 {
                     throw new InvalidOperationException(
-                        "Select at least one email before using Send to MailAI.");
+                        "Select at least one email before using Send to MetoMail.");
                 }
 
                 if (count > MailboxWorkingSet.MaxMessages)
                 {
                     throw new InvalidOperationException(
-                        "Select no more than ten emails before using Send to MailAI.");
+                        "Select no more than ten emails before using Send to MetoMail.");
                 }
 
                 var messages = new List<MessageSnapshot>(count);
@@ -277,7 +277,7 @@ namespace OutlookLocalAIChat.Outlook
             }
 
             // Web-hosted images exist only as URLs; the message stores no
-            // image bytes, so MailAI can never read them. Embedded images
+            // image bytes, so MetoMail can never read them. Embedded images
             // use cid: sources and arrive through the Attachments path.
             var bounded = htmlBody.Length > 512 * 1024
                 ? htmlBody.Substring(0, 512 * 1024)

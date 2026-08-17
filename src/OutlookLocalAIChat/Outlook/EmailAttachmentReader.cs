@@ -156,7 +156,7 @@ namespace OutlookLocalAIChat.Outlook
 
                         tempPath = Path.Combine(
                             Path.GetTempPath(),
-                            "MailAI-" +
+                            "MetoMail-" +
                             Guid.NewGuid().ToString("N") +
                             (isExtensionless ? ".bin" : extension));
                         outlookAttachment.SaveAsFile(tempPath);

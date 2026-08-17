@@ -411,7 +411,7 @@ namespace OutlookLocalAIChat.Outlook
                     message.RemoteImageCount;
                 payload["web_hosted_images_note"] =
                     "The message body references web-hosted images by URL. " +
-                    "Their bytes are not stored in the email, so MailAI " +
+                    "Their bytes are not stored in the email, so MetoMail " +
                     "cannot view them. Only embedded images and attachments " +
                     "are readable.";
             }

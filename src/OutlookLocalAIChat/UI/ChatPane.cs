@@ -89,7 +89,6 @@ namespace OutlookLocalAIChat.UI
         private readonly RichTextBox _transcript =
             new RichTextBox();
         private readonly TextBox _composer = new TextBox();
-        private readonly Label _scopeTitle = new Label();
         private readonly Label _scopeMeta = new Label();
         private readonly Label _modelMeta = new Label();
         private readonly Label _draftState = new Label();
@@ -380,7 +379,6 @@ namespace OutlookLocalAIChat.UI
             }
 
             _selectedMessage = null;
-            _scopeTitle.Text = "MailAI";
             _scopeMeta.Text =
                 "Working set: " +
                 _workingMessages.Count +
@@ -393,7 +391,7 @@ namespace OutlookLocalAIChat.UI
                 ". The ten-email context layer is ready. " +
                 "Search again to replace it if needed.");
             SetStatus(
-                "Working set ready. Run /search again to replace it, or ask MailAI to work on these emails.",
+                "Working set ready. Run /search again to replace it, or ask MetoMail to work on these emails.",
                 false);
         }
 
@@ -691,7 +689,7 @@ namespace OutlookLocalAIChat.UI
         {
             using (var dialog = new OpenFileDialog
             {
-                Title = "Add bounded text context to MailAI",
+                Title = "Add bounded text context to MetoMail",
                 Multiselect = true,
                 CheckFileExists = true,
                 Filter =
@@ -886,7 +884,7 @@ namespace OutlookLocalAIChat.UI
                 Padding = new Padding(0)
             };
             _rootLayout.RowStyles.Add(
-                new RowStyle(SizeType.Absolute, 92));
+                new RowStyle(SizeType.Absolute, 68));
             _rootLayout.RowStyles.Add(
                 new RowStyle(SizeType.Absolute, 38));
             _rootLayout.RowStyles.Add(
@@ -963,28 +961,35 @@ namespace OutlookLocalAIChat.UI
                 Dock = DockStyle.Fill,
                 BackColor = SurfaceMuted,
                 Padding = new Padding(14, 10, 14, 8),
-                ColumnCount = 1,
-                RowCount = 3
+                ColumnCount = 2,
+                RowCount = 2
             };
+            header.ColumnStyles.Add(
+                new ColumnStyle(SizeType.Absolute, 48));
+            header.ColumnStyles.Add(
+                new ColumnStyle(SizeType.Percent, 100));
             header.RowStyles.Add(
-                new RowStyle(SizeType.Absolute, 28));
+                new RowStyle(SizeType.Percent, 50));
             header.RowStyles.Add(
-                new RowStyle(SizeType.Absolute, 22));
-            header.RowStyles.Add(
-                new RowStyle(SizeType.Absolute, 22));
+                new RowStyle(SizeType.Percent, 50));
 
-            _scopeTitle.AutoEllipsis = true;
-            _scopeTitle.Dock = DockStyle.Fill;
-            _scopeTitle.Font = new Font(
-                Font.FontFamily,
-                Font.Size + 2F,
-                FontStyle.Bold);
-            _scopeTitle.ForeColor = TextPrimary;
-            _scopeTitle.Text = "MailAI";
+            var logo = new Panel
+            {
+                Size = new Size(40, 40),
+                Margin = new Padding(0, 1, 8, 0),
+                BackColor = SurfaceMuted,
+                AccessibleName = "MetoMail logo",
+                AccessibleRole = AccessibleRole.Graphic
+            };
+            logo.Paint += PaintLogo;
 
             _scopeMeta.AutoEllipsis = true;
             _scopeMeta.Dock = DockStyle.Fill;
-            _scopeMeta.ForeColor = TextSecondary;
+            _scopeMeta.ForeColor = TextPrimary;
+            _scopeMeta.Font = new Font(
+                Font.FontFamily,
+                Font.Size,
+                FontStyle.Bold);
             _scopeMeta.Text =
                 "No context selected. Use /search or select emails.";
 
@@ -998,10 +1003,98 @@ namespace OutlookLocalAIChat.UI
             _modelMeta.AccessibleName =
                 "Active AI model and safety boundary";
 
-            header.Controls.Add(_scopeTitle, 0, 0);
-            header.Controls.Add(_scopeMeta, 0, 1);
-            header.Controls.Add(_modelMeta, 0, 2);
+            header.Controls.Add(logo, 0, 0);
+            header.SetRowSpan(logo, 2);
+            header.Controls.Add(_scopeMeta, 1, 0);
+            header.Controls.Add(_modelMeta, 1, 1);
             return header;
+        }
+
+        private static void PaintLogo(
+            object sender,
+            PaintEventArgs eventArgs)
+        {
+            var panel = (Control)sender;
+            var graphics = eventArgs.Graphics;
+            graphics.SmoothingMode =
+                System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            var side = Math.Min(panel.Width, panel.Height) - 1;
+            var bounds = new Rectangle(0, 0, side, side);
+            using (var path = RoundedRectangle(bounds, side / 5))
+            using (var brush = new SolidBrush(OutlookBlue))
+            {
+                graphics.FillPath(brush, path);
+            }
+
+            var envelope = new Rectangle(
+                bounds.Left + (int)(side * 0.22),
+                bounds.Top + (int)(side * 0.30),
+                (int)(side * 0.56),
+                (int)(side * 0.40));
+            var flapY = envelope.Top + (int)(envelope.Height * 0.52);
+            var centerX = envelope.Left + envelope.Width / 2;
+            using (var pen = new Pen(
+                Color.White,
+                Math.Max(2F, side / 16F)))
+            {
+                pen.LineJoin =
+                    System.Drawing.Drawing2D.LineJoin.Round;
+                graphics.DrawRectangle(
+                    pen,
+                    envelope.Left,
+                    envelope.Top,
+                    envelope.Width,
+                    envelope.Height);
+                graphics.DrawLine(
+                    pen,
+                    envelope.Left,
+                    envelope.Top,
+                    centerX,
+                    flapY);
+                graphics.DrawLine(
+                    pen,
+                    centerX,
+                    flapY,
+                    envelope.Right,
+                    envelope.Top);
+            }
+        }
+
+        private static System.Drawing.Drawing2D.GraphicsPath
+            RoundedRectangle(Rectangle bounds, int radius)
+        {
+            var path = new System.Drawing.Drawing2D.GraphicsPath();
+            var diameter = Math.Max(2, radius * 2);
+            path.AddArc(
+                bounds.Left,
+                bounds.Top,
+                diameter,
+                diameter,
+                180,
+                90);
+            path.AddArc(
+                bounds.Right - diameter,
+                bounds.Top,
+                diameter,
+                diameter,
+                270,
+                90);
+            path.AddArc(
+                bounds.Right - diameter,
+                bounds.Bottom - diameter,
+                diameter,
+                diameter,
+                0,
+                90);
+            path.AddArc(
+                bounds.Left,
+                bounds.Bottom - diameter,
+                diameter,
+                diameter,
+                90,
+                90);
+            path.CloseFigure();
+            return path;
         }
 
         private Control BuildToolbar()
@@ -1048,7 +1141,7 @@ namespace OutlookLocalAIChat.UI
             _transcript.ScrollBars =
                 RichTextBoxScrollBars.Vertical;
             _transcript.AccessibleName =
-                "MailAI conversation";
+                "MetoMail conversation";
             _transcript.AccessibleDescription =
                 "Plain-text mailbox conversation and context-loading ledger.";
 
@@ -1108,7 +1201,7 @@ namespace OutlookLocalAIChat.UI
             _draftState.AutoEllipsis = true;
             _draftState.Dock = DockStyle.Fill;
             _draftState.Text =
-                "Say 'create a draft' to open one. MailAI cannot send.";
+                "Say 'create a draft' to open one. MetoMail cannot send.";
             _draftState.ForeColor = TextSecondary;
             _draftState.Font = new Font(
                 Font.FontFamily,
@@ -1161,7 +1254,7 @@ namespace OutlookLocalAIChat.UI
             _status.AccessibleName = "Chat status";
             _status.AccessibleRole = AccessibleRole.StatusBar;
             _status.Text =
-                "Mailbox reads are capped at ten emails. MailAI cannot send.";
+                "Mailbox reads are capped at ten emails. MetoMail cannot send.";
             panel.Controls.Add(_status);
             return panel;
         }
@@ -1706,7 +1799,7 @@ namespace OutlookLocalAIChat.UI
                 _draftTools.HasActiveDraft;
             _draftState.Text = linked
                 ? "One draft linked. Revision requests update this draft only."
-                : "Say 'create a draft' to open one. MailAI cannot send.";
+                : "Say 'create a draft' to open one. MetoMail cannot send.";
             _draftState.ForeColor = linked
                 ? OutlookBlue
                 : TextSecondary;
@@ -1735,7 +1828,6 @@ namespace OutlookLocalAIChat.UI
 
         private void SetScopeUnavailable(string text)
         {
-            _scopeTitle.Text = "MailAI";
             _scopeMeta.Text = text;
         }
 
@@ -1745,7 +1837,6 @@ namespace OutlookLocalAIChat.UI
             RefreshContextLayer("External files");
             _selectedMessage = message ??
                 throw new ArgumentNullException(nameof(message));
-            _scopeTitle.Text = "MailAI";
             var displaySubject = SubjectDisplay.Clean(
                 _selectedMessage.Subject);
             _scopeMeta.Text =
@@ -1770,13 +1861,13 @@ namespace OutlookLocalAIChat.UI
         {
             AppendStyledBlock(
                 "Ready",
-                "Ask across Inbox and Sent Items. MailAI loads no more than ten " +
+                "Ask across Inbox and Sent Items. MetoMail loads no more than ten " +
                 "email bodies. Add up to three bounded text files as external context.\n\n" +
                 "Try:\n" +
                 "- /search person or topic\n" +
-                "- Ctrl+click up to ten emails, then click Add email or right-click Send to MailAI.\n" +
-                "- Drag selected Outlook emails onto MailAI, or drag supported text files here.\n" +
-                "- Ask MailAI to summarize or compare the working set.\n" +
+                "- Ctrl+click up to ten emails, then click Add email or right-click Send to MetoMail.\n" +
+                "- Drag selected Outlook emails onto MetoMail, or drag supported text files here.\n" +
+                "- Ask MetoMail to summarize or compare the working set.\n" +
                 "- Find a message and create a concise reply draft.\n" +
                 "- Once it opens, ask to shorten it or bold an exact section.",
                 TextSecondary,

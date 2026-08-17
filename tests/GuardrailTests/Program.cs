@@ -105,7 +105,7 @@ namespace GuardrailTests
                     "Outlook multi-selection accepts one to ten emails",
                     OutlookMultiSelectionIsBounded);
                 Run(
-                    "Active Explorer selection is used for Send to MailAI",
+                    "Active Explorer selection is used for Send to MetoMail",
                     ActiveExplorerSelectionIsUsed);
                 Run(
                     "External context is explicit and bounded",
@@ -154,7 +154,7 @@ namespace GuardrailTests
                     "Chat pane is a registered COM control",
                     ChatPaneIsComControl);
                 Run(
-                    "Outlook ribbon includes Send to MailAI",
+                    "Outlook ribbon includes Send to MetoMail",
                     RibbonIncludesSendToAi);
                 Run(
                     "Selected subjects hide reply and forward prefixes",
@@ -271,7 +271,7 @@ namespace GuardrailTests
 
             var csvPath = Path.Combine(
                 Path.GetTempPath(),
-                "MailAI-test-" + Guid.NewGuid().ToString("N") + ".csv");
+                "MetoMail-test-" + Guid.NewGuid().ToString("N") + ".csv");
             File.WriteAllText(
                 csvPath,
                 "Name,Amount\nWidget,42\nGadget,17");
@@ -1519,8 +1519,8 @@ namespace GuardrailTests
             Assert(
                 xml.Contains("ContextMenuMailItem") &&
                 xml.Contains("OnSendToAi") &&
-                xml.Contains("Send to MailAI") &&
-                xml.Contains("label=\"MailAI\""),
+                xml.Contains("Send to MetoMail") &&
+                xml.Contains("label=\"MetoMail\""),
                 "The Outlook explorer ribbon XML is incomplete: " + xml);
         }
 
@@ -1625,7 +1625,7 @@ namespace GuardrailTests
         {
             var pngPath = Path.Combine(
                 Path.GetTempPath(),
-                "MailAI-prefetch-" + Guid.NewGuid().ToString("N") + ".png");
+                "MetoMail-prefetch-" + Guid.NewGuid().ToString("N") + ".png");
             File.WriteAllBytes(
                 pngPath,
                 Convert.FromBase64String(
@@ -1785,7 +1785,7 @@ namespace GuardrailTests
         {
             var pngPath = Path.Combine(
                 Path.GetTempPath(),
-                "MailAI-test-" + Guid.NewGuid().ToString("N") + ".png");
+                "MetoMail-test-" + Guid.NewGuid().ToString("N") + ".png");
             File.WriteAllBytes(
                 pngPath,
                 Convert.FromBase64String(
@@ -1977,7 +1977,7 @@ namespace GuardrailTests
         {
             var pngPath = Path.Combine(
                 Path.GetTempPath(),
-                "MailAI-pasted-" + Guid.NewGuid().ToString("N"));
+                "MetoMail-pasted-" + Guid.NewGuid().ToString("N"));
             File.WriteAllBytes(
                 pngPath,
                 Convert.FromBase64String(
@@ -2027,7 +2027,7 @@ namespace GuardrailTests
         {
             var pngPath = Path.Combine(
                 Path.GetTempPath(),
-                "MailAI-big-" + Guid.NewGuid().ToString("N") + ".png");
+                "MetoMail-big-" + Guid.NewGuid().ToString("N") + ".png");
             using (var bitmap = new System.Drawing.Bitmap(
                 1400,
                 1400,

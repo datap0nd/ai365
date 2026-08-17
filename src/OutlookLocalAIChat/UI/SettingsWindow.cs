@@ -36,7 +36,7 @@ namespace OutlookLocalAIChat.UI
         private readonly Button _analyzeTone =
             MakeButton("Analyze 15 sent emails", false, 176);
         private readonly Button _updateButton =
-            MakeButton("Update MailAI", false, 128);
+            MakeButton("Update MetoMail", false, 128);
         private readonly Label _updateStatus = new Label();
         private readonly Button _save =
             MakeButton("Save", true, 96);
@@ -68,7 +68,7 @@ namespace OutlookLocalAIChat.UI
                 throw new ArgumentNullException(nameof(store));
             _outlookApplication = outlookApplication;
 
-            Text = "MailAI settings";
+            Text = "MetoMail settings";
             StartPosition = FormStartPosition.CenterParent;
             ClientSize = new Size(700, 670);
             MinimumSize = new Size(620, 620);
@@ -98,7 +98,7 @@ namespace OutlookLocalAIChat.UI
             var tabs = new TabControl
             {
                 Dock = DockStyle.Fill,
-                AccessibleName = "MailAI settings sections"
+                AccessibleName = "MetoMail settings sections"
             };
             tabs.TabPages.Add(BuildConnectionPage());
             tabs.TabPages.Add(BuildWritingStylePage());
@@ -210,7 +210,7 @@ namespace OutlookLocalAIChat.UI
                 "Switch to vision model for images";
             _switchVisionForImages.AccessibleDescription =
                 "Uses your saved model list to pick a vision model for this request only. " +
-                "Save settings after Refresh models so MailAI knows which vision models are available.";
+                "Save settings after Refresh models so MetoMail knows which vision models are available.";
 
             _useToneProfile.AutoSize = true;
             _useToneProfile.Text =
@@ -321,7 +321,7 @@ namespace OutlookLocalAIChat.UI
 
             ConfigureSupportingLabel(_updateStatus);
             _updateStatus.Text =
-                "Update downloads the latest MailAI release, closes Outlook, " +
+                "Update downloads the latest MetoMail release, closes Outlook, " +
                 "installs silently, and reopens Outlook.";
             _updateStatus.AccessibleRole = AccessibleRole.StatusBar;
             layout.Controls.Add(_updateStatus, 0, 13);
@@ -342,16 +342,16 @@ namespace OutlookLocalAIChat.UI
             if (_outlookApplication == null)
             {
                 _error.Text =
-                    "[OUTLOOK_NOT_READY] Open MailAI from Outlook before updating.";
+                    "[OUTLOOK_NOT_READY] Open MetoMail from Outlook before updating.";
                 return;
             }
 
             var confirm = MessageBox.Show(
                 this,
-                "MailAI will download the latest version, close Outlook, " +
+                "MetoMail will download the latest version, close Outlook, " +
                 "install the update silently, and reopen Outlook. Open " +
                 "items may ask to be saved while Outlook closes. Continue?",
-                "Update MailAI",
+                "Update MetoMail",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Question);
             if (confirm != DialogResult.Yes)
@@ -385,7 +385,7 @@ namespace OutlookLocalAIChat.UI
                 _updating = false;
                 _updateStatus.ForeColor = SecondaryText;
                 _updateStatus.Text =
-                    "The update was cancelled. MailAI is unchanged.";
+                    "The update was cancelled. MetoMail is unchanged.";
                 SetCommonControlsEnabled(true);
             }
             catch (Exception exception)
@@ -393,7 +393,7 @@ namespace OutlookLocalAIChat.UI
                 _updating = false;
                 _updateStatus.ForeColor = SecondaryText;
                 _updateStatus.Text =
-                    "The update did not start. MailAI is unchanged.";
+                    "The update did not start. MetoMail is unchanged.";
                 _error.Text = DiagnosticDetails.ForException(
                     exception,
                     "UPDATE_FAILED");
@@ -426,7 +426,7 @@ namespace OutlookLocalAIChat.UI
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
             var disclosure = SupportingText(
-                "Nothing is analyzed automatically. When you click Analyze, MailAI " +
+                "Nothing is analyzed automatically. When you click Analyze, MetoMail " +
                 "reads up to 15 recent Sent Items messages, removes obvious quoted " +
                 "history, and sends bounded samples to your configured endpoint. " +
                 "Review and edit the result before saving.");
@@ -438,7 +438,7 @@ namespace OutlookLocalAIChat.UI
 
             var scope = SupportingText(
                 "The profile affects wording, greeting, cadence, and sign-off only. " +
-                "It cannot change MailAI permissions or security rules.");
+                "It cannot change MetoMail permissions or security rules.");
             layout.Controls.Add(scope, 0, 4);
 
             _analyzeTone.Click += AnalyzeToneClick;
@@ -717,7 +717,7 @@ namespace OutlookLocalAIChat.UI
             if (_outlookApplication == null)
             {
                 _error.Text =
-                    "[OUTLOOK_NOT_READY] Open MailAI from Outlook before analyzing your writing style.";
+                    "[OUTLOOK_NOT_READY] Open MetoMail from Outlook before analyzing your writing style.";
                 return;
             }
 

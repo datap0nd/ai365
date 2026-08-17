@@ -25,7 +25,7 @@ namespace OutlookLocalAIChat.Utilities
                 SecurityProtocolType.Tls12;
             var path = Path.Combine(
                 Path.GetTempPath(),
-                "MailAI-Update-" +
+                "MetoMail-Update-" +
                 Guid.NewGuid().ToString("N") +
                 ".exe");
             using (var http = new HttpClient())
@@ -136,7 +136,7 @@ namespace OutlookLocalAIChat.Utilities
 
             var scriptPath = Path.Combine(
                 Path.GetTempPath(),
-                "MailAI-Update-" +
+                "MetoMail-Update-" +
                 Guid.NewGuid().ToString("N") +
                 ".cmd");
             File.WriteAllText(

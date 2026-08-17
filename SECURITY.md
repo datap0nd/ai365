@@ -128,7 +128,7 @@ The system prompt reinforces these limits, but no security property depends on
 the model obeying it.
 
 Classic Outlook COM add-ins do not have a permission manifest that can deny a
-`Send` scope. MailAI's guarantee is capability-based: its source and compiled
+`Send` scope. MetoMail's guarantee is capability-based: its source and compiled
 assembly contain no Outlook `Send`, `Submit`, or send/receive invocation; its
 model tools expose no such operation; and the model client never receives the
 Outlook application object. CI scans both source and compiled IL for this

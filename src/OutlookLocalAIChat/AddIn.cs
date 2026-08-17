@@ -71,7 +71,7 @@ namespace OutlookLocalAIChat
                 ? "<contextMenus>" +
                   "<contextMenu idMso=\"ContextMenuMailItem\">" +
                   "<button id=\"OutlookLocalAIChat.SendToAi\" " +
-                  "label=\"Send to MailAI\" imageMso=\"ResearchPane\" " +
+                  "label=\"Send to MetoMail\" imageMso=\"ResearchPane\" " +
                   "onAction=\"OnSendToAi\"/>" +
                   "</contextMenu></contextMenus>"
                 : string.Empty;
@@ -80,10 +80,10 @@ namespace OutlookLocalAIChat
                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
                 "<customUI xmlns=\"http://schemas.microsoft.com/office/2009/07/customui\">" +
                 "<ribbon><tabs><tab idMso=\"" + tabId + "\">" +
-                "<group id=\"OutlookLocalAIChat.Group\" label=\"MailAI\">" +
-                "<button id=\"OutlookLocalAIChat.Open\" label=\"MailAI\" " +
+                "<group id=\"OutlookLocalAIChat.Group\" label=\"MetoMail\">" +
+                "<button id=\"OutlookLocalAIChat.Open\" label=\"MetoMail\" " +
                 "size=\"large\" imageMso=\"ResearchPane\" onAction=\"OnOpenChat\" " +
-                "screentip=\"Open MailAI\" " +
+                "screentip=\"Open MetoMail\" " +
                 "supertip=\"Chat with your mailbox and refine one unsent Outlook draft.\"/>" +
                 "</group></tab></tabs></ribbon>" +
                 contextMenu +
@@ -111,7 +111,7 @@ namespace OutlookLocalAIChat
                 {
                     MessageBox.Show(
                         "Outlook is not ready. Restart Outlook and try again.",
-                        "MailAI",
+                        "MetoMail",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Warning);
                     return;
@@ -122,7 +122,7 @@ namespace OutlookLocalAIChat
                     MessageBox.Show(
                         "Outlook has not made the sidebar service available yet. " +
                         "Wait a moment and try again.",
-                        "MailAI",
+                        "MetoMail",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Warning);
                     return;
@@ -134,7 +134,7 @@ namespace OutlookLocalAIChat
                     dynamic factory = _ctpFactory;
                     _taskPane = factory.CreateCTP(
                         "OutlookLocalAIChat.ChatPane",
-                        "MailAI",
+                        "MetoMail",
                         parentWindow ?? Type.Missing);
 
                     dynamic pane = _taskPane;
@@ -171,7 +171,7 @@ namespace OutlookLocalAIChat
                     DiagnosticDetails.ForException(
                         exception,
                         "SIDEBAR_OPEN_FAILED"),
-                    "MailAI",
+                    "MetoMail",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
             }
