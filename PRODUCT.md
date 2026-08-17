@@ -48,8 +48,8 @@ locally linked item. The dedicated host exposes no send operation.
 
 - Microsoft Office Professional Plus 2021 with classic Outlook on Windows.
 - Per-user local installation is preferred.
-- The user opens MetoMail from the ribbon or right-clicks one to ten selected
-  emails and chooses **Send to MetoMail**, then works in a right-docked Outlook
+- The user opens MetoAI from the ribbon or right-clicks one to ten selected
+  emails and chooses **Send to MetoAI**, then works in a right-docked Outlook
   Custom Task Pane. One selected email receives a temporary read handle. Two to
   ten selected emails become the locked working set.
 - Configuration is stored for the current Windows user. The API key is encrypted
@@ -100,7 +100,7 @@ locally linked item. The dedicated host exposes no send operation.
 
 ## Brand Commitments
 
-The user-facing product name is MetoMail. The stable COM assembly, ProgID,
+The user-facing product name is MetoAI. The stable COM assembly, ProgID,
 CLSID, settings path, installer filename, and repository name retain the
 `OutlookLocalAIChat` technical identity so upgrades do not break. The UI should feel like a
 restrained Windows productivity utility, not an AI showcase. Language must be

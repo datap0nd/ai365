@@ -1,4 +1,4 @@
-# MetoMail
+# MetoAI
 
 A Windows-only AI chat add-in for classic Outlook in Microsoft Office
 Professional Plus 2021. It installs locally, opens as a native Outlook sidebar,
@@ -18,7 +18,7 @@ an external Outlook MCP server.
    every push to `main`.
 3. Run the installer for your Windows account.
 4. Start classic Outlook.
-5. Choose **MetoMail > MetoMail** on the ribbon.
+5. Choose **MetoAI > MetoAI** on the ribbon.
 6. Open **Settings** and enter:
    - the OpenAI-compatible endpoint or base URL;
    - the API key;
@@ -30,7 +30,7 @@ an external Outlook MCP server.
 9. Optional: open **Writing style**, click **Analyze 15 sent emails**, review
    the generated drafting instructions, edit them, and enable the profile.
 
-To update later, open **Settings** and click **Update MetoMail**. After a
+To update later, open **Settings** and click **Update MetoAI**. After a
 confirmation it downloads the latest release installer, closes Outlook,
 installs silently for your Windows account, and reopens Outlook.
 
@@ -58,7 +58,7 @@ inert text nodes - model output is still never parsed as HTML.
 
 ## Model choice
 
-MetoMail does not ship with a preset model list or a preferred default. After you
+MetoAI does not ship with a preset model list or a preferred default. After you
 enter an endpoint and API key, use **Refresh models** in Settings to populate the
 dropdown from `GET /v1/models`. You can also type any model ID manually. Every
 dropdown entry is tagged **Vision** (reads email images) or **Text**
@@ -68,7 +68,7 @@ For email **images**, pick a model tagged **Vision**. Vision capability is
 detected from the model ID: `vl` or `vision` in the name (for example
 `qwen3-vl-30b`), multimodal Gemma generations (`gemma3`/`gemma-4` and later),
 and common vision families such as LLaVA, Pixtral, MiniCPM-V, InternVL,
-Moondream, and SmolVLM. MetoMail loads image attachments automatically and sends
+Moondream, and SmolVLM. MetoAI loads image attachments automatically and sends
 them as multimodal input, capped at eight images per request. Multimodal Gemma
 requires the server to load its vision projector; if the server rejects image
 input, use a `vl` model instead. Text-only models get spreadsheet text and
@@ -84,11 +84,11 @@ the tool-call probe allows up to 90 seconds.
 
 ## Use
 
-1. Open **MetoMail**. The chat appears as a sidebar inside Outlook.
-   You can also right-click selected email messages and choose **Send to MetoMail**.
+1. Open **MetoAI**. The chat appears as a sidebar inside Outlook.
+   You can also right-click selected email messages and choose **Send to MetoAI**.
    The sidebar opens with `Selected: subject` at the top. Common `RE:`, `FW:`,
    and `FWD:` prefixes are hidden in that display.
-2. To choose a bounded group first, enter `/search person or topic`. MetoMail
+2. To choose a bounded group first, enter `/search person or topic`. MetoAI
    searches locally and keeps the newest ten matching Inbox or Sent Items
    emails as the working set. No email body is sent during this command.
 3. Review the listed subjects and send another `/search` to replace the set if
@@ -97,8 +97,8 @@ the tool-call probe allows up to 90 seconds.
    remove it. The layer collapses automatically when you send a normal AI
    prompt and can be reopened with **Show**.
 4. Alternatively, Ctrl+click one to ten emails in Outlook, then choose
-   **Add email**, right-click **Send to MetoMail**, or drag the selected messages
-   onto the MetoMail pane. Multiple messages become the same locked working set.
+   **Add email**, right-click **Send to MetoAI**, or drag the selected messages
+   onto the MetoAI pane. Multiple messages become the same locked working set.
 5. Use **Add files** or drag files from Windows Explorer to add up to three
    bounded external-context files. Supported formats are TXT, Markdown, CSV,
    JSON, XML, HTML, LOG, YAML, and INI. HTML files are read as inert text, not
@@ -108,9 +108,9 @@ the tool-call probe allows up to 90 seconds.
    only those emails. Without one, it may perform one bounded mailbox search
    and load no more than ten unique email bodies for the request. Meeting
    invites and calendar items are readable like email — subject, body, time,
-   location, and attachments — but MetoMail can never accept, decline, or
+   location, and attachments — but MetoAI can never accept, decline, or
    schedule anything. When a body
-   is loaded, MetoMail also reads up to ten **email attachments** per
+   is loaded, MetoAI also reads up to ten **email attachments** per
    message: images (PNG, JPEG, GIF, BMP, WebP, TIFF), spreadsheets (XLSX,
    XLSM, XLS, CSV), documents (PDF, PPTX, DOCX, PPT, DOC, RTF), and text
    files (TXT, MD, LOG, JSON, XML, HTML, EML). Unknown extensions are
@@ -185,7 +185,7 @@ scoped exception, not a general mutation permission.
   only the bounded `create_draft` and `update_draft` operations.
 - The draft path exposes no send, move, delete, schedule, BCC, arbitrary HTML,
   or mailbox traversal operation.
-- Classic Outlook COM has no permission-manifest switch for sending. MetoMail
+- Classic Outlook COM has no permission-manifest switch for sending. MetoAI
   instead hardcodes the absence of a send capability, keeps the Outlook object
   outside the model client, and verifies the source plus compiled assembly in CI.
 - Drafts are saved and displayed as unsent Outlook items.
@@ -235,7 +235,7 @@ The local formatter HTML-encodes all text and inserts only fixed headings,
 subheadings, lists, dividers, paragraphs, and `<strong>` markup. The model can
 request these visual structures with a small text layout syntax, but raw HTML is
 rejected. If a model returns Markdown emphasis markers, the shared local formatter
-removes them and applies real bold formatting in both MetoMail and Outlook. Stray
+removes them and applies real bold formatting in both MetoAI and Outlook. Stray
 formatting asterisks are removed. Arbitrary model HTML is never accepted. Neither
 tool has a send operation.
 
@@ -307,7 +307,7 @@ timeout failures before the endpoint returns an HTTP response.
 
 1. Close Outlook.
 2. Open Windows **Installed apps** or **Apps & features**.
-3. Uninstall **MetoMail**.
+3. Uninstall **MetoAI**.
 
 Endpoint settings remain under:
 

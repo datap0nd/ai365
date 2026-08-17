@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy"
       content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;">
-<title>MetoMail</title>
+<title>MetoAI</title>
 <style>
   :root {
     --bg: #1a1b1e;
@@ -47,16 +47,9 @@
   }
   #logo { width: 32px; height: 32px; flex-shrink: 0; }
   .head-text { flex: 1; min-width: 0; }
-  #scope {
-    font-weight: 600;
-    font-size: 12.5px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
   #draft {
     color: var(--dim);
-    font-size: 11px;
+    font-size: 11.5px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -372,7 +365,7 @@
 </head>
 <body>
 <header>
-  <svg id="logo" viewBox="0 0 40 40" aria-label="MetoMail logo">
+  <svg id="logo" viewBox="0 0 40 40" aria-label="MetoAI logo">
     <rect x="1" y="1" width="38" height="38" rx="9" fill="#5c8fff"/>
     <rect x="9" y="13" width="22" height="15" rx="2"
           fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/>
@@ -380,8 +373,7 @@
           stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
   </svg>
   <div class="head-text">
-    <div id="scope">No context - use /search or select emails</div>
-    <div id="draft">Say "create a draft" to open one. MetoMail can never send.</div>
+    <div id="draft">Say "create a draft" to open one. MetoAI can never send.</div>
   </div>
   <nav>
     <button id="btnClearChat"
@@ -400,7 +392,7 @@
   </div>
   <div id="composerCard">
     <button id="btnPlus" title="Add emails, files, or pictures to the context">+</button>
-    <textarea id="input" rows="1" placeholder="Message MetoMail..." maxlength="4000"></textarea>
+    <textarea id="input" rows="1" placeholder="Message MetoAI..." maxlength="4000"></textarea>
     <button id="btnSend" title="Send">&#8593;</button>
   </div>
   <div id="bottomRow">
@@ -418,7 +410,6 @@
   var input = document.getElementById("input");
   var btnSend = document.getElementById("btnSend");
   var statusEl = document.getElementById("status");
-  var scopeEl = document.getElementById("scope");
   var draftEl = document.getElementById("draft");
   var modelEl = document.getElementById("model");
   var visionBadge = document.getElementById("visionBadge");
@@ -469,7 +460,7 @@
   function addAssistant(text, ranges) {
     var msg = el("div", "msg ai");
     var who = el("div", "who");
-    who.textContent = "MetoMail";
+    who.textContent = "MetoAI";
     var body = el("div", "body");
     var list = (ranges || []).slice().sort(function (a, b) {
       return a.s - b.s;
@@ -641,7 +632,6 @@
       case "activity": addActivity(m.text || "", m.kind); break;
       case "status": setStatus(m.text, m.error); break;
       case "busy": setBusy(!!m.value); break;
-      case "scope": scopeEl.textContent = m.text || ""; break;
       case "draft":
         draftEl.textContent = m.text || "";
         draftEl.classList.toggle("linked", !!m.linked);

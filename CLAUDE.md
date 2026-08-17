@@ -1,4 +1,4 @@
-# MetoMail (outlook-local-ai-chat)
+# MetoAI (outlook-local-ai-chat)
 
 Windows Outlook COM add-in (.NET Framework 4.8, C# 7.3, classic csproj).
 It cannot be built or run on Linux — the Windows CI workflow

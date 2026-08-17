@@ -1,10 +1,10 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
 
-[assembly: AssemblyTitle("MetoMail")]
+[assembly: AssemblyTitle("MetoAI")]
 [assembly: AssemblyDescription("Local mailbox AI chat with one linked unsent Outlook draft.")]
-[assembly: AssemblyCompany("MetoMail contributors")]
-[assembly: AssemblyProduct("MetoMail")]
+[assembly: AssemblyCompany("MetoAI contributors")]
+[assembly: AssemblyProduct("MetoAI")]
 [assembly: AssemblyCopyright("Copyright 2026")]
 [assembly: ComVisible(false)]
 [assembly: Guid("2D659014-84E1-4DFD-BAD1-C4BD16FB2D8A")]

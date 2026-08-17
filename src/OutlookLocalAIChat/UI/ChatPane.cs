@@ -139,7 +139,7 @@ namespace OutlookLocalAIChat.UI
                     Environment.GetFolderPath(
                         Environment.SpecialFolder
                             .LocalApplicationData),
-                    "MetoMail",
+                    "MetoAI",
                     "WebView2");
                 var environment =
                     await CoreWebView2Environment.CreateAsync(
@@ -195,7 +195,7 @@ namespace OutlookLocalAIChat.UI
                 ForeColor = Color.FromArgb(232, 232, 236),
                 Padding = new Padding(18),
                 Text =
-                    "MetoMail needs the Microsoft Edge WebView2 " +
+                    "MetoAI needs the Microsoft Edge WebView2 " +
                     "runtime, which ships with Windows 10/11 and " +
                     "Microsoft Edge. Install it from Microsoft, then " +
                     "restart Outlook.\r\n\r\nDetails: " +
@@ -517,8 +517,8 @@ namespace OutlookLocalAIChat.UI
                 {
                     "text",
                     linked
-                        ? "Draft linked - feedback updates it. MetoMail cannot send."
-                        : "Say 'create a draft' to open one. MetoMail cannot send."
+                        ? "Draft linked - feedback updates it. MetoAI cannot send."
+                        : "Say 'create a draft' to open one. MetoAI cannot send."
                 },
                 { "linked", linked }
             });
@@ -950,7 +950,7 @@ namespace OutlookLocalAIChat.UI
 
             using (var dialog = new OpenFileDialog
             {
-                Title = "Add bounded text context to MetoMail",
+                Title = "Add bounded text context to MetoAI",
                 Multiselect = true,
                 CheckFileExists = true,
                 Filter =

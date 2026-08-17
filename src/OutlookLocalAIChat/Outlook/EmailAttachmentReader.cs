@@ -174,7 +174,7 @@ namespace OutlookLocalAIChat.Outlook
                                 : ".bin";
                         tempPath = Path.Combine(
                             Path.GetTempPath(),
-                            "MetoMail-" +
+                            "MetoAI-" +
                             Guid.NewGuid().ToString("N") +
                             safeExtension);
                         outlookAttachment.SaveAsFile(tempPath);
@@ -197,7 +197,7 @@ namespace OutlookLocalAIChat.Outlook
                                 "unreadable",
                                 "[Attachment: " + fileName + ", " +
                                 fileInfo.Length.ToString() +
-                                " bytes. Too large for MetoMail to " +
+                                " bytes. Too large for MetoAI to " +
                                 "read.]"));
                             totalCharacters += 80;
                             continue;
@@ -302,7 +302,7 @@ namespace OutlookLocalAIChat.Outlook
                         "unreadable",
                         "[File: " + fileName + ", " +
                         info.Length.ToString() +
-                        " bytes. Too large for MetoMail to read.]");
+                        " bytes. Too large for MetoAI to read.]");
                 }
 
                 var extracted = ExtractContent(

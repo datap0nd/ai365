@@ -72,7 +72,7 @@ namespace OutlookLocalAIChat.Configuration
                 "Medium",
                 "Very good",
                 true,
-                "Preferred vision model. Receives email images through MetoMail vision input. Best for screenshots, scans, and inline photos."),
+                "Preferred vision model. Receives email images through MetoAI vision input. Best for screenshots, scans, and inline photos."),
             new ModelGuideEntry(
                 "qwen3.6-35b-a3b",
                 new[] { "qwen", "35", "a3b" },
@@ -211,7 +211,7 @@ namespace OutlookLocalAIChat.Configuration
 
             if (IsDisallowedModel(value))
             {
-                return "This model is not available in MetoMail.";
+                return "This model is not available in MetoAI.";
             }
 
             var profile = Resolve(value);
