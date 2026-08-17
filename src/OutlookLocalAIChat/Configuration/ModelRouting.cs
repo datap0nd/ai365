@@ -51,15 +51,32 @@ namespace OutlookLocalAIChat.Configuration
             return false;
         }
 
+        public static bool MessageHasImageAttachment(
+            MessageSnapshot message)
+        {
+            if (message?.AttachmentNames == null)
+            {
+                return false;
+            }
+
+            foreach (var name in message.AttachmentNames)
+            {
+                if (IsImageAttachmentName(name))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         public static string ResolveForRequest(
             AppSettings settings,
             bool imagesExpected,
             IReadOnlyList<MailboxToolResult> loadedImages = null)
         {
             var preferred = (settings?.Model ?? string.Empty).Trim();
-            if (preferred.Length == 0 ||
-                settings == null ||
-                !settings.SwitchToVisionModelForImages)
+            if (preferred.Length == 0 || settings == null)
             {
                 return preferred;
             }
@@ -67,14 +84,26 @@ namespace OutlookLocalAIChat.Configuration
             var needsVision =
                 imagesExpected ||
                 ToolResultsIncludeImages(loadedImages);
-            if (!needsVision ||
-                ModelCatalog.SupportsVision(preferred))
+            if (!needsVision)
             {
                 return preferred;
             }
 
+            if (ModelCatalog.IsVisionCapable(preferred))
+            {
+                return preferred;
+            }
+
+            if (!settings.SwitchToVisionModelForImages)
+            {
+                return preferred;
+            }
+
+            var candidates = (settings.DiscoveredModels ??
+                new List<string>())
+                .Concat(new[] { preferred });
             var visionModel = ModelCatalog.FindBestVisionModel(
-                settings.DiscoveredModels);
+                candidates);
             return visionModel.Length > 0
                 ? visionModel
                 : preferred;
@@ -98,26 +127,7 @@ namespace OutlookLocalAIChat.Configuration
                        preferred,
                        active,
                        StringComparison.OrdinalIgnoreCase) &&
-                   ModelCatalog.SupportsVision(active);
-        }
-
-        private static bool MessageHasImageAttachment(
-            MessageSnapshot message)
-        {
-            if (message?.AttachmentNames == null)
-            {
-                return false;
-            }
-
-            foreach (var name in message.AttachmentNames)
-            {
-                if (IsImageAttachmentName(name))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+                   ModelCatalog.IsVisionCapable(active);
         }
 
         private static bool IsImageAttachmentName(string fileName)

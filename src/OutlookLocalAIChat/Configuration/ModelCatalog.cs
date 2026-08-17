@@ -120,7 +120,40 @@ namespace OutlookLocalAIChat.Configuration
 
         public static bool SupportsVision(string model)
         {
-            return Resolve(model)?.ReadsEmailImages ?? false;
+            return IsVisionCapable(model);
+        }
+
+        public static bool IsVisionCapable(string model)
+        {
+            var value = (model ?? string.Empty).Trim();
+            if (value.Length == 0 ||
+                IsDisallowedModel(value))
+            {
+                return false;
+            }
+
+            var profile = Resolve(value);
+            if (profile?.ReadsEmailImages == true)
+            {
+                return true;
+            }
+
+            var normalized = Normalize(value);
+            if (normalized.IndexOf(
+                    "embedding",
+                    StringComparison.Ordinal) >= 0)
+            {
+                return false;
+            }
+
+            if (normalized.IndexOf("vl", StringComparison.Ordinal) >= 0)
+            {
+                return true;
+            }
+
+            return normalized.IndexOf(
+                "vision",
+                StringComparison.Ordinal) >= 0;
         }
 
         public static ModelGuideEntry Resolve(string model)
@@ -204,15 +237,7 @@ namespace OutlookLocalAIChat.Configuration
 
         public static bool IsVisionCandidate(string model)
         {
-            if (SupportsVision(model))
-            {
-                return true;
-            }
-
-            var normalized = Normalize(model);
-            return normalized.Length > 0 &&
-                   normalized.IndexOf("vl", StringComparison.Ordinal) >= 0 &&
-                   normalized.IndexOf("embedding", StringComparison.Ordinal) < 0;
+            return IsVisionCapable(model);
         }
 
         public static string FindMatchingDiscoveredId(

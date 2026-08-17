@@ -1359,6 +1359,17 @@ namespace OutlookLocalAIChat.UI
                 _outlookApplication,
                 selectedMessage,
                 workingMessages);
+            if (VisionImagePrefetch.TryInject(
+                    request,
+                    activeModel,
+                    mailboxTools,
+                    selectedMessage,
+                    workingMessages))
+            {
+                SetStatus(
+                    "Loaded email image attachments for vision input.",
+                    false);
+            }
             for (var round = 0;
                  round <= TextBoundary.MaxToolRounds;
                  round++)
