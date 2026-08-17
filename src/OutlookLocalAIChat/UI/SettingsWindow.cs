@@ -66,8 +66,8 @@ namespace OutlookLocalAIChat.UI
 
             Text = "MailAI settings";
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new Size(700, 760);
-            MinimumSize = new Size(620, 700);
+            ClientSize = new Size(700, 670);
+            MinimumSize = new Size(620, 620);
             MaximizeBox = false;
             MinimizeBox = false;
             ShowIcon = false;
@@ -199,7 +199,7 @@ namespace OutlookLocalAIChat.UI
 
             _switchVisionForImages.AutoSize = true;
             _switchVisionForImages.Text =
-                "Temporarily switch to the best available vision model when email images are involved";
+                "Auto-switch to vision for images";
             _switchVisionForImages.AccessibleName =
                 "Switch to vision model for images";
             _switchVisionForImages.AccessibleDescription =
@@ -229,70 +229,74 @@ namespace OutlookLocalAIChat.UI
 
         private TabPage BuildConnectionPage()
         {
-            var page = new TabPage("Connection");
+            var page = new TabPage("Connection")
+            {
+                AutoScroll = true
+            };
             var layout = new TableLayoutPanel
             {
-                Dock = DockStyle.Fill,
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 ColumnCount = 1,
-                RowCount = 15,
-                Padding = new Padding(18, 16, 18, 12)
+                RowCount = 14,
+                Padding = new Padding(18, 16, 18, 12),
+                Width = 640
             };
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 96));
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 62));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 66));
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
             layout.Controls.Add(FieldLabel("Endpoint or base URL"), 0, 0);
             layout.Controls.Add(_endpoint, 0, 1);
             layout.Controls.Add(FieldLabel("Model"), 0, 2);
             layout.Controls.Add(_model, 0, 3);
-            ConfigureSupportingLabel(_modelGuidance);
-            layout.Controls.Add(_modelGuidance, 0, 4);
-            layout.Controls.Add(FieldLabel("Model guide"), 0, 5);
-            ConfigureModelGuide();
-            layout.Controls.Add(_modelGuide, 0, 6);
-            layout.Controls.Add(_switchVisionForImages, 0, 7);
-            layout.Controls.Add(FieldLabel("API key"), 0, 8);
-            layout.Controls.Add(_apiKey, 0, 9);
-            layout.Controls.Add(_allowInsecureHttp, 0, 10);
-            ConfigureSupportingLabel(_transportWarning);
-            _transportWarning.AccessibleRole = AccessibleRole.Alert;
-            layout.Controls.Add(_transportWarning, 0, 11);
-
-            var hint = SupportingText(
-                "The endpoint receives your prompt, conversation, and only bounded " +
-                "context. MailAI exposes read tools and guarded draft creation only. " +
-                "It has no send, move, delete, or mailbox mutation capability.");
-            layout.Controls.Add(hint, 0, 12);
-            ConfigureSupportingLabel(_testStatus);
-            _testStatus.Text =
-                "Use Refresh models to load the model list from your endpoint. " +
-                "Check endpoint also verifies tool-call compatibility.";
-            _testStatus.AccessibleRole = AccessibleRole.StatusBar;
-            layout.Controls.Add(_testStatus, 0, 13);
 
             _checkEndpoint.Click += CheckEndpointClick;
             _refreshModels.Click += RefreshModelsClick;
             var checkRow = new FlowLayoutPanel
             {
-                Dock = DockStyle.Fill,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 FlowDirection = FlowDirection.LeftToRight,
-                Padding = new Padding(0, 8, 0, 0)
+                WrapContents = false,
+                Padding = new Padding(0, 4, 0, 0),
+                Margin = new Padding(0)
             };
             checkRow.Controls.Add(_checkEndpoint);
             checkRow.Controls.Add(_refreshModels);
-            layout.Controls.Add(checkRow, 0, 14);
+            layout.Controls.Add(checkRow, 0, 4);
+
+            ConfigureSupportingLabel(_testStatus);
+            _testStatus.Text =
+                "Use Refresh models to load the model list from your endpoint. " +
+                "Check endpoint also verifies tool-call compatibility.";
+            _testStatus.AccessibleRole = AccessibleRole.StatusBar;
+            layout.Controls.Add(_testStatus, 0, 5);
+
+            ConfigureSupportingLabel(_modelGuidance);
+            layout.Controls.Add(_modelGuidance, 0, 6);
+            layout.Controls.Add(FieldLabel("Model guide"), 0, 7);
+            ConfigureModelGuide();
+            layout.Controls.Add(_modelGuide, 0, 8);
+            layout.Controls.Add(_switchVisionForImages, 0, 9);
+            layout.Controls.Add(FieldLabel("API key"), 0, 10);
+            layout.Controls.Add(_apiKey, 0, 11);
+            layout.Controls.Add(_allowInsecureHttp, 0, 12);
+            ConfigureSupportingLabel(_transportWarning);
+            _transportWarning.AccessibleRole = AccessibleRole.Alert;
+            layout.Controls.Add(_transportWarning, 0, 13);
             page.Controls.Add(layout);
             return page;
         }
@@ -375,7 +379,7 @@ namespace OutlookLocalAIChat.UI
                 _modelGuide.Items.Add(entry);
             }
 
-            _modelGuide.DisplayMember = "SummaryLine";
+            _modelGuide.DisplayMember = "ListLabel";
             _modelGuide.SelectedIndexChanged += ModelGuideSelectionChanged;
             _modelGuide.DoubleClick += ModelGuideDoubleClick;
         }
@@ -390,9 +394,7 @@ namespace OutlookLocalAIChat.UI
                 return;
             }
 
-            _modelGuidance.Text = entry.SummaryLine +
-                "\n" +
-                entry.Notes;
+            _modelGuidance.Text = entry.ListLabel;
         }
 
         private void ModelGuideDoubleClick(
