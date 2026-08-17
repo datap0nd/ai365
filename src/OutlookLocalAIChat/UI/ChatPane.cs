@@ -1,10 +1,11 @@
 /*
 THESIS: A restrained Outlook sidebar makes mailbox retrieval and one linked,
 human-reviewed draft visible without granting send capability.
-OWN-WORLD: Windows white and cool-gray surfaces, Outlook blue only for direct actions,
-square native fields, one mailbox scope strip, and plain text throughout.
-STORY: Ask the mailbox, observe what context was loaded, then deliberately open an
-unsent draft.
+OWN-WORLD: Dark charcoal surfaces with a single blue accent, slim inline
+activity lines, the model picker anchored at the bottom, and plain text
+throughout. High contrast mode defers to system colors.
+STORY: Ask the mailbox, watch slim context entries record what loaded, then
+deliberately open an unsent draft.
 */
 
 using System;
@@ -31,19 +32,26 @@ namespace OutlookLocalAIChat.UI
         private const int WorkingSetExpandedHeight = 322;
         private const int WorkingSetCollapsedHeight = 36;
 
+        // Dark, Ollama-client-inspired palette. High contrast mode keeps
+        // system colors so accessibility themes always win.
         private static Color OutlookBlue
         {
             get
             {
                 return SystemInformation.HighContrast
                     ? SystemColors.Highlight
-                    : Color.FromArgb(0, 95, 184);
+                    : Color.FromArgb(92, 143, 255);
             }
         }
 
         private static Color TextPrimary
         {
-            get { return SystemColors.WindowText; }
+            get
+            {
+                return SystemInformation.HighContrast
+                    ? SystemColors.WindowText
+                    : Color.FromArgb(232, 232, 236);
+            }
         }
 
         private static Color TextSecondary
@@ -52,7 +60,7 @@ namespace OutlookLocalAIChat.UI
             {
                 return SystemInformation.HighContrast
                     ? SystemColors.GrayText
-                    : Color.FromArgb(80, 80, 80);
+                    : Color.FromArgb(152, 152, 160);
             }
         }
 
@@ -62,7 +70,17 @@ namespace OutlookLocalAIChat.UI
             {
                 return SystemInformation.HighContrast
                     ? SystemColors.HotTrack
-                    : Color.FromArgb(163, 38, 38);
+                    : Color.FromArgb(255, 118, 118);
+            }
+        }
+
+        private static Color Surface
+        {
+            get
+            {
+                return SystemInformation.HighContrast
+                    ? SystemColors.Window
+                    : Color.FromArgb(26, 27, 30);
             }
         }
 
@@ -72,7 +90,17 @@ namespace OutlookLocalAIChat.UI
             {
                 return SystemInformation.HighContrast
                     ? SystemColors.Control
-                    : Color.FromArgb(244, 246, 248);
+                    : Color.FromArgb(33, 34, 38);
+            }
+        }
+
+        private static Color CardSurface
+        {
+            get
+            {
+                return SystemInformation.HighContrast
+                    ? SystemColors.Window
+                    : Color.FromArgb(43, 44, 49);
             }
         }
 
@@ -90,7 +118,7 @@ namespace OutlookLocalAIChat.UI
             new RichTextBox();
         private readonly TextBox _composer = new TextBox();
         private readonly Label _scopeMeta = new Label();
-        private readonly Label _modelMeta = new Label();
+        private readonly ComboBox _modelPicker = new ComboBox();
         private readonly Label _draftState = new Label();
         private readonly Label _status = new Label();
         private readonly Button _send = new Button();
@@ -121,7 +149,7 @@ namespace OutlookLocalAIChat.UI
             _settings = _settingsStore.Load();
 
             Dock = DockStyle.Fill;
-            BackColor = SystemColors.Window;
+            BackColor = Surface;
             ForeColor = TextPrimary;
             Font = SystemFonts.MessageBoxFont;
             AutoScaleMode = AutoScaleMode.Font;
@@ -130,7 +158,7 @@ namespace OutlookLocalAIChat.UI
             DragEnter += ChatPaneDragEnter;
             DragDrop += ChatPaneDragDrop;
             BuildLayout();
-            UpdateModelMeta();
+            RefreshModelPicker();
             ShowWelcome();
         }
 
@@ -169,7 +197,7 @@ namespace OutlookLocalAIChat.UI
             if (_busy)
             {
                 SetStatus(
-                    "Wait for the request to finish before refreshing the selection.",
+                    "Still working - try again in a moment.",
                     true);
                 return;
             }
@@ -180,7 +208,7 @@ namespace OutlookLocalAIChat.UI
                     new MessageReader(_outlookApplication)
                         .CaptureCurrent());
                 SetStatus(
-                    "The model can search and read bounded context from Inbox and Sent Items.",
+                    "Email selected",
                     false);
             }
             catch (Exception exception)
@@ -191,7 +219,7 @@ namespace OutlookLocalAIChat.UI
                 SetScopeUnavailable(
                     "No selected email. Mailbox search is still available.");
                 SetStatus(
-                    "Ask about your mailbox, or select an email and refresh the selection.",
+                    "Ready",
                     false);
                 Log.Error("CaptureCurrent", exception);
             }
@@ -207,7 +235,7 @@ namespace OutlookLocalAIChat.UI
             if (_busy)
             {
                 SetStatus(
-                    "Wait for the active request before changing context.",
+                    "Still working - try again in a moment.",
                     true);
                 return;
             }
@@ -258,7 +286,7 @@ namespace OutlookLocalAIChat.UI
             {
                 SetSelectedMessage(messages[0]);
                 SetStatus(
-                    "Selected email added. Its body is loaded only if the model requests it.",
+                    "Email added to context",
                     false);
                 return;
             }
@@ -282,7 +310,7 @@ namespace OutlookLocalAIChat.UI
                         "the newest ten matching emails from Inbox and Sent Items. " +
                         "Use /search clear to remove the working set.");
                     SetStatus(
-                        "Search help shown. No email context changed.",
+                        "Search help shown",
                         false);
                     return;
                 case LocalSearchCommandKind.Clear:
@@ -294,7 +322,7 @@ namespace OutlookLocalAIChat.UI
                     AppendContext(
                         "Working set cleared. No email bodies are loaded.");
                     SetStatus(
-                        "Working set cleared.",
+                        "Working set cleared",
                         false);
                     return;
                 case LocalSearchCommandKind.Search:
@@ -317,7 +345,7 @@ namespace OutlookLocalAIChat.UI
 
             UseWaitCursor = true;
             SetStatus(
-                "Searching Outlook locally for the newest ten matches...",
+                "Searching mailbox...",
                 false);
             try
             {
@@ -343,7 +371,7 @@ namespace OutlookLocalAIChat.UI
                             : "No working set was created.") +
                         " Refine the person or topic and run /search again.");
                     SetStatus(
-                        "No matching emails. Refine the query and try /search again.",
+                        "No matches - refine /search",
                         true);
                     return;
                 }
@@ -391,7 +419,7 @@ namespace OutlookLocalAIChat.UI
                 ". The ten-email context layer is ready. " +
                 "Search again to replace it if needed.");
             SetStatus(
-                "Working set ready. Run /search again to replace it, or ask MetoMail to work on these emails.",
+                "Working set ready",
                 false);
         }
 
@@ -456,10 +484,9 @@ namespace OutlookLocalAIChat.UI
             var card = new Panel
             {
                 Height = 50,
-                Margin = new Padding(0, 0, 0, 5),
-                Padding = new Padding(8, 4, 8, 4),
-                BackColor = SystemColors.Window,
-                BorderStyle = BorderStyle.FixedSingle,
+                Margin = new Padding(0, 0, 0, 6),
+                Padding = new Padding(10, 5, 10, 5),
+                BackColor = CardSurface,
                 AccessibleName = "Context file: " + document.Name,
                 AccessibleDescription =
                     document.Content.Length + " bounded text characters"
@@ -469,7 +496,7 @@ namespace OutlookLocalAIChat.UI
                 Dock = DockStyle.Fill,
                 ColumnCount = 2,
                 RowCount = 2,
-                BackColor = SystemColors.Window,
+                BackColor = CardSurface,
                 Margin = new Padding(0),
                 Padding = new Padding(0)
             };
@@ -548,10 +575,9 @@ namespace OutlookLocalAIChat.UI
             var card = new Panel
             {
                 Height = 50,
-                Margin = new Padding(0, 0, 0, 5),
-                Padding = new Padding(8, 4, 8, 4),
-                BackColor = SystemColors.Window,
-                BorderStyle = BorderStyle.FixedSingle,
+                Margin = new Padding(0, 0, 0, 6),
+                Padding = new Padding(10, 5, 10, 5),
+                BackColor = CardSurface,
                 AccessibleName =
                     "Email " +
                     (index + 1) +
@@ -565,7 +591,7 @@ namespace OutlookLocalAIChat.UI
                 Dock = DockStyle.Fill,
                 ColumnCount = 2,
                 RowCount = 2,
-                BackColor = SystemColors.Window,
+                BackColor = CardSurface,
                 Margin = new Padding(0),
                 Padding = new Padding(0)
             };
@@ -679,7 +705,7 @@ namespace OutlookLocalAIChat.UI
             SetScopeUnavailable(
                 "No context selected. Use /search, Add email, or Add files.");
             SetStatus(
-                "Email and external file context cleared.",
+                "Context cleared",
                 false);
         }
 
@@ -881,27 +907,28 @@ namespace OutlookLocalAIChat.UI
                 Dock = DockStyle.Fill,
                 ColumnCount = 1,
                 RowCount = 6,
-                Padding = new Padding(0)
+                Padding = new Padding(0),
+                BackColor = Surface
             };
             _rootLayout.RowStyles.Add(
-                new RowStyle(SizeType.Absolute, 68));
+                new RowStyle(SizeType.Absolute, 56));
             _rootLayout.RowStyles.Add(
-                new RowStyle(SizeType.Absolute, 38));
+                new RowStyle(SizeType.Absolute, 34));
             _rootLayout.RowStyles.Add(
                 new RowStyle(SizeType.Absolute, 0));
             _rootLayout.RowStyles.Add(
                 new RowStyle(SizeType.Percent, 100));
             _rootLayout.RowStyles.Add(
-                new RowStyle(SizeType.Absolute, 154));
+                new RowStyle(SizeType.Absolute, 104));
             _rootLayout.RowStyles.Add(
-                new RowStyle(SizeType.Absolute, 64));
+                new RowStyle(SizeType.Absolute, 52));
 
             _rootLayout.Controls.Add(BuildHeader(), 0, 0);
             _rootLayout.Controls.Add(BuildToolbar(), 0, 1);
             _rootLayout.Controls.Add(BuildWorkingSetLayer(), 0, 2);
             _rootLayout.Controls.Add(BuildTranscript(), 0, 3);
             _rootLayout.Controls.Add(BuildComposer(), 0, 4);
-            _rootLayout.Controls.Add(BuildStatusArea(), 0, 5);
+            _rootLayout.Controls.Add(BuildBottomBar(), 0, 5);
             Controls.Add(_rootLayout);
         }
 
@@ -960,12 +987,12 @@ namespace OutlookLocalAIChat.UI
             {
                 Dock = DockStyle.Fill,
                 BackColor = SurfaceMuted,
-                Padding = new Padding(14, 10, 14, 8),
+                Padding = new Padding(14, 8, 14, 6),
                 ColumnCount = 2,
                 RowCount = 2
             };
             header.ColumnStyles.Add(
-                new ColumnStyle(SizeType.Absolute, 48));
+                new ColumnStyle(SizeType.Absolute, 44));
             header.ColumnStyles.Add(
                 new ColumnStyle(SizeType.Percent, 100));
             header.RowStyles.Add(
@@ -975,8 +1002,8 @@ namespace OutlookLocalAIChat.UI
 
             var logo = new Panel
             {
-                Size = new Size(40, 40),
-                Margin = new Padding(0, 1, 8, 0),
+                Size = new Size(36, 36),
+                Margin = new Padding(0, 2, 8, 0),
                 BackColor = SurfaceMuted,
                 AccessibleName = "MetoMail logo",
                 AccessibleRole = AccessibleRole.Graphic
@@ -991,22 +1018,24 @@ namespace OutlookLocalAIChat.UI
                 Font.Size,
                 FontStyle.Bold);
             _scopeMeta.Text =
-                "No context selected. Use /search or select emails.";
+                "No context - use /search or select emails";
 
-            _modelMeta.AutoEllipsis = true;
-            _modelMeta.Dock = DockStyle.Fill;
-            _modelMeta.ForeColor = TextSecondary;
-            _modelMeta.Font = new Font(
+            _draftState.AutoSize = false;
+            _draftState.AutoEllipsis = true;
+            _draftState.Dock = DockStyle.Fill;
+            _draftState.Text =
+                "Say 'create a draft' to open one. MetoMail cannot send.";
+            _draftState.ForeColor = TextSecondary;
+            _draftState.Font = new Font(
                 Font.FontFamily,
                 Math.Max(8F, Font.Size - 1F),
                 FontStyle.Regular);
-            _modelMeta.AccessibleName =
-                "Active AI model and safety boundary";
+            _draftState.AccessibleName = "Draft safety status";
 
             header.Controls.Add(logo, 0, 0);
             header.SetRowSpan(logo, 2);
             header.Controls.Add(_scopeMeta, 1, 0);
-            header.Controls.Add(_modelMeta, 1, 1);
+            header.Controls.Add(_draftState, 1, 1);
             return header;
         }
 
@@ -1104,8 +1133,8 @@ namespace OutlookLocalAIChat.UI
                 Dock = DockStyle.Fill,
                 FlowDirection = FlowDirection.LeftToRight,
                 WrapContents = false,
-                Padding = new Padding(8, 4, 8, 2),
-                BackColor = SystemColors.Window
+                Padding = new Padding(10, 3, 8, 1),
+                BackColor = SurfaceMuted
             };
 
             _refresh = MakeLinkButton("Add email", 74);
@@ -1129,7 +1158,7 @@ namespace OutlookLocalAIChat.UI
         {
             _transcript.Dock = DockStyle.Fill;
             _transcript.BorderStyle = BorderStyle.None;
-            _transcript.BackColor = SystemColors.Window;
+            _transcript.BackColor = Surface;
             _transcript.ForeColor = TextPrimary;
             _transcript.Font = new Font(
                 Font.FontFamily,
@@ -1148,8 +1177,8 @@ namespace OutlookLocalAIChat.UI
             var frame = new Panel
             {
                 Dock = DockStyle.Fill,
-                Padding = new Padding(14, 8, 14, 8),
-                BackColor = SystemColors.Window
+                Padding = new Padding(14, 10, 14, 8),
+                BackColor = Surface
             };
             frame.Controls.Add(_transcript);
             return frame;
@@ -1161,20 +1190,16 @@ namespace OutlookLocalAIChat.UI
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 2,
-                RowCount = 3,
-                Padding = new Padding(14, 8, 14, 8),
-                BackColor = SurfaceMuted
+                RowCount = 1,
+                Padding = new Padding(14, 8, 14, 4),
+                BackColor = Surface
             };
             panel.ColumnStyles.Add(
                 new ColumnStyle(SizeType.Percent, 100));
             panel.ColumnStyles.Add(
-                new ColumnStyle(SizeType.Absolute, 96));
+                new ColumnStyle(SizeType.Absolute, 92));
             panel.RowStyles.Add(
                 new RowStyle(SizeType.Percent, 100));
-            panel.RowStyles.Add(
-                new RowStyle(SizeType.Absolute, 28));
-            panel.RowStyles.Add(
-                new RowStyle(SizeType.Absolute, 22));
 
             _composer.Dock = DockStyle.Fill;
             _composer.Multiline = true;
@@ -1185,78 +1210,212 @@ namespace OutlookLocalAIChat.UI
                 Font.Size + 1F,
                 FontStyle.Regular);
             _composer.BorderStyle = BorderStyle.FixedSingle;
+            _composer.BackColor = CardSurface;
+            _composer.ForeColor = TextPrimary;
             _composer.MaxLength =
                 TextBoundary.MaxUserPromptCharacters;
             _composer.AccessibleName = "Message to AI";
             _composer.AccessibleDescription =
-                "Ask about the mailbox or request draft text. Control Enter submits the prompt.";
+                "Ask about the mailbox or request draft text. " +
+                "Control Enter submits the prompt.";
             _composer.KeyDown += ComposerKeyDown;
 
-            ConfigurePrimaryButton(_send, "Send to AI");
+            ConfigurePrimaryButton(_send, "Send \u2191");
             _send.Dock = DockStyle.Fill;
             _send.Margin = new Padding(8, 0, 0, 0);
+            _send.AccessibleName = "Send message";
             _send.Click += SendClick;
-
-            _draftState.AutoSize = false;
-            _draftState.AutoEllipsis = true;
-            _draftState.Dock = DockStyle.Fill;
-            _draftState.Text =
-                "Say 'create a draft' to open one. MetoMail cannot send.";
-            _draftState.ForeColor = TextSecondary;
-            _draftState.Font = new Font(
-                Font.FontFamily,
-                Math.Max(8F, Font.Size - 1F),
-                FontStyle.Regular);
-            _draftState.Padding = new Padding(0, 3, 0, 0);
-            _draftState.Visible = true;
-            _draftState.AccessibleName = "Draft safety status";
-
-            var hint = new Label
-            {
-                AutoSize = true,
-                ForeColor = TextSecondary,
-                Font = new Font(
-                    Font.FontFamily,
-                    Math.Max(8F, Font.Size - 1F),
-                    FontStyle.Regular),
-                Text =
-                    "Ctrl+Enter submits prompt.",
-                Padding = new Padding(0, 3, 0, 0)
-            };
 
             panel.Controls.Add(_composer, 0, 0);
             panel.Controls.Add(_send, 1, 0);
-            var draftMode = new Panel
-            {
-                Dock = DockStyle.Fill,
-                BackColor = SurfaceMuted
-            };
-            draftMode.Controls.Add(_draftState);
-            panel.Controls.Add(draftMode, 0, 1);
-            panel.SetColumnSpan(draftMode, 2);
-            panel.Controls.Add(hint, 0, 2);
-            panel.SetColumnSpan(hint, 2);
             return panel;
         }
 
-        private Control BuildStatusArea()
+        private Control BuildBottomBar()
         {
-            var panel = new Panel
+            var panel = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                BackColor = SurfaceMuted,
-                Padding = new Padding(14, 8, 14, 8)
+                ColumnCount = 2,
+                RowCount = 1,
+                Padding = new Padding(14, 4, 14, 8),
+                BackColor = Surface
             };
+            panel.ColumnStyles.Add(
+                new ColumnStyle(SizeType.Absolute, 170));
+            panel.ColumnStyles.Add(
+                new ColumnStyle(SizeType.Percent, 100));
+
+            _modelPicker.Dock = DockStyle.Fill;
+            _modelPicker.DropDownStyle =
+                ComboBoxStyle.DropDownList;
+            _modelPicker.FlatStyle = FlatStyle.Flat;
+            _modelPicker.BackColor = CardSurface;
+            _modelPicker.ForeColor = TextPrimary;
+            _modelPicker.Font = new Font(
+                Font.FontFamily,
+                Math.Max(8F, Font.Size - 1F),
+                FontStyle.Regular);
+            _modelPicker.DrawMode = DrawMode.OwnerDrawFixed;
+            _modelPicker.ItemHeight = Math.Max(
+                _modelPicker.ItemHeight,
+                _modelPicker.Font.Height + 6);
+            _modelPicker.DrawItem += ModelPickerDrawItem;
+            _modelPicker.AccessibleName = "Active AI model";
+            _modelPicker.AccessibleDescription =
+                "Switches the saved model. Vision-tagged models can " +
+                "read email images.";
+            _modelPicker.SelectionChangeCommitted +=
+                ModelPickerChanged;
+
             _status.Dock = DockStyle.Fill;
             _status.AutoEllipsis = true;
             _status.ForeColor = TextSecondary;
-            _status.TextAlign = ContentAlignment.MiddleLeft;
+            _status.TextAlign = ContentAlignment.MiddleRight;
+            _status.Font = new Font(
+                Font.FontFamily,
+                Math.Max(8F, Font.Size - 1F),
+                FontStyle.Regular);
+            _status.Margin = new Padding(8, 0, 0, 0);
             _status.AccessibleName = "Chat status";
             _status.AccessibleRole = AccessibleRole.StatusBar;
-            _status.Text =
-                "Mailbox reads are capped at ten emails. MetoMail cannot send.";
-            panel.Controls.Add(_status);
+            _status.Text = "Reads up to 10 emails - can never send";
+
+            panel.Controls.Add(_modelPicker, 0, 0);
+            panel.Controls.Add(_status, 1, 0);
             return panel;
+        }
+
+        private void ModelPickerDrawItem(
+            object sender,
+            DrawItemEventArgs eventArgs)
+        {
+            eventArgs.DrawBackground();
+            if (eventArgs.Index < 0)
+            {
+                eventArgs.DrawFocusRectangle();
+                return;
+            }
+
+            var modelId = Convert.ToString(
+                _modelPicker.Items[eventArgs.Index]) ??
+                string.Empty;
+            var isVision = ModelCatalog.IsVisionCapable(modelId);
+            var tag = isVision ? "Vision" : "Text";
+            var selected =
+                (eventArgs.State & DrawItemState.Selected) ==
+                DrawItemState.Selected;
+            var bounds = eventArgs.Bounds;
+            var tagWidth = TextRenderer.MeasureText(
+                eventArgs.Graphics,
+                tag,
+                eventArgs.Font).Width + 8;
+            TextRenderer.DrawText(
+                eventArgs.Graphics,
+                modelId,
+                eventArgs.Font,
+                new Rectangle(
+                    bounds.Left + 2,
+                    bounds.Top,
+                    Math.Max(16, bounds.Width - tagWidth - 8),
+                    bounds.Height),
+                selected
+                    ? SystemColors.HighlightText
+                    : TextPrimary,
+                TextFormatFlags.Left |
+                TextFormatFlags.VerticalCenter |
+                TextFormatFlags.EndEllipsis |
+                TextFormatFlags.NoPrefix);
+            TextRenderer.DrawText(
+                eventArgs.Graphics,
+                tag,
+                eventArgs.Font,
+                new Rectangle(
+                    bounds.Right - tagWidth - 4,
+                    bounds.Top,
+                    tagWidth,
+                    bounds.Height),
+                selected
+                    ? SystemColors.HighlightText
+                    : (isVision ? OutlookBlue : TextSecondary),
+                TextFormatFlags.Right |
+                TextFormatFlags.VerticalCenter |
+                TextFormatFlags.NoPrefix);
+            eventArgs.DrawFocusRectangle();
+        }
+
+        private void ModelPickerChanged(
+            object sender,
+            EventArgs eventArgs)
+        {
+            if (_busy)
+            {
+                return;
+            }
+
+            var model = Convert.ToString(
+                _modelPicker.SelectedItem) ?? string.Empty;
+            if (model.Length == 0 ||
+                string.Equals(
+                    model,
+                    _settings.Model,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            try
+            {
+                _settings.Model = model;
+                _settingsStore.Save(_settings);
+                SetStatus(
+                    "Model: " + model +
+                    (ModelCatalog.IsVisionCapable(model)
+                        ? " (vision)"
+                        : " (text)"),
+                    false);
+            }
+            catch (Exception exception)
+            {
+                Log.Error("SwitchModel", exception);
+                SetStatus("The model change was not saved.", true);
+            }
+        }
+
+        private void RefreshModelPicker()
+        {
+            _modelPicker.BeginUpdate();
+            _modelPicker.Items.Clear();
+            var current = (_settings?.Model ?? string.Empty).Trim();
+            var models = new List<string>(
+                _settings?.DiscoveredModels ?? new List<string>());
+            if (current.Length > 0 &&
+                models.FindIndex(model =>
+                    string.Equals(
+                        model,
+                        current,
+                        StringComparison.OrdinalIgnoreCase)) < 0)
+            {
+                models.Insert(0, current);
+            }
+
+            foreach (var model in models)
+            {
+                if (!ModelCatalog.IsDisallowedModel(model))
+                {
+                    _modelPicker.Items.Add(model);
+                }
+            }
+
+            _modelPicker.EndUpdate();
+            if (current.Length > 0)
+            {
+                var index = _modelPicker.FindStringExact(current);
+                if (index >= 0)
+                {
+                    _modelPicker.SelectedIndex = index;
+                }
+            }
         }
 
         private async void SendClick(
@@ -1275,7 +1434,7 @@ namespace OutlookLocalAIChat.UI
             if (prompt.Length == 0)
             {
                 SetStatus(
-                    "Type a mailbox question or drafting instruction first.",
+                    "Type a message first",
                     true);
                 return;
             }
@@ -1344,48 +1503,48 @@ namespace OutlookLocalAIChat.UI
                 _history.Add(
                     new ChatTurn("assistant", response));
                 AppendTurn(
-                    "Assistant",
+                    "MetoMail",
                     response,
                     TextPrimary);
                 if (draftAuthorization.IsCreated)
                 {
                     SetStatus(
-                        "One unsent draft is open and linked. Feedback now updates it automatically.",
+                        "Draft created - unsent, open for review",
                         false);
                 }
                 else if (draftAuthorization.IsUpdated)
                 {
                     SetStatus(
-                        "The linked unsent draft was updated in Outlook.",
+                        "Draft updated",
                         false);
                 }
                 else if (draftAuthorization.IsConsumed)
                 {
                     SetStatus(
                         draftAuthorization.CanUpdate
-                            ? "The linked draft update did not complete. This request cannot retry it."
-                            : "Draft creation did not complete. This request cannot retry it.",
+                            ? "Draft update did not complete"
+                            : "Draft creation did not complete",
                         true);
                 }
                 else if (draftAuthorization.CanCreate)
                 {
                     SetStatus(
-                        "Draft request recognized, but no Outlook draft was created.",
+                        "No draft was created",
                         false);
                 }
                 else
                 {
                     SetStatus(
                         hasLinkedDraft
-                            ? "Response received. The linked draft was unchanged."
-                            : "Response received. Say 'create a draft' when you want one opened.",
+                            ? "Done - draft unchanged"
+                            : "Done",
                         false);
                 }
             }
             catch (OperationCanceledException)
             {
                 RestoreFailedPrompt(prompt, transcriptStart);
-                SetStatus("Request cancelled. Your prompt was restored.", false);
+                SetStatus("Stopped - prompt restored", false);
             }
             catch (Exception exception)
             {
@@ -1430,17 +1589,15 @@ namespace OutlookLocalAIChat.UI
                     activeModel))
             {
                 SetStatus(
-                    "Temporarily using " + activeModel +
-                    " for email image attachments.",
+                    "Using " + activeModel + " for images",
                     false);
             }
             else if (imagesExpected &&
                      !ModelCatalog.IsVisionCapable(activeModel))
             {
                 SetStatus(
-                    "Images detected, but " + activeModel +
-                    " is text-only. Pick a Vision-tagged model in Settings " +
-                    "or enable auto-switch.",
+                    activeModel + " is text-only - images will not " +
+                    "be read",
                     false);
             }
 
@@ -1469,7 +1626,7 @@ namespace OutlookLocalAIChat.UI
                     workingMessages))
             {
                 SetStatus(
-                    "Loaded email image attachments for vision input.",
+                    "Images attached for vision",
                     false);
             }
             for (var round = 0;
@@ -1585,7 +1742,7 @@ namespace OutlookLocalAIChat.UI
             ShowWelcome();
             UpdateDraftState();
             SetStatus(
-                "New mailbox chat started. No previous context is retained.",
+                "New chat",
                 false);
             _composer.Focus();
         }
@@ -1610,10 +1767,9 @@ namespace OutlookLocalAIChat.UI
                 {
                     _settings =
                         settingsWindow.SavedSettings;
-                    UpdateModelMeta();
+                    RefreshModelPicker();
                     SetStatus(
-                        "AI endpoint settings saved for " +
-                        _settings.Model + ".",
+                        "Settings saved - " + _settings.Model,
                         false);
                 }
             }
@@ -1621,20 +1777,30 @@ namespace OutlookLocalAIChat.UI
 
         private void AppendContext(string text)
         {
-            AppendStyledBlock(
-                "Context",
-                text,
-                TextSecondary,
-                FontStyle.Italic);
+            AppendActivityLine(text, TextSecondary);
         }
 
         private void AppendDraftAction(string text)
         {
-            AppendStyledBlock(
-                "Draft",
-                text,
-                OutlookBlue,
+            AppendActivityLine(text, OutlookBlue);
+        }
+
+        // A single dim activity line, like a modern chat client's
+        // inline tool/status entries.
+        private void AppendActivityLine(string text, Color color)
+        {
+            _transcript.SelectionStart = _transcript.TextLength;
+            _transcript.SelectionFont = new Font(
+                SystemFonts.MessageBoxFont.FontFamily,
+                Math.Max(7F, SystemFonts.MessageBoxFont.Size - 1F),
                 FontStyle.Regular);
+            _transcript.SelectionColor = color;
+            _transcript.AppendText(
+                "\u2022 " +
+                TextBoundary.SingleLine(text, 400) +
+                Environment.NewLine +
+                Environment.NewLine);
+            ScrollTranscript();
         }
 
         private void AppendError(string text)
@@ -1686,7 +1852,7 @@ namespace OutlookLocalAIChat.UI
             _transcript.SelectionColor = headingColor;
             _transcript.AppendText(
                 speaker + Environment.NewLine);
-            if (speaker == "Assistant")
+            if (speaker != "You")
             {
                 AppendFormattedAssistantText(text);
             }
@@ -1778,7 +1944,8 @@ namespace OutlookLocalAIChat.UI
         private void SetBusy(bool busy)
         {
             _busy = busy;
-            _send.Text = busy ? "Cancel" : "Send to AI";
+            _send.Text = busy ? "Stop" : "Send \u2191";
+            _modelPicker.Enabled = !busy;
             _composer.Enabled = !busy;
             _refresh.Enabled = !busy;
             _addFiles.Enabled = !busy;
@@ -1787,7 +1954,7 @@ namespace OutlookLocalAIChat.UI
             if (busy)
             {
                 SetStatus(
-                    "Waiting for the AI endpoint. It may request mailbox context.",
+                    "Thinking...",
                     false);
             }
         }
@@ -1798,7 +1965,7 @@ namespace OutlookLocalAIChat.UI
                 _draftTools != null &&
                 _draftTools.HasActiveDraft;
             _draftState.Text = linked
-                ? "One draft linked. Revision requests update this draft only."
+                ? "Draft linked - feedback updates it. MetoMail cannot send."
                 : "Say 'create a draft' to open one. MetoMail cannot send.";
             _draftState.ForeColor = linked
                 ? OutlookBlue
@@ -1846,30 +2013,18 @@ namespace OutlookLocalAIChat.UI
                     : displaySubject);
         }
 
-        private void UpdateModelMeta()
-        {
-            var model = (_settings?.Model ?? string.Empty).Trim();
-            _modelMeta.Text = model.Length > 0
-                ? "Model: " + model +
-                  (ModelCatalog.IsVisionCapable(model)
-                      ? " (vision)"
-                      : " (text-only)")
-                : "Model: not configured";
-        }
-
         private void ShowWelcome()
         {
             AppendStyledBlock(
-                "Ready",
-                "Ask across Inbox and Sent Items. MetoMail loads no more than ten " +
-                "email bodies. Add up to three bounded text files as external context.\n\n" +
-                "Try:\n" +
-                "- /search person or topic\n" +
-                "- Ctrl+click up to ten emails, then click Add email or right-click Send to MetoMail.\n" +
-                "- Drag selected Outlook emails onto MetoMail, or drag supported text files here.\n" +
-                "- Ask MetoMail to summarize or compare the working set.\n" +
-                "- Find a message and create a concise reply draft.\n" +
-                "- Once it opens, ask to shorten it or bold an exact section.",
+                "MetoMail",
+                "Chat with your mailbox - local models, nothing is " +
+                "ever sent.\n\n" +
+                "\u2022 /search a person or topic\n" +
+                "\u2022 Select emails, then Add email (up to 10)\n" +
+                "\u2022 Drag emails or files here\n" +
+                "\u2022 Ask about attachments, images, invites\n" +
+                "\u2022 Say 'create a draft' to write one - it opens " +
+                "unsent",
                 TextSecondary,
                 FontStyle.Regular);
             _transcript.SelectionStart = 0;
@@ -1906,15 +2061,20 @@ namespace OutlookLocalAIChat.UI
             {
                 Text = text,
                 Width = width,
-                Height = 28,
+                Height = 26,
                 FlatStyle = FlatStyle.Flat,
-                BackColor = SystemColors.Window,
-                ForeColor = OutlookBlue,
+                BackColor = SurfaceMuted,
+                ForeColor = TextSecondary,
                 UseVisualStyleBackColor = false,
                 Margin = new Padding(0, 0, 4, 0),
                 AccessibleName = text
             };
             button.FlatAppearance.BorderSize = 0;
+            button.FlatAppearance.MouseOverBackColor = CardSurface;
+            button.MouseEnter += (sender, args) =>
+                button.ForeColor = TextPrimary;
+            button.MouseLeave += (sender, args) =>
+                button.ForeColor = TextSecondary;
             return button;
         }
 
