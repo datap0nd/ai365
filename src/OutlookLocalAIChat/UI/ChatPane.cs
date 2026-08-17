@@ -151,7 +151,7 @@ namespace OutlookLocalAIChat.UI
             Dock = DockStyle.Fill;
             BackColor = Surface;
             ForeColor = TextPrimary;
-            Font = SystemFonts.MessageBoxFont;
+            Font = new Font("Segoe UI", 10F, FontStyle.Regular);
             AutoScaleMode = AutoScaleMode.Font;
             MinimumSize = new Size(300, 480);
             AllowDrop = true;
@@ -1791,8 +1791,8 @@ namespace OutlookLocalAIChat.UI
         {
             _transcript.SelectionStart = _transcript.TextLength;
             _transcript.SelectionFont = new Font(
-                SystemFonts.MessageBoxFont.FontFamily,
-                Math.Max(7F, SystemFonts.MessageBoxFont.Size - 1F),
+                Font.FontFamily,
+                Math.Max(8F, Font.Size - 1.5F),
                 FontStyle.Regular);
             _transcript.SelectionColor = color;
             _transcript.AppendText(
@@ -1821,14 +1821,14 @@ namespace OutlookLocalAIChat.UI
             _transcript.SelectionStart =
                 _transcript.TextLength;
             _transcript.SelectionFont = new Font(
-                SystemFonts.MessageBoxFont.FontFamily,
-                SystemFonts.MessageBoxFont.Size,
+                Font.FontFamily,
+                Font.Size,
                 FontStyle.Bold);
             _transcript.SelectionColor = color;
             _transcript.AppendText(label + Environment.NewLine);
             _transcript.SelectionFont = new Font(
-                SystemFonts.MessageBoxFont.FontFamily,
-                SystemFonts.MessageBoxFont.Size,
+                Font.FontFamily,
+                Font.Size,
                 bodyStyle);
             _transcript.SelectionColor = color;
             _transcript.AppendText(
@@ -1846,8 +1846,8 @@ namespace OutlookLocalAIChat.UI
             _transcript.SelectionStart =
                 _transcript.TextLength;
             _transcript.SelectionFont = new Font(
-                SystemFonts.MessageBoxFont.FontFamily,
-                SystemFonts.MessageBoxFont.Size,
+                Font.FontFamily,
+                Font.Size,
                 FontStyle.Bold);
             _transcript.SelectionColor = headingColor;
             _transcript.AppendText(
@@ -1909,8 +1909,8 @@ namespace OutlookLocalAIChat.UI
         private void SetTranscriptBodyStyle(FontStyle style)
         {
             _transcript.SelectionFont = new Font(
-                SystemFonts.MessageBoxFont.FontFamily,
-                SystemFonts.MessageBoxFont.Size + 1F,
+                Font.FontFamily,
+                Font.Size + 0.5F,
                 style);
             _transcript.SelectionColor = TextPrimary;
         }
@@ -2091,8 +2091,8 @@ namespace OutlookLocalAIChat.UI
             button.FlatAppearance.BorderColor =
                 OutlookBlue;
             button.Font = new Font(
-                SystemFonts.MessageBoxFont.FontFamily,
-                SystemFonts.MessageBoxFont.Size,
+                "Segoe UI",
+                10F,
                 FontStyle.Bold);
             button.AccessibleName = text;
         }
