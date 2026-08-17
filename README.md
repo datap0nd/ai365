@@ -101,7 +101,10 @@ the tool-call probe allows up to 90 seconds.
    characters, with 24,000 characters total.
 6. Ask a normal mailbox question. When a working set exists, the model can read
    only those emails. Without one, it may perform one bounded mailbox search
-   and load no more than ten unique email bodies for the request. When a body
+   and load no more than ten unique email bodies for the request. Meeting
+   invites and calendar items are readable like email — subject, body, time,
+   location, and attachments — but MetoMail can never accept, decline, or
+   schedule anything. When a body
    is loaded, MetoMail also reads up to ten supported **email attachments** per
    message: images (PNG, JPEG, GIF, BMP, WebP, TIFF), spreadsheets (XLSX,
    XLSM, CSV), documents (PDF, PPTX, DOCX), and text files (TXT, MD, LOG,

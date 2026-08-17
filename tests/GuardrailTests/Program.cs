@@ -65,6 +65,9 @@ namespace GuardrailTests
                     "PDF, PowerPoint, and Word attachments are extracted",
                     DocumentAttachmentsAreExtracted);
                 Run(
+                    "Calendar invites are readable with attachments",
+                    CalendarInvitesAreReadable);
+                Run(
                     "Model catalog describes vision capability",
                     ModelCatalogDescribesVisionCapability);
                 Run("HTTPS endpoint is accepted", HttpsEndpointIsAccepted);
@@ -2027,6 +2030,104 @@ namespace GuardrailTests
             }
         }
 
+        private static void CalendarInvitesAreReadable()
+        {
+            var agendaPath = Path.Combine(
+                Path.GetTempPath(),
+                "MetoMail-agenda-" +
+                Guid.NewGuid().ToString("N") +
+                ".txt");
+            File.WriteAllText(
+                agendaPath,
+                "Agenda: budget review and hiring plan");
+            try
+            {
+                var attachments = new FakeOutlookAttachments();
+                attachments.Add(new FakeOutlookAttachment(
+                    "agenda.txt",
+                    agendaPath));
+                var invite = new FakeSelectedMailItem(
+                    "invite-entry",
+                    "Design review")
+                {
+                    MessageClass = "IPM.Schedule.Meeting.Request",
+                    Attachments = attachments
+                };
+                var application = new FakeOutlookApplication();
+                application.Session.Register(
+                    "invite-entry",
+                    "store",
+                    invite);
+                var snapshot = new MessageReader(application)
+                    .CaptureById("invite-entry", "store");
+                Assert(
+                    snapshot.Subject == "Design review" &&
+                    snapshot.Body.Contains("Message body") &&
+                    snapshot.AttachmentNames.Count == 1,
+                    "The meeting invite was not captured as readable context.");
+
+                var host = new MailboxToolHost(application, snapshot);
+                var loaded = host.Execute(
+                    MailboxCall(
+                        "read-invite",
+                        MailboxToolCatalog.ReadMessages,
+                        "{\"handles\":[\"selected\"]}"));
+                Assert(
+                    loaded.Content.Contains(
+                        "Agenda: budget review and hiring plan"),
+                    "The invite attachment text was not extracted.");
+
+                var appointment = new FakeSelectedMailItem(
+                    "appointment-entry",
+                    "Quarterly offsite")
+                {
+                    MessageClass = "IPM.Appointment"
+                };
+                application.Session.Register(
+                    "appointment-entry",
+                    "store",
+                    appointment);
+                var appointmentSnapshot =
+                    new MessageReader(application)
+                        .CaptureById("appointment-entry", "store");
+                Assert(
+                    appointmentSnapshot.Subject == "Quarterly offsite",
+                    "Appointment items should be readable.");
+
+                var rejected = false;
+                var task = new FakeSelectedMailItem(
+                    "task-entry",
+                    "Not readable")
+                {
+                    MessageClass = "IPM.Task"
+                };
+                application.Session.Register(
+                    "task-entry",
+                    "store",
+                    task);
+                try
+                {
+                    new MessageReader(application)
+                        .CaptureById("task-entry", "store");
+                }
+                catch (InvalidOperationException)
+                {
+                    rejected = true;
+                }
+
+                Assert(
+                    rejected,
+                    "Non-mail, non-calendar item classes must stay rejected.");
+            }
+            finally
+            {
+                if (File.Exists(agendaPath))
+                {
+                    File.Delete(agendaPath);
+                }
+            }
+        }
+
         private static void DocumentAttachmentsAreExtracted()
         {
             var temp = Path.Combine(
@@ -2544,7 +2645,7 @@ namespace GuardrailTests
             Attachments = new FakeOutlookAttachments();
         }
 
-        public string MessageClass { get; } = "IPM.Note";
+        public string MessageClass { get; set; } = "IPM.Note";
 
         public string EntryID { get; }
 

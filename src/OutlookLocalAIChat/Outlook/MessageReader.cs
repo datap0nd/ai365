@@ -56,12 +56,10 @@ namespace OutlookLocalAIChat.Outlook
 
                 dynamic mail = item;
                 var messageClass = SafeString(() => mail.MessageClass);
-                if (!messageClass.StartsWith(
-                    "IPM.Note",
-                    StringComparison.OrdinalIgnoreCase))
+                if (!IsReadableItemClass(messageClass))
                 {
                     throw new InvalidOperationException(
-                        "The selected Outlook item is not an email.");
+                        "The selected Outlook item is not an email, meeting invite, or appointment.");
                 }
 
                 return CaptureItem(item);
@@ -222,13 +220,18 @@ namespace OutlookLocalAIChat.Outlook
             {
                 dynamic mail = item;
                 var messageClass = SafeString(() => mail.MessageClass);
-                if (!messageClass.StartsWith(
-                    "IPM.Note",
-                    StringComparison.OrdinalIgnoreCase))
+                if (!IsReadableItemClass(messageClass))
                 {
                     throw new InvalidOperationException(
-                        "The Outlook item is not an email.");
+                        "The Outlook item is not an email, meeting invite, or appointment.");
                 }
+
+                var isAppointment = messageClass.StartsWith(
+                    "IPM.Appointment",
+                    StringComparison.OrdinalIgnoreCase);
+                var isMeeting = messageClass.StartsWith(
+                    "IPM.Schedule.Meeting",
+                    StringComparison.OrdinalIgnoreCase);
 
                 parent = SafeObject(() => mail.Parent);
                 var storeId = string.Empty;
@@ -241,7 +244,15 @@ namespace OutlookLocalAIChat.Outlook
                 var receivedAt =
                     SafeDateTime(() => mail.ReceivedTime) ??
                     SafeDateTime(() => mail.SentOn) ??
+                    SafeDateTime(() => mail.Start) ??
                     SafeDateTime(() => mail.CreationTime);
+
+                var sender = isAppointment
+                    ? SafeString(() => mail.Organizer)
+                    : BuildSender(mail);
+                var meetingDetails = isMeeting || isAppointment
+                    ? BuildMeetingDetails(mail, isMeeting)
+                    : string.Empty;
 
                 return new MessageSnapshot(
                     SafeString(() => mail.EntryID),
@@ -249,14 +260,13 @@ namespace OutlookLocalAIChat.Outlook
                     TextBoundary.PlainText(
                         SafeString(() => mail.Subject),
                         1000),
+                    TextBoundary.PlainText(sender, 1000),
                     TextBoundary.PlainText(
-                        BuildSender(mail),
-                        1000),
-                    TextBoundary.PlainText(
-                        SafeString(() => mail.To),
+                        BuildRecipients(mail, isAppointment),
                         2000),
                     receivedAt,
                     TextBoundary.PlainText(
+                        meetingDetails +
                         SafeString(() => mail.Body),
                         TextBoundary.MaxMessageBodyCharacters),
                     CaptureAttachmentNames(mail),
@@ -266,6 +276,164 @@ namespace OutlookLocalAIChat.Outlook
             finally
             {
                 Release(parent);
+            }
+        }
+
+        private static bool IsReadableItemClass(string messageClass)
+        {
+            var value = messageClass ?? string.Empty;
+            return value.StartsWith(
+                       "IPM.Note",
+                       StringComparison.OrdinalIgnoreCase) ||
+                   value.StartsWith(
+                       "IPM.Schedule.Meeting",
+                       StringComparison.OrdinalIgnoreCase) ||
+                   value.StartsWith(
+                       "IPM.Appointment",
+                       StringComparison.OrdinalIgnoreCase);
+        }
+
+        internal static bool IsReadableItem(object item)
+        {
+            if (item == null)
+            {
+                return false;
+            }
+
+            dynamic mail = item;
+            return IsReadableItemClass(
+                SafeString(() => mail.MessageClass));
+        }
+
+        private static string BuildRecipients(
+            dynamic mail,
+            bool isAppointment)
+        {
+            if (isAppointment)
+            {
+                var required = SafeString(
+                    () => mail.RequiredAttendees);
+                var optional = SafeString(
+                    () => mail.OptionalAttendees);
+                var joined = required +
+                    (required.Length > 0 && optional.Length > 0
+                        ? "; "
+                        : string.Empty) +
+                    optional;
+                if (joined.Trim().Length > 0)
+                {
+                    return joined;
+                }
+            }
+
+            var to = SafeString(() => mail.To);
+            if (to.Length > 0)
+            {
+                return to;
+            }
+
+            // Meeting invites expose attendees only through the
+            // Recipients collection.
+            object recipients = null;
+            try
+            {
+                recipients = SafeObject(() => mail.Recipients);
+                if (recipients == null)
+                {
+                    return string.Empty;
+                }
+
+                dynamic collection = recipients;
+                var count = Math.Min(
+                    Convert.ToInt32(collection.Count),
+                    20);
+                var names = new List<string>(count);
+                for (var index = 1; index <= count; index++)
+                {
+                    object recipient = null;
+                    try
+                    {
+                        recipient = collection.Item(index);
+                        dynamic outlookRecipient = recipient;
+                        var name = SafeString(
+                            () => outlookRecipient.Name);
+                        if (name.Length > 0)
+                        {
+                            names.Add(name);
+                        }
+                    }
+                    finally
+                    {
+                        Release(recipient);
+                    }
+                }
+
+                return string.Join("; ", names);
+            }
+            catch
+            {
+                return string.Empty;
+            }
+            finally
+            {
+                Release(recipients);
+            }
+        }
+
+        private static string BuildMeetingDetails(
+            dynamic mail,
+            bool viaAssociatedAppointment)
+        {
+            object appointment = null;
+            try
+            {
+                dynamic source = mail;
+                if (viaAssociatedAppointment)
+                {
+                    // false: read the existing appointment only, never
+                    // add the meeting to the calendar.
+                    appointment = SafeObject(
+                        () => mail.GetAssociatedAppointment(false));
+                    if (appointment == null)
+                    {
+                        return string.Empty;
+                    }
+
+                    source = appointment;
+                }
+
+                dynamic details = source;
+                var start = SafeDateTime(() => details.Start);
+                var end = SafeDateTime(() => details.End);
+                var location = SafeString(() => details.Location);
+                if (start == null &&
+                    end == null &&
+                    location.Length == 0)
+                {
+                    return string.Empty;
+                }
+
+                return "[Calendar item" +
+                    (start != null
+                        ? " | Start: " + start.Value.ToString(
+                            "yyyy-MM-dd HH:mm")
+                        : string.Empty) +
+                    (end != null
+                        ? " | End: " + end.Value.ToString(
+                            "yyyy-MM-dd HH:mm")
+                        : string.Empty) +
+                    (location.Length > 0
+                        ? " | Location: " + location
+                        : string.Empty) +
+                    "]\n";
+            }
+            catch
+            {
+                return string.Empty;
+            }
+            finally
+            {
+                Release(appointment);
             }
         }
 
@@ -357,6 +525,8 @@ namespace OutlookLocalAIChat.Outlook
             }
         }
 
+        // Strict email check, kept separate from IsReadableItem so the
+        // writing-style sampler never learns from meeting responses.
         internal static bool IsMailItem(object item)
         {
             if (item == null)

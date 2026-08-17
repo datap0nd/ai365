@@ -141,7 +141,7 @@ namespace OutlookLocalAIChat.Outlook
                             item = outlookSession.GetItemFromID(entryId);
                         }
 
-                        if (MessageReader.IsMailItem(item))
+                        if (MessageReader.IsReadableItem(item))
                         {
                             messages.Add(
                                 MessageReader.CaptureItem(item));
@@ -241,7 +241,7 @@ namespace OutlookLocalAIChat.Outlook
                     try
                     {
                         item = candidates.Item(index);
-                        if (!MessageReader.IsMailItem(item))
+                        if (!MessageReader.IsReadableItem(item))
                         {
                             continue;
                         }
