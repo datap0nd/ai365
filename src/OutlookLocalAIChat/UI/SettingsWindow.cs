@@ -495,8 +495,7 @@ namespace OutlookLocalAIChat.UI
             }
 
             SetToneAnalyzing(true);
-            _toneCancellation = new CancellationTokenSource(
-                TimeSpan.FromSeconds(120));
+            _toneCancellation = new CancellationTokenSource();
             try
             {
                 _toneStatus.Text =
@@ -549,7 +548,7 @@ namespace OutlookLocalAIChat.UI
             catch (OperationCanceledException)
             {
                 _toneStatus.Text =
-                    "Writing-style analysis was cancelled or timed out after 120 seconds.";
+                    "Writing-style analysis was cancelled.";
             }
             catch (Exception exception)
             {

@@ -26,7 +26,7 @@ namespace OutlookLocalAIChat.Chat
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             _httpClient = new HttpClient
             {
-                Timeout = TimeSpan.FromSeconds(120)
+                Timeout = Timeout.InfiniteTimeSpan
             };
         }
 
@@ -90,7 +90,7 @@ namespace OutlookLocalAIChat.Chat
 
                     throw new AiEndpointException(
                         "AI_TIMEOUT",
-                        "The AI endpoint did not respond within 120 seconds.",
+                        "The AI endpoint did not respond before the request was cancelled.",
                         exception);
                 }
                 catch (HttpRequestException exception)
