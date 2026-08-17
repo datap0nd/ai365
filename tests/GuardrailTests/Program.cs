@@ -255,7 +255,10 @@ namespace GuardrailTests
                     "attachment-entry",
                     "store",
                     mail);
-                var snapshot = MessageReader.CaptureItem(mail);
+                var reader = new MessageReader(application);
+                var snapshot = reader.CaptureById(
+                    "attachment-entry",
+                    "store");
                 Assert(
                     snapshot.AttachmentNames.Count == 1 &&
                     snapshot.AttachmentNames[0] == "budget.csv",
