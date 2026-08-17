@@ -54,6 +54,9 @@ namespace GuardrailTests
                     "Web-hosted body images are disclosed as unreadable",
                     WebHostedImagesAreDisclosed);
                 Run(
+                    "Extensionless pasted images are sniffed and read",
+                    PastedImagesWithoutExtensionAreRead);
+                Run(
                     "Model catalog describes vision capability",
                     ModelCatalogDescribesVisionCapability);
                 Run("HTTPS endpoint is accepted", HttpsEndpointIsAccepted);
@@ -1918,7 +1921,7 @@ namespace GuardrailTests
 
             images.Add(new VisionImagePayload(
                 "huge.png",
-                "data:image/png;base64," + new string('A', 700001)));
+                "data:image/png;base64," + new string('A', 2200001)));
 
             var request = ChatRequestFactory.Create(
                 "qwen3-vl-30b",
@@ -1961,6 +1964,56 @@ namespace GuardrailTests
             Assert(
                 body.Contains("omitted"),
                 "Omitted images are not disclosed to the model.");
+        }
+
+        private static void PastedImagesWithoutExtensionAreRead()
+        {
+            var pngPath = Path.Combine(
+                Path.GetTempPath(),
+                "MailAI-pasted-" + Guid.NewGuid().ToString("N"));
+            File.WriteAllBytes(
+                pngPath,
+                Convert.FromBase64String(
+                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ" +
+                    "AAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="));
+            try
+            {
+                var attachments = new FakeOutlookAttachments();
+                attachments.Add(new FakeOutlookAttachment(
+                    "image001",
+                    pngPath));
+                var mail = new FakeSelectedMailItem(
+                    "pasted-entry",
+                    "Survey request")
+                {
+                    Attachments = attachments
+                };
+                var application = new FakeOutlookApplication();
+                application.Session.Register(
+                    "pasted-entry",
+                    "store",
+                    mail);
+                var snapshot = new MessageReader(application)
+                    .CaptureById("pasted-entry", "store");
+                var host = new MailboxToolHost(application, snapshot);
+                var loaded = host.Execute(
+                    MailboxCall(
+                        "read-pasted",
+                        MailboxToolCatalog.ReadMessages,
+                        "{\"handles\":[\"selected\"]}"));
+                Assert(
+                    loaded.VisionImages.Count == 1 &&
+                    loaded.VisionImages[0].DataUrl.StartsWith(
+                        "data:image/png;base64,"),
+                    "An extensionless pasted image was not sniffed as PNG.");
+            }
+            finally
+            {
+                if (File.Exists(pngPath))
+                {
+                    File.Delete(pngPath);
+                }
+            }
         }
 
         private static void WebHostedImagesAreDisclosed()

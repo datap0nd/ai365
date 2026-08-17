@@ -18,8 +18,14 @@ namespace OutlookLocalAIChat.Chat
     public sealed class OpenAiCompatibleClient : IDisposable
     {
         private readonly HttpClient _httpClient;
+        // Vision requests carry multi-megabyte base64 image parts; the
+        // serializer's 2 MB default would reject them. Responses stay
+        // bounded separately by ReadBoundedAsync.
         private readonly JavaScriptSerializer _serializer =
-            new JavaScriptSerializer();
+            new JavaScriptSerializer
+            {
+                MaxJsonLength = int.MaxValue
+            };
 
         public OpenAiCompatibleClient()
         {

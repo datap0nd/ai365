@@ -9,7 +9,8 @@ namespace OutlookLocalAIChat.Chat
     internal static class VisionAttachmentExchange
     {
         internal const int MaxImagesPerExchange = 8;
-        internal const int MaxDataUrlCharacters = 700000;
+        internal const int MaxDataUrlCharacters =
+            Outlook.EmailAttachmentReader.MaxImageDataUrlCharacters;
 
         public static void AppendVisionContext(
             ChatCompletionRequest request,

@@ -51,8 +51,10 @@ namespace OutlookLocalAIChat.Outlook
         public const int MaxBytesPerAttachment = 2 * 1024 * 1024;
         public const int MaxCharactersPerAttachment = 8000;
         public const int MaxTotalCharacters = 16000;
-        public const int MaxImageDataUrlCharacters = 700000;
-        private const int MaxImageBytesForBase64 = 512 * 1024;
+        // 1.5 MB of image bytes is ~2.1M base64 characters plus the
+        // data URL prefix; the two limits must move together.
+        public const int MaxImageDataUrlCharacters = 2200000;
+        private const int MaxImageBytesForBase64 = 1536 * 1024;
 
         private static readonly HashSet<string> ImageExtensions =
             new HashSet<string>(
@@ -139,7 +141,12 @@ namespace OutlookLocalAIChat.Outlook
                         }
 
                         var extension = Path.GetExtension(fileName);
-                        if (!IsSupportedExtension(extension))
+                        // Images pasted into a body sometimes arrive with no
+                        // usable extension; those are saved and sniffed by
+                        // magic bytes instead of being skipped.
+                        var isExtensionless = extension.Length == 0;
+                        if (!IsSupportedExtension(extension) &&
+                            !isExtensionless)
                         {
                             continue;
                         }
@@ -148,7 +155,7 @@ namespace OutlookLocalAIChat.Outlook
                             Path.GetTempPath(),
                             "MailAI-" +
                             Guid.NewGuid().ToString("N") +
-                            extension);
+                            (isExtensionless ? ".bin" : extension));
                         outlookAttachment.SaveAsFile(tempPath);
 
                         var fileInfo = new FileInfo(tempPath);
@@ -229,12 +236,86 @@ namespace OutlookLocalAIChat.Outlook
         {
             if (ImageExtensions.Contains(extension))
             {
-                return ExtractImage(path, fileName, extension);
+                return ExtractImage(
+                    path,
+                    fileName,
+                    ImageMimeType(extension));
             }
 
             if (ExcelExtensions.Contains(extension))
             {
                 return ExtractSpreadsheet(path, fileName, extension);
+            }
+
+            var sniffedMimeType = SniffImageMimeType(path);
+            return sniffedMimeType != null
+                ? ExtractImage(path, fileName, sniffedMimeType)
+                : null;
+        }
+
+        private static string SniffImageMimeType(string path)
+        {
+            byte[] header;
+            using (var stream = File.OpenRead(path))
+            {
+                header = new byte[12];
+                var read = stream.Read(header, 0, header.Length);
+                if (read < 4)
+                {
+                    return null;
+                }
+            }
+
+            if (header[0] == 0x89 &&
+                header[1] == 0x50 &&
+                header[2] == 0x4E &&
+                header[3] == 0x47)
+            {
+                return "image/png";
+            }
+
+            if (header[0] == 0xFF &&
+                header[1] == 0xD8 &&
+                header[2] == 0xFF)
+            {
+                return "image/jpeg";
+            }
+
+            if (header[0] == 'G' &&
+                header[1] == 'I' &&
+                header[2] == 'F' &&
+                header[3] == '8')
+            {
+                return "image/gif";
+            }
+
+            if (header[0] == 'B' && header[1] == 'M')
+            {
+                return "image/bmp";
+            }
+
+            if (header[0] == 'R' &&
+                header[1] == 'I' &&
+                header[2] == 'F' &&
+                header[3] == 'F' &&
+                header[8] == 'W' &&
+                header[9] == 'E' &&
+                header[10] == 'B' &&
+                header[11] == 'P')
+            {
+                return "image/webp";
+            }
+
+            if ((header[0] == 'I' &&
+                 header[1] == 'I' &&
+                 header[2] == 0x2A &&
+                 header[3] == 0x00) ||
+                (header[0] == 'M' &&
+                 header[1] == 'M' &&
+                 header[2] == 0x00 &&
+                 header[3] == 0x2A))
+            {
+                return "image/tiff";
             }
 
             return null;
@@ -243,10 +324,9 @@ namespace OutlookLocalAIChat.Outlook
         private static EmailAttachmentContent ExtractImage(
             string path,
             string fileName,
-            string extension)
+            string mimeType)
         {
             var bytes = File.ReadAllBytes(path);
-            var mimeType = ImageMimeType(extension);
             var builder = new StringBuilder();
             builder.Append("[Image attachment: ");
             builder.Append(fileName);
