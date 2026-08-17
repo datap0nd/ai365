@@ -78,6 +78,7 @@
     <Compile Include="Outlook\MailboxToolHost.cs" />
     <Compile Include="Outlook\MailboxWorkingSet.cs" />
     <Compile Include="Outlook\MessageReader.cs" />
+    <Compile Include="Outlook\PdfTextExtractor.cs" />
     <Compile Include="Outlook\MessageSnapshot.cs" />
     <Compile Include="Outlook\SafeDraftHtml.cs" />
     <Compile Include="Outlook\SentMailToneSampler.cs" />

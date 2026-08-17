@@ -68,6 +68,9 @@ namespace GuardrailTests
                     "Calendar invites are readable with attachments",
                     CalendarInvitesAreReadable);
                 Run(
+                    "CID-font PDF text decodes through ToUnicode maps",
+                    PdfCidFontTextIsDecoded);
+                Run(
                     "Model catalog describes vision capability",
                     ModelCatalogDescribesVisionCapability);
                 Run("HTTPS endpoint is accepted", HttpsEndpointIsAccepted);
@@ -2028,6 +2031,62 @@ namespace GuardrailTests
                     File.Delete(pngPath);
                 }
             }
+        }
+
+        private static void PdfCidFontTextIsDecoded()
+        {
+            // Word, Chrome, and LibreOffice PDFs store text as hex glyph
+            // codes decoded through each font's ToUnicode CMap.
+            const string sentence =
+                "Hello quarterly budget numbers attached for review today";
+            var hex = new StringBuilder();
+            foreach (var character in sentence)
+            {
+                hex.Append(((int)character).ToString("X4"));
+            }
+
+            var pdf =
+                "%PDF-1.4\n" +
+                "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n" +
+                "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n" +
+                "3 0 obj << /Type /Page /Parent 2 0 R " +
+                "/Resources << /Font << /F1 4 0 R >> >> " +
+                "/Contents 5 0 R >> endobj\n" +
+                "4 0 obj << /Type /Font /Subtype /Type0 " +
+                "/ToUnicode 6 0 R >> endobj\n" +
+                "5 0 obj << /Length 400 >>\nstream\n" +
+                "BT /F1 12 Tf <" + hex + "> Tj ET\n" +
+                "endstream\nendobj\n" +
+                "6 0 obj << /Length 200 >>\nstream\n" +
+                "begincmap\n" +
+                "1 begincodespacerange\n<0000> <FFFF>\n" +
+                "endcodespacerange\n" +
+                "1 beginbfrange\n<0020> <007E> <0020>\nendbfrange\n" +
+                "endcmap\n" +
+                "endstream\nendobj\n" +
+                "trailer << /Root 1 0 R >>\n%%EOF";
+            var extracted = PdfTextExtractor.Extract(
+                Encoding.ASCII.GetBytes(pdf),
+                8000);
+            Assert(
+                extracted.Contains(sentence),
+                "CID hex-coded PDF text was not decoded. Got: " +
+                extracted);
+
+            var literalPdf =
+                "%PDF-1.4\n1 0 obj << /Length 96 >>\nstream\n" +
+                "BT /F1 12 Tf (Plain literal payment reminder for " +
+                "the october invoice) Tj ET\n" +
+                "endstream\nendobj\ntrailer\n%%EOF";
+            var literal = PdfTextExtractor.Extract(
+                Encoding.ASCII.GetBytes(literalPdf),
+                8000);
+            Assert(
+                literal.Contains(
+                    "Plain literal payment reminder for the " +
+                    "october invoice"),
+                "Literal PDF text extraction regressed. Got: " +
+                literal);
         }
 
         private static void CalendarInvitesAreReadable()
