@@ -119,6 +119,9 @@ the tool-call probe allows up to 90 seconds.
    Chrome — scanned PDFs yield a clear "no readable text" note. Legacy
    binary Office files get best-effort extraction. Every attachment is
    listed; anything unreadable is noted rather than silently skipped.
+   Small inline images embedded in the body (64 KB or less) are treated
+   as signature graphics and ignored, with a note in the tool result;
+   pasted screenshots and photos are far larger and are always read.
    Attachments are decrypted locally through Outlook COM before reading.
 7. The sidebar records which bounded context operations ran.
 8. Ask explicitly, for example "create a reply draft" or "write an email."
