@@ -1326,8 +1326,24 @@ namespace OutlookLocalAIChat.UI
             var activeDraft = draftAuthorization.CanUpdate
                 ? _draftTools?.ActiveDraft
                 : null;
+            var imagesExpected = ModelRouting.ContextMayIncludeImages(
+                selectedMessage,
+                workingMessages);
+            var activeModel = ModelRouting.ResolveForRequest(
+                _settings,
+                imagesExpected);
+            if (ModelRouting.IsTemporaryVisionSwitch(
+                    _settings,
+                    activeModel))
+            {
+                SetStatus(
+                    "Temporarily using " + activeModel +
+                    " for email image attachments.",
+                    false);
+            }
+
             var request = ChatRequestFactory.Create(
-                _settings.Model,
+                activeModel,
                 selectedMessage,
                 _history,
                 prompt,
@@ -1407,10 +1423,26 @@ namespace OutlookLocalAIChat.UI
                     SetStatus(result.StatusText, false);
                 }
 
+                activeModel = ModelRouting.ResolveForRequest(
+                    _settings,
+                    imagesExpected,
+                    results);
+                request.model = TextBoundary.PlainText(activeModel, 200);
+                if (ModelRouting.IsTemporaryVisionSwitch(
+                        _settings,
+                        activeModel))
+                {
+                    SetStatus(
+                        "Temporarily using " + activeModel +
+                        " for loaded email images.",
+                        false);
+                }
+
                 ChatRequestFactory.AppendToolExchange(
                     request,
                     response,
-                    results);
+                    results,
+                    activeModel);
             }
 
             throw new AiEndpointException(

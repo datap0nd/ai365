@@ -260,7 +260,8 @@ namespace OutlookLocalAIChat.Chat
         public static void AppendToolExchange(
             ChatCompletionRequest request,
             ChatCompletionResponseMessage assistantMessage,
-            IReadOnlyList<MailboxToolResult> toolResults)
+            IReadOnlyList<MailboxToolResult> toolResults,
+            string modelId = null)
         {
             if (request == null)
             {
@@ -292,6 +293,11 @@ namespace OutlookLocalAIChat.Chat
                         TextBoundary.MaxToolResultCharacters)
                 });
             }
+
+            VisionAttachmentExchange.AppendVisionContext(
+                request,
+                modelId,
+                toolResults);
         }
 
         private static string BuildSelectedMessageReference(

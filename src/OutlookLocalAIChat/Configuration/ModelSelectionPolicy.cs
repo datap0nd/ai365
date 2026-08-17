@@ -8,6 +8,7 @@ namespace OutlookLocalAIChat.Configuration
         {
             var value = (model ?? string.Empty).Trim();
             return value.Length > 0 &&
+                   !ModelCatalog.IsDisallowedModel(value) &&
                    value.IndexOf(
                        "embedding",
                        StringComparison.OrdinalIgnoreCase) < 0;
@@ -15,13 +16,7 @@ namespace OutlookLocalAIChat.Configuration
 
         public static string DescriptionFor(string model)
         {
-            var value = (model ?? string.Empty).Trim();
-            if (value.Length == 0)
-            {
-                return "Use Refresh models to load choices from your endpoint, or enter a model manually.";
-            }
-
-            return "The model must support OpenAI-compatible chat tool calls.";
+            return ModelCatalog.DescribeForSelection(model);
         }
     }
 }

@@ -34,7 +34,43 @@ namespace OutlookLocalAIChat.Chat
     {
         public string role { get; set; }
 
-        public string content { get; set; }
+        public object content { get; set; }
+    }
+
+    public sealed class ChatMultimodalTextPart
+    {
+        public string type { get; set; }
+
+        public string text { get; set; }
+    }
+
+    public sealed class ChatMultimodalImagePart
+    {
+        public string type { get; set; }
+
+        public ChatMultimodalImageUrl image_url { get; set; }
+    }
+
+    public sealed class ChatMultimodalImageUrl
+    {
+        public string url { get; set; }
+
+        public string detail { get; set; }
+    }
+
+    public sealed class VisionImagePayload
+    {
+        public VisionImagePayload(
+            string fileName,
+            string dataUrl)
+        {
+            FileName = fileName ?? string.Empty;
+            DataUrl = dataUrl ?? string.Empty;
+        }
+
+        public string FileName { get; }
+
+        public string DataUrl { get; }
     }
 
     public sealed class ChatCompletionAssistantToolMessage
@@ -132,11 +168,14 @@ namespace OutlookLocalAIChat.Chat
         public MailboxToolResult(
             string toolCallId,
             string content,
-            string statusText)
+            string statusText,
+            IReadOnlyList<VisionImagePayload> visionImages = null)
         {
             ToolCallId = toolCallId ?? string.Empty;
             Content = content ?? string.Empty;
             StatusText = statusText ?? string.Empty;
+            VisionImages = visionImages ??
+                new VisionImagePayload[0];
         }
 
         public string ToolCallId { get; }
@@ -144,5 +183,7 @@ namespace OutlookLocalAIChat.Chat
         public string Content { get; }
 
         public string StatusText { get; }
+
+        public IReadOnlyList<VisionImagePayload> VisionImages { get; }
     }
 }

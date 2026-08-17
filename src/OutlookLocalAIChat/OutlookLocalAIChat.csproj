@@ -63,6 +63,9 @@
     <Compile Include="Chat\OpenAiCompatibleClient.cs" />
     <Compile Include="Chat\ToneProfileRequestFactory.cs" />
     <Compile Include="Configuration\AppSettings.cs" />
+    <Compile Include="Chat\VisionAttachmentExchange.cs" />
+    <Compile Include="Configuration\ModelCatalog.cs" />
+    <Compile Include="Configuration\ModelRouting.cs" />
     <Compile Include="Configuration\ModelSelectionPolicy.cs" />
     <Compile Include="Configuration\SettingsStore.cs" />
     <Compile Include="Interop\OfficeInterfaces.cs" />

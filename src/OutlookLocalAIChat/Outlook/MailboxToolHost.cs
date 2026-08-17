@@ -227,6 +227,7 @@ namespace OutlookLocalAIChat.Outlook
             }
 
             var messages = new List<object>();
+            var visionImages = new List<VisionImagePayload>();
             var loadedCount = 0;
             foreach (var handle in handles)
             {
@@ -266,7 +267,8 @@ namespace OutlookLocalAIChat.Outlook
                     SerializeMessage(
                         handle,
                         message,
-                        MaxDirectMessageBodyCharacters));
+                        MaxDirectMessageBodyCharacters,
+                        visionImages));
                 _loadedBodyHandles.Add(handle);
                 loadedCount++;
             }
@@ -286,7 +288,8 @@ namespace OutlookLocalAIChat.Outlook
                 " of " +
                 MailboxWorkingSet.MaxMessages.ToString(
                     CultureInfo.InvariantCulture) +
-                ".");
+                ".",
+                visionImages);
         }
 
         private MailboxToolResult ReadThread(
@@ -327,6 +330,7 @@ namespace OutlookLocalAIChat.Outlook
                 source,
                 MaxThreadMessages);
             var messages = new List<object>();
+            var visionImages = new List<VisionImagePayload>();
             foreach (var message in conversation)
             {
                 var messageHandle = Register(message);
@@ -345,7 +349,8 @@ namespace OutlookLocalAIChat.Outlook
                     SerializeMessage(
                         messageHandle,
                         message,
-                        MaxThreadMessageBodyCharacters));
+                        MaxThreadMessageBodyCharacters,
+                        visionImages));
                 _loadedBodyHandles.Add(messageHandle);
             }
 
@@ -366,13 +371,15 @@ namespace OutlookLocalAIChat.Outlook
                 " of " +
                 MailboxWorkingSet.MaxMessages.ToString(
                     CultureInfo.InvariantCulture) +
-                ".");
+                ".",
+                visionImages);
         }
 
         private object SerializeMessage(
             string handle,
             MessageSnapshot message,
-            int maximumBodyCharacters)
+            int maximumBodyCharacters,
+            IList<VisionImagePayload> visionImages)
         {
             var payload = new Dictionary<string, object>
             {
@@ -399,13 +406,22 @@ namespace OutlookLocalAIChat.Outlook
                 var serialized = new List<object>(attachments.Count);
                 foreach (var attachment in attachments)
                 {
-                    serialized.Add(
-                        new Dictionary<string, object>
-                        {
-                            { "filename", attachment.FileName },
-                            { "kind", attachment.Kind },
-                            { "content", attachment.Text }
-                        });
+                    var entry = new Dictionary<string, object>
+                    {
+                        { "filename", attachment.FileName },
+                        { "kind", attachment.Kind },
+                        { "content", attachment.Text }
+                    };
+                    if (attachment.ImageDataUrl.Length > 0)
+                    {
+                        entry["vision_available"] = true;
+                        visionImages?.Add(
+                            new VisionImagePayload(
+                                attachment.FileName,
+                                attachment.ImageDataUrl));
+                    }
+
+                    serialized.Add(entry);
                 }
 
                 payload["attachments"] = serialized;
@@ -439,7 +455,8 @@ namespace OutlookLocalAIChat.Outlook
         private MailboxToolResult Success(
             string callId,
             object payload,
-            string status)
+            string status,
+            IReadOnlyList<VisionImagePayload> visionImages = null)
         {
             var json = _serializer.Serialize(payload);
             if (json.Length > TextBoundary.MaxToolResultCharacters)
@@ -453,7 +470,8 @@ namespace OutlookLocalAIChat.Outlook
             return new MailboxToolResult(
                 callId,
                 json,
-                status);
+                status,
+                visionImages);
         }
 
         private MailboxToolResult Error(

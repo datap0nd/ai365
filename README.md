@@ -53,6 +53,16 @@ MailAI does not ship with a preset model list or a preferred default. After you
 enter an endpoint and API key, use **Refresh models** in Settings to populate the
 dropdown from `GET /v1/models`. You can also type any model ID manually.
 
+The **Model guide** panel in Settings describes common local models: relative
+speed, answer quality, and whether the model can interpret email images.
+Only vision models (for example `qwen3-vl-30b`) receive image attachments through
+MailAI multimodal input; other models still get spreadsheet text and image
+metadata only. Enable **Temporarily switch to the best available vision model
+when email images are involved** to keep your everyday text model selected while
+MailAI routes image questions to a discovered vision model for that request only.
+Save settings after **Refresh models** so MailAI knows which vision models are
+available. Gauss and Gausso model IDs are removed automatically during refresh.
+
 Embedding-only models are excluded from discovery. **Check endpoint** verifies
 authentication with a lightweight `search_mailbox` tool-call probe. It does not
 read mailbox data during the check. Model discovery allows up to 15 seconds;
