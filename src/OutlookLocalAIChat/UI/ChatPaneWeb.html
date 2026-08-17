@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;">
+<title>MetoMail</title>
+<style>
+  :root {
+    --bg: #1a1b1e;
+    --bg2: #212226;
+    --card: #2b2c31;
+    --card2: #34353b;
+    --border: #34353a;
+    --text: #e8e8ec;
+    --dim: #9898a0;
+    --accent: #5c8fff;
+    --accent-soft: rgba(92, 143, 255, 0.14);
+    --error: #ff7676;
+    --ok: #3ddc97;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 13.5px/1.55 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-thumb { background: #3c3d43; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #4a4b52; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px 8px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  #logo { width: 32px; height: 32px; flex-shrink: 0; }
+  .head-text { flex: 1; min-width: 0; }
+  #scope {
+    font-weight: 600;
+    font-size: 12.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #draft {
+    color: var(--dim);
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #draft.linked { color: var(--accent); }
+  nav { display: flex; gap: 4px; flex-shrink: 0; }
+  nav button {
+    background: transparent;
+    color: var(--dim);
+    border: none;
+    border-radius: 7px;
+    padding: 5px 8px;
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+    white-space: nowrap;
+  }
+  nav button:hover { background: var(--card); color: var(--text); }
+
+  #chips {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 6px 14px 8px;
+    flex-shrink: 0;
+    max-height: 180px;
+    overflow-y: auto;
+  }
+  #chipsHead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  #chipsTitle { color: var(--dim); font-size: 11px; font-weight: 600; }
+  #chipsHead button {
+    background: none;
+    border: none;
+    color: var(--dim);
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  #chipsHead button:hover { color: var(--error); }
+  #chipsList { display: flex; flex-direction: column; gap: 4px; }
+  .chip {
+    background: var(--card);
+    border-radius: 8px;
+    padding: 6px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    animation: fadein 0.15s ease-out;
+  }
+  .chip .n {
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+    width: 16px;
+  }
+  .chip .t { min-width: 0; flex: 1; }
+  .chip .t1 {
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .chip .t2 {
+    font-size: 11px;
+    color: var(--dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 14px 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    scroll-behavior: smooth;
+  }
+  .msg { max-width: 100%; animation: fadein 0.18s ease-out; }
+  .msg .body {
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    -webkit-user-select: text;
+    user-select: text;
+  }
+  .msg.user { align-self: flex-end; max-width: 88%; }
+  .msg.user .body {
+    background: var(--accent-soft);
+    border: 1px solid rgba(92, 143, 255, 0.25);
+    border-radius: 14px 14px 4px 14px;
+    padding: 8px 12px;
+  }
+  .msg.ai { align-self: stretch; }
+  .msg.ai .who {
+    color: var(--dim);
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+  }
+  .msg.ai .body { padding-right: 6px; }
+  .msg.welcome .body {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    color: var(--dim);
+    font-size: 12.5px;
+  }
+  .msg.welcome .body b { color: var(--text); }
+  .act {
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+    color: var(--dim);
+    font-size: 11.5px;
+    animation: fadein 0.15s ease-out;
+    -webkit-user-select: text;
+    user-select: text;
+  }
+  .act::before { content: "\2022"; flex-shrink: 0; }
+  .act.draft { color: var(--accent); }
+  .act.error {
+    color: var(--error);
+    background: rgba(255, 118, 118, 0.08);
+    border-radius: 8px;
+    padding: 6px 10px;
+    white-space: pre-wrap;
+  }
+  #typing { display: none; gap: 4px; padding: 4px 2px; }
+  #typing.on { display: flex; }
+  #typing span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--dim);
+    animation: pulse 1.2s infinite ease-in-out;
+  }
+  #typing span:nth-child(2) { animation-delay: 0.18s; }
+  #typing span:nth-child(3) { animation-delay: 0.36s; }
+
+  footer {
+    flex-shrink: 0;
+    padding: 8px 14px 10px;
+    background: var(--bg);
+  }
+  #composerCard {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 8px 8px 8px 12px;
+    transition: border-color 0.15s;
+  }
+  #composerCard:focus-within { border-color: var(--accent); }
+  #input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    resize: none;
+    color: var(--text);
+    font: inherit;
+    max-height: 120px;
+    line-height: 1.45;
+    -webkit-user-select: text;
+    user-select: text;
+  }
+  #input::placeholder { color: #6a6b72; }
+  #btnSend {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 9px;
+    width: 34px;
+    height: 30px;
+    font-size: 14px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: filter 0.12s;
+  }
+  #btnSend:hover { filter: brightness(1.12); }
+  #btnSend.stop { background: var(--card2); color: var(--error); }
+  #bottomRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 7px;
+  }
+  #model {
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px 8px;
+    font: inherit;
+    font-size: 11.5px;
+    max-width: 55%;
+    cursor: pointer;
+    outline: none;
+  }
+  #model:disabled { opacity: 0.5; }
+  #visionBadge {
+    display: none;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--accent);
+    border: 1px solid rgba(92, 143, 255, 0.4);
+    border-radius: 6px;
+    padding: 1px 6px;
+  }
+  #visionBadge.on { display: inline-block; }
+  #status {
+    flex: 1;
+    text-align: right;
+    color: var(--dim);
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #status.error { color: var(--error); }
+
+  @keyframes fadein {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes pulse {
+    0%, 60%, 100% { opacity: 0.25; transform: scale(0.85); }
+    30% { opacity: 1; transform: scale(1); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <svg id="logo" viewBox="0 0 40 40" aria-label="MetoMail logo">
+    <rect x="1" y="1" width="38" height="38" rx="9" fill="#5c8fff"/>
+    <rect x="9" y="13" width="22" height="15" rx="2"
+          fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/>
+    <path d="M9 13 L20 21.5 L31 13" fill="none" stroke="#fff"
+          stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+  </svg>
+  <div class="head-text">
+    <div id="scope">No context - use /search or select emails</div>
+    <div id="draft">Say "create a draft" to open one. MetoMail can never send.</div>
+  </div>
+  <nav>
+    <button id="btnAddEmail" title="Add the emails selected in Outlook">+ Email</button>
+    <button id="btnAddFiles" title="Add text files as context">+ Files</button>
+    <button id="btnNew" title="Start a new chat">New</button>
+    <button id="btnSettings" title="Settings">Settings</button>
+  </nav>
+</header>
+
+<section id="chips" hidden>
+  <div id="chipsHead">
+    <span id="chipsTitle">Context</span>
+    <button id="btnClear">Clear</button>
+  </div>
+  <div id="chipsList"></div>
+</section>
+
+<main id="chat"></main>
+
+<footer>
+  <div id="composerCard">
+    <textarea id="input" rows="1" placeholder="Message MetoMail..." maxlength="4000"></textarea>
+    <button id="btnSend" title="Send">&#8593;</button>
+  </div>
+  <div id="bottomRow">
+    <select id="model" title="Active model"></select>
+    <span id="visionBadge">VISION</span>
+    <span id="status">Starting...</span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+  var api = window.chrome && window.chrome.webview;
+  var chat = document.getElementById("chat");
+  var input = document.getElementById("input");
+  var btnSend = document.getElementById("btnSend");
+  var statusEl = document.getElementById("status");
+  var scopeEl = document.getElementById("scope");
+  var draftEl = document.getElementById("draft");
+  var modelEl = document.getElementById("model");
+  var visionBadge = document.getElementById("visionBadge");
+  var chips = document.getElementById("chips");
+  var chipsList = document.getElementById("chipsList");
+  var chipsTitle = document.getElementById("chipsTitle");
+  var typing = null;
+  var busy = false;
+  var modelVision = {};
+
+  function post(type, data) {
+    if (!api) { return; }
+    var payload = data || {};
+    payload.type = type;
+    api.postMessage(JSON.stringify(payload));
+  }
+
+  function el(tag, cls) {
+    var node = document.createElement(tag);
+    if (cls) { node.className = cls; }
+    return node;
+  }
+
+  function scrollDown() {
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  function ensureTyping() {
+    if (!typing) {
+      typing = el("div", "");
+      typing.id = "typing";
+      typing.appendChild(el("span"));
+      typing.appendChild(el("span"));
+      typing.appendChild(el("span"));
+    }
+    chat.appendChild(typing);
+  }
+
+  // All dynamic text is inserted via textContent / text nodes only —
+  // model and mailbox content is never parsed as HTML.
+  function addUser(text) {
+    var msg = el("div", "msg user");
+    var body = el("div", "body");
+    body.textContent = text;
+    msg.appendChild(body);
+    chat.appendChild(msg);
+    scrollDown();
+  }
+
+  function addAssistant(text, ranges) {
+    var msg = el("div", "msg ai");
+    var who = el("div", "who");
+    who.textContent = "MetoMail";
+    var body = el("div", "body");
+    var list = (ranges || []).slice().sort(function (a, b) {
+      return a.s - b.s;
+    });
+    var pos = 0;
+    for (var i = 0; i < list.length; i++) {
+      var r = list[i];
+      if (typeof r.s !== "number" || typeof r.l !== "number") { continue; }
+      if (r.s < pos || r.s + r.l > text.length) { continue; }
+      if (r.s > pos) {
+        body.appendChild(document.createTextNode(text.slice(pos, r.s)));
+      }
+      var strong = document.createElement("strong");
+      strong.textContent = text.slice(r.s, r.s + r.l);
+      body.appendChild(strong);
+      pos = r.s + r.l;
+    }
+    if (pos < text.length) {
+      body.appendChild(document.createTextNode(text.slice(pos)));
+    }
+    msg.appendChild(who);
+    msg.appendChild(body);
+    chat.appendChild(msg);
+    scrollDown();
+  }
+
+  function addActivity(text, kind) {
+    var line = el("div", "act" + (kind ? " " + kind : ""));
+    line.textContent = text;
+    chat.appendChild(line);
+    scrollDown();
+  }
+
+  function addWelcome() {
+    var msg = el("div", "msg ai welcome");
+    var body = el("div", "body");
+    function line(bold, rest) {
+      var b = document.createElement("b");
+      b.textContent = bold;
+      body.appendChild(b);
+      body.appendChild(document.createTextNode(rest + "\n"));
+    }
+    body.appendChild(document.createTextNode(
+      "Chat with your mailbox - local models, nothing is ever sent.\n\n"));
+    line("/search", " a person or topic to build a working set");
+    line("+ Email", " adds the emails selected in Outlook (up to 10)");
+    line("+ Files", " adds text files as context");
+    body.appendChild(document.createTextNode(
+      "Ask about emails, attachments, images, or invites.\n"));
+    line("\"create a draft\"", " writes one - it always opens unsent");
+    msg.appendChild(body);
+    chat.appendChild(msg);
+    scrollDown();
+  }
+
+  function setBusy(value) {
+    busy = value;
+    btnSend.textContent = value ? "■" : "↑";
+    btnSend.title = value ? "Stop" : "Send";
+    btnSend.classList.toggle("stop", value);
+    modelEl.disabled = value;
+    if (value) {
+      ensureTyping();
+      typing.classList.add("on");
+      scrollDown();
+    } else if (typing && typing.parentNode) {
+      typing.classList.remove("on");
+      typing.parentNode.removeChild(typing);
+    }
+  }
+
+  function setStatus(text, isError) {
+    statusEl.textContent = text || "";
+    statusEl.classList.toggle("error", !!isError);
+  }
+
+  function setModels(items, current) {
+    modelVision = {};
+    while (modelEl.firstChild) { modelEl.removeChild(modelEl.firstChild); }
+    for (var i = 0; i < (items || []).length; i++) {
+      var item = items[i];
+      modelVision[item.id] = !!item.vision;
+      var option = document.createElement("option");
+      option.value = item.id;
+      option.textContent = item.id + (item.vision ? "  (vision)" : "");
+      modelEl.appendChild(option);
+    }
+    if (current) { modelEl.value = current; }
+    updateVisionBadge();
+  }
+
+  function updateVisionBadge() {
+    visionBadge.classList.toggle(
+      "on",
+      !!modelVision[modelEl.value]);
+  }
+
+  function setContext(items) {
+    while (chipsList.firstChild) {
+      chipsList.removeChild(chipsList.firstChild);
+    }
+    var count = (items || []).length;
+    chips.hidden = count === 0;
+    chipsTitle.textContent =
+      "Context - " + count + (count === 1 ? " item" : " items");
+    for (var i = 0; i < count; i++) {
+      var item = items[i];
+      var chip = el("div", "chip");
+      var n = el("div", "n");
+      n.textContent = item.badge || String(i + 1);
+      var t = el("div", "t");
+      var t1 = el("div", "t1");
+      t1.textContent = item.title || "";
+      var t2 = el("div", "t2");
+      t2.textContent = item.subtitle || "";
+      t.appendChild(t1);
+      t.appendChild(t2);
+      chip.appendChild(n);
+      chip.appendChild(t);
+      chipsList.appendChild(chip);
+    }
+  }
+
+  function clearChat() {
+    while (chat.firstChild) { chat.removeChild(chat.firstChild); }
+    typing = null;
+  }
+
+  function handle(m) {
+    if (!m || !m.type) { return; }
+    switch (m.type) {
+      case "user": addUser(m.text || ""); break;
+      case "assistant": addAssistant(m.text || "", m.bold); break;
+      case "activity": addActivity(m.text || "", m.kind); break;
+      case "status": setStatus(m.text, m.error); break;
+      case "busy": setBusy(!!m.value); break;
+      case "scope": scopeEl.textContent = m.text || ""; break;
+      case "draft":
+        draftEl.textContent = m.text || "";
+        draftEl.classList.toggle("linked", !!m.linked);
+        break;
+      case "models": setModels(m.items, m.current); break;
+      case "context": setContext(m.items); break;
+      case "restorePrompt":
+        input.value = m.text || "";
+        autoGrow();
+        input.focus();
+        break;
+      case "clear": clearChat(); addWelcome(); break;
+      case "welcome": addWelcome(); break;
+    }
+  }
+
+  function sendMessage() {
+    if (busy) { post("stop"); return; }
+    var text = input.value.replace(/\s+$/, "");
+    if (!text) { return; }
+    post("send", { text: text });
+    input.value = "";
+    autoGrow();
+  }
+
+  function autoGrow() {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 120) + "px";
+  }
+
+  input.addEventListener("input", autoGrow);
+  input.addEventListener("keydown", function (event) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      sendMessage();
+    }
+  });
+  btnSend.addEventListener("click", sendMessage);
+  modelEl.addEventListener("change", function () {
+    updateVisionBadge();
+    post("setModel", { model: modelEl.value });
+  });
+  document.getElementById("btnAddEmail")
+    .addEventListener("click", function () { post("addEmail"); });
+  document.getElementById("btnAddFiles")
+    .addEventListener("click", function () { post("addFiles"); });
+  document.getElementById("btnNew")
+    .addEventListener("click", function () { post("newChat"); });
+  document.getElementById("btnSettings")
+    .addEventListener("click", function () { post("openSettings"); });
+  document.getElementById("btnClear")
+    .addEventListener("click", function () { post("clearContext"); });
+
+  if (api) {
+    api.addEventListener("message", function (event) {
+      var m = event.data;
+      if (typeof m === "string") {
+        try { m = JSON.parse(m); } catch (parseError) { return; }
+      }
+      handle(m);
+    });
+  }
+
+  post("ready");
+  input.focus();
+})();
+</script>
+</body>
+</html>

@@ -51,6 +51,11 @@ The first unsigned build may trigger a Windows SmartScreen warning. A trusted
 code-signing certificate is required to remove that warning for normal company
 distribution.
 
+The chat sidebar renders in Microsoft Edge WebView2, which ships with
+Windows 10/11 and Microsoft Edge. The embedded page is network-isolated by
+CSP, never navigates anywhere, and inserts all model and mailbox text as
+inert text nodes - model output is still never parsed as HTML.
+
 ## Model choice
 
 MetoMail does not ship with a preset model list or a preferred default. After you

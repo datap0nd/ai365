@@ -27,6 +27,9 @@ jobs:
         shell: pwsh
         run: ./scripts/Restore-StrongNameKey.ps1
 
+      - name: Restore NuGet packages
+        run: msbuild OutlookLocalAIChat.sln /t:Restore /p:Configuration=Release
+
       - name: Build solution
         run: msbuild OutlookLocalAIChat.sln /m /p:Configuration=Release
 
