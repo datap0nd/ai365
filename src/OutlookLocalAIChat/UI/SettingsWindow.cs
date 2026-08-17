@@ -22,6 +22,7 @@ namespace OutlookLocalAIChat.UI
         private readonly TextBox _apiKey = new TextBox();
         private readonly CheckBox _allowInsecureHttp = new CheckBox();
         private readonly Label _transportWarning = new Label();
+        private readonly CheckBox _switchVisionForImages = new CheckBox();
         private readonly Label _modelGuidance = new Label();
         private readonly ListBox _modelGuide = new ListBox();
         private readonly Label _testStatus = new Label();
@@ -123,6 +124,9 @@ namespace OutlookLocalAIChat.UI
             _useToneProfile.Checked =
                 (current?.UseToneProfile ?? false) &&
                 _toneProfile.TextLength > 0;
+            _switchVisionForImages.Checked =
+                current?.SwitchToVisionModelForImages ?? false;
+            RestoreDiscoveredModels(current?.DiscoveredModels);
             UpdateModelGuidance();
             UpdateTransportWarning();
         }
@@ -193,6 +197,15 @@ namespace OutlookLocalAIChat.UI
                 "without transport encryption.";
             _allowInsecureHttp.CheckedChanged += InsecureHttpChanged;
 
+            _switchVisionForImages.AutoSize = true;
+            _switchVisionForImages.Text =
+                "Temporarily switch to the best available vision model when email images are involved";
+            _switchVisionForImages.AccessibleName =
+                "Switch to vision model for images";
+            _switchVisionForImages.AccessibleDescription =
+                "Uses your saved model list to pick a vision model for this request only. " +
+                "Save settings after Refresh models so MailAI knows which vision models are available.";
+
             _useToneProfile.AutoSize = true;
             _useToneProfile.Text =
                 "Use this writing profile for drafts";
@@ -221,7 +234,7 @@ namespace OutlookLocalAIChat.UI
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 1,
-                RowCount = 14,
+                RowCount = 15,
                 Padding = new Padding(18, 16, 18, 12)
             };
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -237,6 +250,7 @@ namespace OutlookLocalAIChat.UI
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 62));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 66));
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
             layout.Controls.Add(FieldLabel("Endpoint or base URL"), 0, 0);
@@ -248,24 +262,25 @@ namespace OutlookLocalAIChat.UI
             layout.Controls.Add(FieldLabel("Model guide"), 0, 5);
             ConfigureModelGuide();
             layout.Controls.Add(_modelGuide, 0, 6);
-            layout.Controls.Add(FieldLabel("API key"), 0, 7);
-            layout.Controls.Add(_apiKey, 0, 8);
-            layout.Controls.Add(_allowInsecureHttp, 0, 9);
+            layout.Controls.Add(_switchVisionForImages, 0, 7);
+            layout.Controls.Add(FieldLabel("API key"), 0, 8);
+            layout.Controls.Add(_apiKey, 0, 9);
+            layout.Controls.Add(_allowInsecureHttp, 0, 10);
             ConfigureSupportingLabel(_transportWarning);
             _transportWarning.AccessibleRole = AccessibleRole.Alert;
-            layout.Controls.Add(_transportWarning, 0, 10);
+            layout.Controls.Add(_transportWarning, 0, 11);
 
             var hint = SupportingText(
                 "The endpoint receives your prompt, conversation, and only bounded " +
                 "context. MailAI exposes read tools and guarded draft creation only. " +
                 "It has no send, move, delete, or mailbox mutation capability.");
-            layout.Controls.Add(hint, 0, 11);
+            layout.Controls.Add(hint, 0, 12);
             ConfigureSupportingLabel(_testStatus);
             _testStatus.Text =
                 "Use Refresh models to load the model list from your endpoint. " +
                 "Check endpoint also verifies tool-call compatibility.";
             _testStatus.AccessibleRole = AccessibleRole.StatusBar;
-            layout.Controls.Add(_testStatus, 0, 12);
+            layout.Controls.Add(_testStatus, 0, 13);
 
             _checkEndpoint.Click += CheckEndpointClick;
             _refreshModels.Click += RefreshModelsClick;
@@ -277,7 +292,7 @@ namespace OutlookLocalAIChat.UI
             };
             checkRow.Controls.Add(_checkEndpoint);
             checkRow.Controls.Add(_refreshModels);
-            layout.Controls.Add(checkRow, 0, 13);
+            layout.Controls.Add(checkRow, 0, 14);
             page.Controls.Add(layout);
             return page;
         }
@@ -529,8 +544,46 @@ namespace OutlookLocalAIChat.UI
                 AllowInsecureHttp = _allowInsecureHttp.Checked,
                 ToneProfile = profile,
                 UseToneProfile =
-                    _useToneProfile.Checked && profile.Length > 0
+                    _useToneProfile.Checked && profile.Length > 0,
+                SwitchToVisionModelForImages =
+                    _switchVisionForImages.Checked,
+                DiscoveredModels = CollectDiscoveredModels()
             };
+        }
+
+        private List<string> CollectDiscoveredModels()
+        {
+            return _model.Items
+                .Cast<object>()
+                .Select(item =>
+                    TextBoundary.PlainText(
+                        Convert.ToString(item),
+                        200))
+                .Where(item => item.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(item => item, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private void RestoreDiscoveredModels(
+            IEnumerable<string> models)
+        {
+            foreach (var model in models ?? Enumerable.Empty<string>())
+            {
+                if (ModelCatalog.IsDisallowedModel(model))
+                {
+                    continue;
+                }
+
+                if (!_model.Items.Cast<object>().Any(item =>
+                    string.Equals(
+                        item.ToString(),
+                        model,
+                        StringComparison.OrdinalIgnoreCase)))
+                {
+                    _model.Items.Add(model);
+                }
+            }
         }
 
         private async void AnalyzeToneClick(
@@ -885,6 +938,7 @@ namespace OutlookLocalAIChat.UI
             _model.Enabled = enabled;
             _apiKey.Enabled = enabled;
             _allowInsecureHttp.Enabled = enabled;
+            _switchVisionForImages.Enabled = enabled;
             _useToneProfile.Enabled = enabled;
             _toneProfile.Enabled = enabled;
             _checkEndpoint.Enabled = enabled || _checking;

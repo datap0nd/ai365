@@ -176,6 +176,52 @@ namespace OutlookLocalAIChat.Configuration
             return builder.ToString();
         }
 
+        public static string FindBestVisionModel(
+            IEnumerable<string> discoveredModels)
+        {
+            var models = (discoveredModels ?? Enumerable.Empty<string>())
+                .Where(model =>
+                    model != null &&
+                    model.Trim().Length > 0 &&
+                    !IsDisallowedModel(model) &&
+                    ModelSelectionPolicy.IsGenerativeModel(model))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            foreach (var entry in MasterList)
+            {
+                if (!entry.ReadsEmailImages)
+                {
+                    continue;
+                }
+
+                var match = FindMatchingDiscoveredId(entry, models);
+                if (match.Length > 0)
+                {
+                    return match;
+                }
+            }
+
+            return models
+                .Where(IsVisionCandidate)
+                .OrderBy(model => model, StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault() ??
+                string.Empty;
+        }
+
+        public static bool IsVisionCandidate(string model)
+        {
+            if (SupportsVision(model))
+            {
+                return true;
+            }
+
+            var normalized = Normalize(model);
+            return normalized.Length > 0 &&
+                   normalized.IndexOf("vl", StringComparison.Ordinal) >= 0 &&
+                   normalized.IndexOf("embedding", StringComparison.Ordinal) < 0;
+        }
+
         public static string FindMatchingDiscoveredId(
             ModelGuideEntry entry,
             IEnumerable<string> discoveredModels)

@@ -30,6 +30,9 @@ namespace GuardrailTests
             try
             {
                 Run(
+                    "Vision auto-switch picks the best discovered model",
+                    VisionAutoSwitchPicksBestDiscoveredModel);
+                Run(
                     "Gauss models are excluded from discovery",
                     GaussModelsAreExcluded);
                 Run(
@@ -1572,6 +1575,61 @@ namespace GuardrailTests
             return Convert.ToString(
                 ((ChatCompletionInputMessage)message).content) ??
                 string.Empty;
+        }
+
+        private static void VisionAutoSwitchPicksBestDiscoveredModel()
+        {
+            var discovered = new[]
+            {
+                "gpt-oss-20b",
+                "qwen3.6-35b-a3b",
+                "qwen3-vl-30b"
+            };
+            Assert(
+                ModelCatalog.FindBestVisionModel(discovered) ==
+                    "qwen3-vl-30b",
+                "The best vision model was not selected from the saved list.");
+
+            var settings = new AppSettings
+            {
+                Model = "gpt-oss-20b",
+                SwitchToVisionModelForImages = true,
+                DiscoveredModels = new List<string>(discovered)
+            };
+            var snapshot = new MessageSnapshot(
+                "entry",
+                "store",
+                "Invoice",
+                "Sender",
+                "Recipient",
+                DateTime.UtcNow,
+                "Body",
+                new[] { "scan.png" });
+            var routed = ModelRouting.ResolveForRequest(
+                settings,
+                ModelRouting.ContextMayIncludeImages(snapshot, null));
+            Assert(
+                routed == "qwen3-vl-30b" &&
+                ModelRouting.IsTemporaryVisionSwitch(settings, routed),
+                "Image requests did not temporarily switch to the vision model.");
+
+            settings.SwitchToVisionModelForImages = false;
+            Assert(
+                ModelRouting.ResolveForRequest(
+                    settings,
+                    true) == "gpt-oss-20b",
+                "The checkbox should gate temporary vision switching.");
+
+            settings.SwitchToVisionModelForImages = true;
+            settings.Model = "qwen3-vl-30b";
+            Assert(
+                ModelRouting.ResolveForRequest(
+                    settings,
+                    true) == "qwen3-vl-30b" &&
+                !ModelRouting.IsTemporaryVisionSwitch(
+                    settings,
+                    "qwen3-vl-30b"),
+                "Vision models should not be replaced when already selected.");
         }
 
         private static void GaussModelsAreExcluded()

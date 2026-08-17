@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Web.Script.Serialization;
@@ -50,7 +52,11 @@ namespace OutlookLocalAIChat.Configuration
                     ToneProfile = TextBoundary.PlainText(
                         stored.ToneProfile,
                         TextBoundary.MaxToneProfileCharacters),
-                    UseToneProfile = stored.UseToneProfile
+                    UseToneProfile = stored.UseToneProfile,
+                    SwitchToVisionModelForImages =
+                        stored.SwitchToVisionModelForImages,
+                    DiscoveredModels = NormalizeDiscoveredModels(
+                        stored.DiscoveredModels)
                 };
             }
             catch
@@ -99,7 +105,11 @@ namespace OutlookLocalAIChat.Configuration
                     settings.ToneProfile,
                     TextBoundary.MaxToneProfileCharacters),
                 UseToneProfile = settings.UseToneProfile &&
-                    !string.IsNullOrWhiteSpace(settings.ToneProfile)
+                    !string.IsNullOrWhiteSpace(settings.ToneProfile),
+                SwitchToVisionModelForImages =
+                    settings.SwitchToVisionModelForImages,
+                DiscoveredModels = NormalizeDiscoveredModels(
+                    settings.DiscoveredModels)
             };
 
             File.WriteAllText(
@@ -133,6 +143,17 @@ namespace OutlookLocalAIChat.Configuration
             return Encoding.UTF8.GetString(clearBytes);
         }
 
+        private static List<string> NormalizeDiscoveredModels(
+            IEnumerable<string> models)
+        {
+            return (models ?? Enumerable.Empty<string>())
+                .Select(model => TextBoundary.PlainText(model, 200))
+                .Where(model => model.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(model => model, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
         private sealed class StoredSettings
         {
             public string BaseUrl { get; set; }
@@ -146,6 +167,10 @@ namespace OutlookLocalAIChat.Configuration
             public string ToneProfile { get; set; }
 
             public bool UseToneProfile { get; set; }
+
+            public bool SwitchToVisionModelForImages { get; set; }
+
+            public List<string> DiscoveredModels { get; set; }
         }
     }
 }

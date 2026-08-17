@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace OutlookLocalAIChat.Configuration
 {
@@ -15,6 +16,11 @@ namespace OutlookLocalAIChat.Configuration
         public string ToneProfile { get; set; } = string.Empty;
 
         public bool UseToneProfile { get; set; }
+
+        public bool SwitchToVisionModelForImages { get; set; }
+
+        public List<string> DiscoveredModels { get; set; } =
+            new List<string>();
 
         public bool IsConfigured
         {

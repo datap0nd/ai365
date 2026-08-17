@@ -1,6 +1,6 @@
 #define AppName "MailAI"
 #ifndef AppVersion
-  #define AppVersion "1.10.0"
+  #define AppVersion "1.10.1"
 #endif
 #define AppPublisher "MailAI contributors"
 #define AppProgId "OutlookLocalAIChat.AddIn"

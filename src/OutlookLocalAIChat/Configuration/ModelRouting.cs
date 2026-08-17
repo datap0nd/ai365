@@ -1,0 +1,134 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using OutlookLocalAIChat.Chat;
+using OutlookLocalAIChat.Outlook;
+
+namespace OutlookLocalAIChat.Configuration
+{
+    public static class ModelRouting
+    {
+        public static bool ContextMayIncludeImages(
+            MessageSnapshot selectedMessage,
+            IReadOnlyList<MessageSnapshot> workingMessages)
+        {
+            if (MessageHasImageAttachment(selectedMessage))
+            {
+                return true;
+            }
+
+            var workingSet = MailboxWorkingSet.Normalize(
+                workingMessages);
+            foreach (var message in workingSet)
+            {
+                if (MessageHasImageAttachment(message))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public static bool ToolResultsIncludeImages(
+            IReadOnlyList<MailboxToolResult> toolResults)
+        {
+            if (toolResults == null)
+            {
+                return false;
+            }
+
+            foreach (var result in toolResults)
+            {
+                if (result?.VisionImages != null &&
+                    result.VisionImages.Count > 0)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public static string ResolveForRequest(
+            AppSettings settings,
+            bool imagesExpected,
+            IReadOnlyList<MailboxToolResult> loadedImages = null)
+        {
+            var preferred = (settings?.Model ?? string.Empty).Trim();
+            if (preferred.Length == 0 ||
+                settings == null ||
+                !settings.SwitchToVisionModelForImages)
+            {
+                return preferred;
+            }
+
+            var needsVision =
+                imagesExpected ||
+                ToolResultsIncludeImages(loadedImages);
+            if (!needsVision ||
+                ModelCatalog.SupportsVision(preferred))
+            {
+                return preferred;
+            }
+
+            var visionModel = ModelCatalog.FindBestVisionModel(
+                settings.DiscoveredModels);
+            return visionModel.Length > 0
+                ? visionModel
+                : preferred;
+        }
+
+        public static bool IsTemporaryVisionSwitch(
+            AppSettings settings,
+            string activeModel)
+        {
+            if (settings == null ||
+                !settings.SwitchToVisionModelForImages)
+            {
+                return false;
+            }
+
+            var preferred = settings.Model.Trim();
+            var active = (activeModel ?? string.Empty).Trim();
+            return preferred.Length > 0 &&
+                   active.Length > 0 &&
+                   !string.Equals(
+                       preferred,
+                       active,
+                       StringComparison.OrdinalIgnoreCase) &&
+                   ModelCatalog.SupportsVision(active);
+        }
+
+        private static bool MessageHasImageAttachment(
+            MessageSnapshot message)
+        {
+            if (message?.AttachmentNames == null)
+            {
+                return false;
+            }
+
+            foreach (var name in message.AttachmentNames)
+            {
+                if (IsImageAttachmentName(name))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool IsImageAttachmentName(string fileName)
+        {
+            var extension = Path.GetExtension(
+                fileName ?? string.Empty);
+            return EmailAttachmentReader.IsSupportedExtension(extension) &&
+                   !extension.Equals(".csv", StringComparison.OrdinalIgnoreCase) &&
+                   !extension.Equals(".xlsx", StringComparison.OrdinalIgnoreCase) &&
+                   !extension.Equals(".xlsm", StringComparison.OrdinalIgnoreCase) &&
+                   !extension.Equals(".xls", StringComparison.OrdinalIgnoreCase);
+        }
+    }
+}
