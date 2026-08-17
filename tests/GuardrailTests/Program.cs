@@ -39,20 +39,11 @@ namespace GuardrailTests
                     "Models endpoint is normalized",
                     ModelsEndpointIsNormalized);
                 Run(
-                    "Recommended model balances capability and speed",
-                    RecommendedModelIsStable);
-                Run(
                     "Default model is empty on install",
                     DefaultModelIsEmptyOnInstall);
                 Run(
-                    "Model presets stay empty until endpoint discovery",
-                    ModelPresetsAreEmptyOnInstall);
-                Run(
                     "Email attachments are bounded and readable",
                     EmailAttachmentsAreBounded);
-                Run(
-                    "Model selection never recommends Gauss variants",
-                    GaussModelsAreNeverRecommended);
                 Run(
                     "Compatible endpoint model discovery is verified",
                     ModelDiscoveryUsesCompatibleContract);
@@ -223,24 +214,6 @@ namespace GuardrailTests
                 "The models path was not normalized.");
         }
 
-        private static void RecommendedModelIsStable()
-        {
-            Assert(
-                ModelSelectionPolicy.RecommendedModel ==
-                "qwen3.5-35b-a3b",
-                "The balanced default changed unexpectedly.");
-            var chosen = ModelSelectionPolicy.ChooseRecommended(
-                new[]
-                {
-                    "gpt-oss-120b",
-                    "qwen3.5-35b-a3b",
-                    "gpt-oss-20b"
-                });
-            Assert(
-                chosen == "qwen3.5-35b-a3b",
-                "The balanced model was not preferred: " + chosen);
-        }
-
         private static void DefaultModelIsEmptyOnInstall()
         {
             var settings = new AppSettings();
@@ -248,13 +221,6 @@ namespace GuardrailTests
                 settings.Model == string.Empty &&
                 !settings.IsConfigured,
                 "A fresh install should start without a configured model.");
-        }
-
-        private static void ModelPresetsAreEmptyOnInstall()
-        {
-            Assert(
-                ModelSelectionPolicy.Presets.Count == 0,
-                "Model presets should stay empty until endpoint discovery.");
         }
 
         private static void EmailAttachmentsAreBounded()
@@ -326,26 +292,6 @@ namespace GuardrailTests
                     File.Delete(csvPath);
                 }
             }
-        }
-
-        private static void GaussModelsAreNeverRecommended()
-        {
-            var chosen = ModelSelectionPolicy.ChooseRecommended(
-                new[]
-                {
-                    "gausso",
-                    "gausso-flash",
-                    "gauss-think",
-                    "gpt-oss-20b"
-                });
-            Assert(
-                chosen == "gpt-oss-20b",
-                "A Gauss variant was recommended: " + chosen);
-            Assert(
-                ModelSelectionPolicy.ChooseRecommended(
-                    new[] { "gausso", "gauss" }) ==
-                string.Empty,
-                "Gauss-only endpoints must not produce a recommendation.");
         }
 
         private static void ModelDiscoveryUsesCompatibleContract()
@@ -433,8 +379,7 @@ namespace GuardrailTests
             return new AppSettings
             {
                 BaseUrl = baseUrl,
-                Model =
-                    ModelSelectionPolicy.RecommendedModel,
+                Model = "local-model",
                 ApiKey = "test-key"
             };
         }

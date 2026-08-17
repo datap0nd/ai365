@@ -27,8 +27,6 @@ namespace OutlookLocalAIChat.UI
         private readonly Label _error = new Label();
         private readonly Button _checkEndpoint =
             MakeButton("Check endpoint", false, 128);
-        private readonly Button _useRecommended =
-            MakeButton("Use recommended", false, 134);
         private readonly Button _analyzeTone =
             MakeButton("Analyze 15 sent emails", false, 176);
         private readonly Button _save =
@@ -106,11 +104,6 @@ namespace OutlookLocalAIChat.UI
 
             AcceptButton = _save;
             CancelButton = GetCancelButton(buttons);
-
-            foreach (var preset in ModelSelectionPolicy.Presets)
-            {
-                _model.Items.Add(preset);
-            }
 
             _endpoint.Text = current?.BaseUrl ?? string.Empty;
             _model.Text = current?.Model ?? string.Empty;
@@ -240,7 +233,7 @@ namespace OutlookLocalAIChat.UI
             layout.Controls.Add(FieldLabel("Endpoint or base URL"), 0, 0);
             layout.Controls.Add(_endpoint, 0, 1);
             layout.Controls.Add(FieldLabel("Model"), 0, 2);
-            layout.Controls.Add(BuildModelRow(), 0, 3);
+            layout.Controls.Add(_model, 0, 3);
             ConfigureSupportingLabel(_modelGuidance);
             layout.Controls.Add(_modelGuidance, 0, 4);
             layout.Controls.Add(FieldLabel("API key"), 0, 5);
@@ -349,42 +342,6 @@ namespace OutlookLocalAIChat.UI
             _model.AccessibleName = "AI model";
             _model.TextChanged +=
                 (sender, args) => UpdateModelGuidance();
-        }
-
-        private Control BuildModelRow()
-        {
-            var panel = new TableLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                ColumnCount = 2,
-                RowCount = 1,
-                Margin = new Padding(0)
-            };
-            panel.ColumnStyles.Add(
-                new ColumnStyle(SizeType.Percent, 100));
-            panel.ColumnStyles.Add(
-                new ColumnStyle(SizeType.Absolute, 142));
-            _useRecommended.Margin = new Padding(8, 0, 0, 0);
-            _useRecommended.Click +=
-                (sender, args) =>
-                {
-                    var recommendation =
-                        ModelSelectionPolicy.ChooseRecommended(
-                            _model.Items.Cast<string>());
-                    if (recommendation.Length == 0)
-                    {
-                        _error.Text =
-                            "[MODELS_NOT_DISCOVERED] Check the endpoint to discover available models first.";
-                        return;
-                    }
-
-                    _error.Text = string.Empty;
-                    _model.Text = recommendation;
-                    _model.Focus();
-                };
-            panel.Controls.Add(_model, 0, 0);
-            panel.Controls.Add(_useRecommended, 1, 0);
-            return panel;
         }
 
         private Control BuildButtons()
@@ -633,14 +590,6 @@ namespace OutlookLocalAIChat.UI
                         settings,
                         _checkCancellation.Token);
                     AddDiscoveredModels(models);
-                    var recommendation =
-                        ModelSelectionPolicy.ChooseRecommended(models);
-                    if (recommendation.Length > 0 &&
-                        string.IsNullOrWhiteSpace(_model.Text))
-                    {
-                        _model.Text = recommendation;
-                        UpdateModelGuidance();
-                    }
                 }
                 catch (AiEndpointException exception)
                 {
@@ -682,18 +631,10 @@ namespace OutlookLocalAIChat.UI
                         "The endpoint answered, but this model did not return a compatible mailbox tool call.");
                 }
 
-                var recommendation =
-                    ModelSelectionPolicy.ChooseRecommended(models);
-                var note = recommendation.Length > 0 &&
-                    !recommendation.Equals(
-                        settings.Model,
-                        StringComparison.OrdinalIgnoreCase)
-                        ? " Best available balance: " + recommendation + "."
-                        : string.Empty;
                 _testStatus.ForeColor = SuccessText;
                 _testStatus.Text =
                     "Endpoint verified. Authentication, model, and mailbox tool calling passed." +
-                    discoveryNote + note;
+                    discoveryNote;
             }
             catch (OperationCanceledException)
             {
@@ -761,7 +702,6 @@ namespace OutlookLocalAIChat.UI
             _model.Enabled = enabled;
             _apiKey.Enabled = enabled;
             _allowInsecureHttp.Enabled = enabled;
-            _useRecommended.Enabled = enabled;
             _useToneProfile.Enabled = enabled;
             _toneProfile.Enabled = enabled;
             _checkEndpoint.Enabled = enabled || _checking;
