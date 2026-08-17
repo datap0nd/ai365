@@ -140,7 +140,10 @@ namespace OutlookLocalAIChat.UI
                 settings.AreBrowserAcceleratorKeysEnabled = false;
                 settings.IsBuiltInErrorPageEnabled = false;
                 settings.IsZoomControlEnabled = false;
-                _webView.AllowExternalDrop = false;
+                // External drop stays enabled so the page can receive
+                // drag gestures; the page never navigates on drop and
+                // forwards the gesture to the host instead.
+                _webView.AllowExternalDrop = true;
                 _webView.CoreWebView2.NavigationStarting +=
                     WebNavigationStarting;
                 _webView.CoreWebView2.NewWindowRequested +=
@@ -269,6 +272,16 @@ namespace OutlookLocalAIChat.UI
                         break;
                     case "clearContext":
                         HandleClearContext();
+                        break;
+                    case "emailDrop":
+                        if (!_busy)
+                        {
+                            AddActiveSelection();
+                        }
+
+                        break;
+                    case "fileDrop":
+                        HandleWebFileDrop(eventArgs);
                         break;
                     case "setModel":
                         object modelValue;
@@ -763,6 +776,37 @@ namespace OutlookLocalAIChat.UI
             SetScopeUnavailable(
                 "No context - use /search or select emails");
             SetStatus("Context cleared", false);
+        }
+
+        private void HandleWebFileDrop(
+            CoreWebView2WebMessageReceivedEventArgs eventArgs)
+        {
+            if (_busy)
+            {
+                return;
+            }
+
+            var paths = new List<string>();
+            var objects = eventArgs.AdditionalObjects;
+            if (objects == null)
+            {
+                return;
+            }
+
+            foreach (var item in objects)
+            {
+                var file = item as CoreWebView2File;
+                if (file != null &&
+                    !string.IsNullOrEmpty(file.Path))
+                {
+                    paths.Add(file.Path);
+                }
+            }
+
+            if (paths.Count > 0)
+            {
+                AddExternalFiles(paths);
+            }
         }
 
         private void HandleAddFiles()

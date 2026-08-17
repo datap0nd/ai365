@@ -291,6 +291,22 @@
   }
   #status.error { color: var(--error); }
 
+  body.dropping::after {
+    content: "Drop emails or files to add them as context";
+    position: fixed;
+    inset: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px dashed var(--accent);
+    border-radius: 14px;
+    background: rgba(92, 143, 255, 0.10);
+    color: var(--accent);
+    font-weight: 600;
+    pointer-events: none;
+    z-index: 10;
+  }
+
   @keyframes fadein {
     from { opacity: 0; transform: translateY(4px); }
     to { opacity: 1; transform: none; }
@@ -595,6 +611,47 @@
     .addEventListener("click", function () { post("openSettings"); });
   document.getElementById("btnClear")
     .addEventListener("click", function () { post("clearContext"); });
+
+  // Drag-and-drop: the drop gesture is forwarded to the host. Outlook
+  // email drags (virtual .msg files, or drags exposing no files) map to
+  // "add the current Outlook selection", matching the pre-web behavior;
+  // real file drops are handed over with their paths.
+  var dropDepth = 0;
+  document.addEventListener("dragover", function (event) {
+    event.preventDefault();
+  });
+  document.addEventListener("dragenter", function (event) {
+    event.preventDefault();
+    dropDepth++;
+    document.body.classList.add("dropping");
+  });
+  document.addEventListener("dragleave", function () {
+    dropDepth--;
+    if (dropDepth <= 0) {
+      dropDepth = 0;
+      document.body.classList.remove("dropping");
+    }
+  });
+  document.addEventListener("drop", function (event) {
+    event.preventDefault();
+    dropDepth = 0;
+    document.body.classList.remove("dropping");
+    var files = (event.dataTransfer && event.dataTransfer.files) ||
+      [];
+    var hasMsg = false;
+    for (var i = 0; i < files.length; i++) {
+      if (/\.msg$/i.test(files[i].name)) { hasMsg = true; break; }
+    }
+    if (hasMsg || files.length === 0) {
+      post("emailDrop");
+      return;
+    }
+    if (api && api.postMessageWithAdditionalObjects) {
+      api.postMessageWithAdditionalObjects(
+        JSON.stringify({ type: "fileDrop" }),
+        files);
+    }
+  });
 
   if (api) {
     api.addEventListener("message", function (event) {
