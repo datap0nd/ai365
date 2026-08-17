@@ -59,7 +59,10 @@ namespace OutlookLocalAIChat.Chat
                         allowDraftUpdate && activeDraft != null,
                         hasWorkingSet,
                         toneProfile,
-                        model)
+                        model,
+                        ModelRouting.ContextMayIncludeImages(
+                            message,
+                            workingSet))
                 },
                 new ChatCompletionInputMessage
                 {
@@ -164,7 +167,9 @@ namespace OutlookLocalAIChat.Chat
                         }
                     }
                 },
-                max_tokens = 1
+                // Local servers count tool-call JSON against max_tokens,
+                // so 1 would truncate the forced call and fail the probe.
+                max_tokens = 160
             };
         }
 
@@ -173,14 +178,16 @@ namespace OutlookLocalAIChat.Chat
             bool allowDraftUpdate,
             bool hasWorkingSet,
             string toneProfile,
-            string model)
+            string model,
+            bool imagesExpected)
         {
             var boundary = SystemBoundary +
-                (ModelCatalog.IsVisionCapable(model)
-                    ? " This request uses a vision-capable model. Email image attachments " +
-                      "from read_messages are provided as visual input. Describe and answer " +
-                      "from those images when the user asks about them."
-                    : string.Empty) +
+                " Today's date is " +
+                DateTime.Now.ToString(
+                    "yyyy-MM-dd (dddd)",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                ". Use it for relative time ranges such as last week." +
+                BuildImageBoundary(model, imagesExpected) +
                 (hasWorkingSet
                     ? " A user-approved working set of no more than ten emails is locked for this request. Use only read_messages with its supplied context handles. Do not search the mailbox or expand conversation threads."
                     : " At most ten unique message bodies may be loaded in one request. Perform no more than one mailbox search.");
@@ -230,6 +237,34 @@ namespace OutlookLocalAIChat.Chat
                 " The local host did not recognize an explicit draft or revision request " +
                 "in the user's latest prompt. Draft mutation is unavailable. Never claim " +
                 "that a draft was created or updated.";
+        }
+
+        private static string BuildImageBoundary(
+            string model,
+            bool imagesExpected)
+        {
+            if (ModelCatalog.IsVisionCapable(model))
+            {
+                return
+                    " This request uses a vision-capable model. Email image attachments " +
+                    "from read_messages are provided as visual input after the tool " +
+                    "result. When the user asks what an image shows, answer from that " +
+                    "visual input and refer to each image by its attachment filename. " +
+                    "If the image is in a message whose body is not loaded yet, call " +
+                    "read_messages for that message first.";
+            }
+
+            if (imagesExpected)
+            {
+                return
+                    " The current model is text-only and cannot view images. Image " +
+                    "attachments in this context appear as filename and metadata only. " +
+                    "If the user asks about image content, say that a model tagged " +
+                    "Vision must be selected in MailAI settings (or auto-switch to " +
+                    "vision enabled), then answer what you can from the text.";
+            }
+
+            return string.Empty;
         }
 
         private static string BuildContextReference(

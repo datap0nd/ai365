@@ -247,7 +247,12 @@ namespace OutlookLocalAIChat.Outlook
                     messages.Add(new Dictionary<string, object>
                     {
                         { "handle", handle },
-                        { "already_loaded", true }
+                        { "already_loaded", true },
+                        {
+                            "note",
+                            "This body appears earlier in the conversation. " +
+                            "Do not request it again."
+                        }
                     });
                     continue;
                 }

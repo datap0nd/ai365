@@ -1341,6 +1341,15 @@ namespace OutlookLocalAIChat.UI
                     " for email image attachments.",
                     false);
             }
+            else if (imagesExpected &&
+                     !ModelCatalog.IsVisionCapable(activeModel))
+            {
+                SetStatus(
+                    "Images detected, but " + activeModel +
+                    " is text-only. Pick a Vision-tagged model in Settings " +
+                    "or enable auto-switch.",
+                    false);
+            }
 
             var request = ChatRequestFactory.Create(
                 activeModel,
@@ -1748,11 +1757,13 @@ namespace OutlookLocalAIChat.UI
 
         private void UpdateModelMeta()
         {
-            var model = _settings?.Model ?? string.Empty;
-            _modelMeta.Text = "Model: " +
-                (model.Length > 0
-                    ? model
-                    : "not configured");
+            var model = (_settings?.Model ?? string.Empty).Trim();
+            _modelMeta.Text = model.Length > 0
+                ? "Model: " + model +
+                  (ModelCatalog.IsVisionCapable(model)
+                      ? " (vision)"
+                      : " (text-only)")
+                : "Model: not configured";
         }
 
         private void ShowWelcome()

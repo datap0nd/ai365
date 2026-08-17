@@ -31,7 +31,9 @@ namespace OutlookLocalAIChat.Chat
                         name = SearchMailbox,
                         description =
                             "Search the user's local primary Outlook Inbox and Sent Items. " +
-                            "Returns bounded metadata, snippets, and temporary message handles.",
+                            "Returns bounded metadata, snippets, and temporary message " +
+                            "handles, newest first. Only one search is allowed per request, " +
+                            "so choose the query carefully before calling.",
                         parameters = ObjectSchema(
                             new Dictionary<string, object>
                             {
@@ -52,7 +54,9 @@ namespace OutlookLocalAIChat.Chat
                                 {
                                     "days_back",
                                     IntegerSchema(
-                                        "Only include messages this many days old or newer.",
+                                        "Only include messages this many days old or newer. " +
+                                        "Defaults to 365 when omitted; stay generous unless " +
+                                        "the user names a time range.",
                                         1,
                                         3650)
                                 },
@@ -77,7 +81,11 @@ namespace OutlookLocalAIChat.Chat
                             "Load the bounded plain-text bodies of messages returned by " +
                             "search_mailbox, the selected email, or the user-approved " +
                             "ten-message working set. At most ten unique message bodies " +
-                            "can be loaded in one request.",
+                            "can be loaded in one request. Spreadsheet attachments are " +
+                            "included as extracted text. Supported image attachments are " +
+                            "delivered to vision-capable models as image input right " +
+                            "after this tool result, so call this tool when the user " +
+                            "asks about an image in a message.",
                         parameters = ObjectSchema(
                             new Dictionary<string, object>
                             {

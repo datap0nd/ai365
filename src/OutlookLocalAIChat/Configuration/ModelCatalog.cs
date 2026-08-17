@@ -46,6 +46,23 @@ namespace OutlookLocalAIChat.Configuration
 
     public static class ModelCatalog
     {
+        private static readonly string[] VisionNameTokens =
+        {
+            "vl",
+            "vision",
+            "llava",
+            "pixtral",
+            "minicpm-v",
+            "internvl",
+            "moondream",
+            "smolvlm",
+            "multimodal",
+            "gemma-3",
+            "gemma3",
+            "gemma-4",
+            "gemma4"
+        };
+
         private static readonly ModelGuideEntry[] MasterList =
         {
             new ModelGuideEntry(
@@ -55,7 +72,7 @@ namespace OutlookLocalAIChat.Configuration
                 "Medium",
                 "Very good",
                 true,
-                "Only listed model that receives email images through MailAI vision input. Best for screenshots, scans, and inline photos."),
+                "Preferred vision model. Receives email images through MailAI vision input. Best for screenshots, scans, and inline photos."),
             new ModelGuideEntry(
                 "qwen3.6-35b-a3b",
                 new[] { "qwen", "35", "a3b" },
@@ -75,19 +92,21 @@ namespace OutlookLocalAIChat.Configuration
             new ModelGuideEntry(
                 "gemma-4-31b-it",
                 new[] { "gemma", "31" },
-                "Strong Gemma drafting model",
+                "Multimodal Gemma drafting model",
                 "Medium",
                 "Very good",
-                false,
-                "Higher-quality Gemma option for longer answers and careful drafting."),
+                true,
+                "Higher-quality Gemma option for longer answers and careful drafting. " +
+                "Reads email images when the server exposes Gemma's vision input."),
             new ModelGuideEntry(
                 "gemma-4-26b-a4b-it",
                 new[] { "gemma", "26", "a4b" },
-                "Fast Gemma for quick asks",
+                "Fast multimodal Gemma for quick asks",
                 "Fast",
                 "Good",
-                false,
-                "Lightweight Gemma route for quick mailbox questions and spreadsheet attachments."),
+                true,
+                "Lightweight Gemma route for quick mailbox questions and spreadsheet attachments. " +
+                "Reads email images when the server exposes Gemma's vision input."),
             new ModelGuideEntry(
                 "gpt-oss-20b",
                 new[] { "gpt", "oss", "20" },
@@ -146,14 +165,17 @@ namespace OutlookLocalAIChat.Configuration
                 return false;
             }
 
-            if (normalized.IndexOf("vl", StringComparison.Ordinal) >= 0)
+            foreach (var token in VisionNameTokens)
             {
-                return true;
+                if (normalized.IndexOf(
+                        token,
+                        StringComparison.Ordinal) >= 0)
+                {
+                    return true;
+                }
             }
 
-            return normalized.IndexOf(
-                "vision",
-                StringComparison.Ordinal) >= 0;
+            return false;
         }
 
         public static ModelGuideEntry Resolve(string model)
@@ -196,7 +218,10 @@ namespace OutlookLocalAIChat.Configuration
             if (profile == null)
             {
                 return "Custom model. It must support OpenAI-compatible chat tool calls. " +
-                    "Only vision models can interpret email images; spreadsheets are sent as extracted text for any model.";
+                    (IsVisionCapable(value)
+                        ? "Its name looks vision-capable, so email images are sent as image input."
+                        : "Its name does not look vision-capable, so email images stay filename-only.") +
+                    " Spreadsheets are sent as extracted text for any model.";
             }
 
             return profile.ListLabel;

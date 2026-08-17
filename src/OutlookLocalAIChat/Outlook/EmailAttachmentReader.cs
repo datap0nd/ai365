@@ -27,9 +27,13 @@ namespace OutlookLocalAIChat.Outlook
             Text = TextBoundary.PlainText(
                 text ?? string.Empty,
                 EmailAttachmentReader.MaxCharactersPerAttachment);
-            ImageDataUrl = TextBoundary.SingleLine(
-                imageDataUrl ?? string.Empty,
-                700000);
+            // A truncated data URL is corrupt base64, so an oversized
+            // image is dropped rather than bounded.
+            var boundedDataUrl = (imageDataUrl ?? string.Empty).Trim();
+            ImageDataUrl = boundedDataUrl.Length <=
+                EmailAttachmentReader.MaxImageDataUrlCharacters
+                    ? boundedDataUrl
+                    : string.Empty;
         }
 
         public string FileName { get; }
@@ -47,6 +51,7 @@ namespace OutlookLocalAIChat.Outlook
         public const int MaxBytesPerAttachment = 2 * 1024 * 1024;
         public const int MaxCharactersPerAttachment = 8000;
         public const int MaxTotalCharacters = 16000;
+        public const int MaxImageDataUrlCharacters = 700000;
         private const int MaxImageBytesForBase64 = 512 * 1024;
 
         private static readonly HashSet<string> ImageExtensions =

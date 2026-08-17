@@ -51,11 +51,19 @@ distribution.
 
 MailAI does not ship with a preset model list or a preferred default. After you
 enter an endpoint and API key, use **Refresh models** in Settings to populate the
-dropdown from `GET /v1/models`. You can also type any model ID manually.
+dropdown from `GET /v1/models`. You can also type any model ID manually. Every
+dropdown entry is tagged **Vision** (reads email images) or **Text**
+(filename-only), and the sidebar header shows the same tag for the saved model.
 
-For email **images**, use a vision model whose ID contains `vl` (for example
-`qwen3-vl-30b`). MailAI loads image attachments automatically and sends them as
-multimodal input. Non-vision models get spreadsheet text and image metadata only.
+For email **images**, pick a model tagged **Vision**. Vision capability is
+detected from the model ID: `vl` or `vision` in the name (for example
+`qwen3-vl-30b`), multimodal Gemma generations (`gemma3`/`gemma-4` and later),
+and common vision families such as LLaVA, Pixtral, MiniCPM-V, InternVL,
+Moondream, and SmolVLM. MailAI loads image attachments automatically and sends
+them as multimodal input, capped at eight images per request. Multimodal Gemma
+requires the server to load its vision projector; if the server rejects image
+input, use a `vl` model instead. Text-only models get spreadsheet text and
+image metadata only, and the chat will say so if you ask about an image.
 Optional: enable **Auto-switch to vision for images** to temporarily use a
 discovered vision model while keeping your everyday text model saved. Save after
 **Refresh models** so auto-switch knows which vision models are available. Gauss

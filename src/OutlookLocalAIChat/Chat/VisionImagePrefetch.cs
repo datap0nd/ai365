@@ -33,6 +33,7 @@ namespace OutlookLocalAIChat.Chat
                 return false;
             }
 
+            var arguments = BuildArguments(handles);
             var result = mailboxTools.Execute(
                 new ChatToolCall
                 {
@@ -41,7 +42,7 @@ namespace OutlookLocalAIChat.Chat
                     function = new ChatToolCallFunction
                     {
                         name = MailboxToolCatalog.ReadMessages,
-                        arguments = BuildArguments(handles)
+                        arguments = arguments
                     }
                 });
             if (result.VisionImages == null ||
@@ -63,7 +64,7 @@ namespace OutlookLocalAIChat.Chat
                         function = new ChatToolCallFunction
                         {
                             name = MailboxToolCatalog.ReadMessages,
-                            arguments = BuildArguments(handles)
+                            arguments = arguments
                         }
                     }
                 }

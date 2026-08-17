@@ -368,8 +368,75 @@ namespace OutlookLocalAIChat.UI
             _model.AutoCompleteSource = AutoCompleteSource.ListItems;
             _model.MaxDropDownItems = 12;
             _model.AccessibleName = "AI model";
+            _model.AccessibleDescription =
+                "Each list entry is tagged Vision when the model can read " +
+                "email images, or Text when it cannot.";
+            _model.DrawMode = DrawMode.OwnerDrawFixed;
+            _model.ItemHeight = Math.Max(
+                _model.ItemHeight,
+                _model.Font.Height + 6);
+            _model.DrawItem += ModelDrawItem;
             _model.TextChanged +=
                 (sender, args) => UpdateModelGuidance();
+        }
+
+        private void ModelDrawItem(
+            object sender,
+            DrawItemEventArgs eventArgs)
+        {
+            eventArgs.DrawBackground();
+            if (eventArgs.Index < 0)
+            {
+                eventArgs.DrawFocusRectangle();
+                return;
+            }
+
+            var modelId = Convert.ToString(
+                _model.Items[eventArgs.Index]) ?? string.Empty;
+            var isVision = ModelCatalog.IsVisionCapable(modelId);
+            var tag = isVision ? "Vision" : "Text";
+            var selected =
+                (eventArgs.State & DrawItemState.Selected) ==
+                DrawItemState.Selected;
+            var bounds = eventArgs.Bounds;
+            var tagWidth = TextRenderer.MeasureText(
+                eventArgs.Graphics,
+                tag,
+                eventArgs.Font).Width + 8;
+            var idBounds = new Rectangle(
+                bounds.Left + 2,
+                bounds.Top,
+                Math.Max(16, bounds.Width - tagWidth - 8),
+                bounds.Height);
+            var tagBounds = new Rectangle(
+                bounds.Right - tagWidth - 4,
+                bounds.Top,
+                tagWidth,
+                bounds.Height);
+            TextRenderer.DrawText(
+                eventArgs.Graphics,
+                modelId,
+                eventArgs.Font,
+                idBounds,
+                selected
+                    ? SystemColors.HighlightText
+                    : SystemColors.WindowText,
+                TextFormatFlags.Left |
+                TextFormatFlags.VerticalCenter |
+                TextFormatFlags.EndEllipsis |
+                TextFormatFlags.NoPrefix);
+            TextRenderer.DrawText(
+                eventArgs.Graphics,
+                tag,
+                eventArgs.Font,
+                tagBounds,
+                selected
+                    ? SystemColors.HighlightText
+                    : (isVision ? SuccessText : SecondaryText),
+                TextFormatFlags.Right |
+                TextFormatFlags.VerticalCenter |
+                TextFormatFlags.NoPrefix);
+            eventArgs.DrawFocusRectangle();
         }
 
         private Control BuildButtons()
@@ -930,11 +997,16 @@ namespace OutlookLocalAIChat.UI
             {
                 _modelGuidance.Text =
                     "Use Refresh models, then choose a model that supports tool calls. " +
-                    "Use a vision model (name contains vl) for email images.";
+                    "Entries tagged Vision can read email images; Text entries cannot.";
                 return;
             }
 
-            _modelGuidance.Text =
+            var capability = ModelCatalog.IsDisallowedModel(text)
+                ? string.Empty
+                : (ModelCatalog.IsVisionCapable(text)
+                    ? "Vision-capable: reads email image attachments. "
+                    : "Text-only: email images stay filename-only. ");
+            _modelGuidance.Text = capability +
                 ModelSelectionPolicy.DescriptionFor(text);
         }
 

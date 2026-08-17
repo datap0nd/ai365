@@ -45,6 +45,12 @@ namespace GuardrailTests
                     "Vision models receive multimodal image follow-up",
                     VisionModelsReceiveMultimodalFollowUp);
                 Run(
+                    "System prompt states image capability",
+                    SystemPromptStatesImageCapability);
+                Run(
+                    "Vision image limits are enforced",
+                    VisionImageLimitsAreEnforced);
+                Run(
                     "Model catalog describes vision capability",
                     ModelCatalogDescribesVisionCapability);
                 Run("HTTPS endpoint is accepted", HttpsEndpointIsAccepted);
@@ -364,7 +370,9 @@ namespace GuardrailTests
                 probe.tools.Count == 1 &&
                 probe.tools[0].function.name ==
                 MailboxToolCatalog.SearchMailbox &&
-                probe.max_tokens == 1 &&
+                probe.max_tokens.HasValue &&
+                probe.max_tokens.Value >= 64 &&
+                probe.max_tokens.Value <= 256 &&
                 json.Contains("\"tool_choice\"") &&
                 json.Contains("search_mailbox") &&
                 !json.Contains("read_messages") &&
@@ -1589,7 +1597,13 @@ namespace GuardrailTests
                 ModelCatalog.IsVisionCapable("qwen3-vl-30b") &&
                 ModelCatalog.IsVisionCapable("Qwen3-VL-30B-Instruct") &&
                 ModelCatalog.IsVisionCapable("my-vision-model") &&
+                ModelCatalog.IsVisionCapable("gemma-4-31b-it") &&
+                ModelCatalog.IsVisionCapable("gemma-4-26b-a4b-it") &&
+                ModelCatalog.IsVisionCapable("gemma3-27b-it") &&
+                ModelCatalog.IsVisionCapable("llava-1.6-13b") &&
+                ModelCatalog.IsVisionCapable("MiniCPM-V-2_6") &&
                 !ModelCatalog.IsVisionCapable("gpt-oss-20b") &&
+                !ModelCatalog.IsVisionCapable("qwen3.6-35b-a3b") &&
                 !ModelCatalog.IsVisionCapable("text-embedding-vl"),
                 "Vision capability detection is too narrow or too broad.");
         }
@@ -1665,6 +1679,16 @@ namespace GuardrailTests
                 ModelCatalog.FindBestVisionModel(discovered) ==
                     "qwen3-vl-30b",
                 "The best vision model was not selected from the saved list.");
+            Assert(
+                ModelCatalog.FindBestVisionModel(
+                    new[] { "gemma-4-31b-it", "qwen3-vl-30b" }) ==
+                    "qwen3-vl-30b",
+                "The dedicated vision model should be preferred over multimodal Gemma.");
+            Assert(
+                ModelCatalog.FindBestVisionModel(
+                    new[] { "gpt-oss-20b", "gemma-4-31b-it" }) ==
+                    "gemma-4-31b-it",
+                "Multimodal Gemma should be used when no dedicated vision model exists.");
 
             var settings = new AppSettings
             {
@@ -1826,10 +1850,137 @@ namespace GuardrailTests
             }
         }
 
+        private static void SystemPromptStatesImageCapability()
+        {
+            var snapshot = new MessageSnapshot(
+                "entry",
+                "store",
+                "Invoice",
+                "Sender",
+                "Recipient",
+                DateTime.UtcNow,
+                "Body",
+                new[] { "scan.png" });
+
+            var textRequest = ChatRequestFactory.Create(
+                "gpt-oss-20b",
+                snapshot,
+                new List<ChatTurn>(),
+                "Summarize this image.");
+            var textSystem = MessageContent(textRequest.messages[0]);
+            Assert(
+                textSystem.Contains("text-only") &&
+                textSystem.Contains("cannot view images") &&
+                textSystem.Contains("Today's date is"),
+                "Text-only models are not told about unseen images.");
+
+            var visionRequest = ChatRequestFactory.Create(
+                "qwen3-vl-30b",
+                snapshot,
+                new List<ChatTurn>(),
+                "Summarize this image.");
+            var visionSystem = MessageContent(visionRequest.messages[0]);
+            Assert(
+                visionSystem.Contains("vision-capable model") &&
+                visionSystem.Contains("attachment filename"),
+                "Vision models are not instructed to use image input.");
+
+            var plainRequest = ChatRequestFactory.Create(
+                "gpt-oss-20b",
+                new MessageSnapshot(
+                    "entry",
+                    "store",
+                    "Subject",
+                    "Sender",
+                    "Recipient",
+                    DateTime.UtcNow,
+                    "Body"),
+                new List<ChatTurn>(),
+                "Hello.");
+            Assert(
+                !MessageContent(plainRequest.messages[0])
+                    .Contains("text-only"),
+                "The image warning should appear only when images are in context.");
+        }
+
+        private static void VisionImageLimitsAreEnforced()
+        {
+            var images = new List<VisionImagePayload>();
+            for (var index = 0; index < 12; index++)
+            {
+                images.Add(new VisionImagePayload(
+                    "img" + index + ".png",
+                    "data:image/png;base64,AAA" + index));
+            }
+
+            images.Add(new VisionImagePayload(
+                "huge.png",
+                "data:image/png;base64," + new string('A', 700001)));
+
+            var request = ChatRequestFactory.Create(
+                "qwen3-vl-30b",
+                null,
+                new List<ChatTurn>(),
+                "Describe the images.");
+            ChatRequestFactory.AppendToolExchange(
+                request,
+                new ChatCompletionResponseMessage
+                {
+                    role = "assistant",
+                    content = string.Empty,
+                    tool_calls = new List<ChatToolCall>
+                    {
+                        MailboxCall(
+                            "read-many",
+                            MailboxToolCatalog.ReadMessages,
+                            "{\"handles\":[\"selected\"]}")
+                    }
+                },
+                new List<MailboxToolResult>
+                {
+                    new MailboxToolResult(
+                        "read-many",
+                        "{}",
+                        "loaded",
+                        images)
+                },
+                "qwen3-vl-30b");
+            var body = new JavaScriptSerializer
+            {
+                MaxJsonLength = int.MaxValue
+            }.Serialize(request);
+            Assert(
+                CountToken(body, "\"type\":\"image_url\"") == 8,
+                "The per-request image cap was not applied.");
+            Assert(
+                !body.Contains("huge.png"),
+                "An oversized image data URL was not dropped.");
+            Assert(
+                body.Contains("omitted"),
+                "Omitted images are not disclosed to the model.");
+        }
+
+        private static int CountToken(string text, string token)
+        {
+            var count = 0;
+            var index = 0;
+            while ((index = text.IndexOf(
+                token,
+                index,
+                StringComparison.Ordinal)) >= 0)
+            {
+                count++;
+                index += token.Length;
+            }
+
+            return count;
+        }
+
         private static void ModelCatalogDescribesVisionCapability()
         {
             Assert(
                 ModelCatalog.SupportsVision("qwen3-vl-30b") &&
+                ModelCatalog.SupportsVision("gemma-4-31b-it") &&
                 !ModelCatalog.SupportsVision("qwen3.6-35b-a3b") &&
                 ModelCatalog.GuideEntries.Count >= 7,
                 "The model catalog vision flags are incomplete.");
