@@ -18,6 +18,7 @@ using OutlookLocalAIChat.Interop;
 using OutlookLocalAIChat.Outlook;
 using OutlookLocalAIChat.Security;
 using OutlookLocalAIChat.UI;
+using OutlookLocalAIChat.Utilities;
 
 namespace GuardrailTests
 {
@@ -155,6 +156,9 @@ namespace GuardrailTests
                 Run(
                     "Selected subjects hide reply and forward prefixes",
                     SelectedSubjectIsCleaned);
+                Run(
+                    "Self update is official, silent, and restarts Outlook",
+                    SelfUpdateIsOfficialAndBounded);
                 Console.WriteLine("PASS: " + _passed + " guardrail tests");
                 return 0;
             }
@@ -2107,6 +2111,26 @@ namespace GuardrailTests
                 overview.Contains("Refresh models") &&
                 overview.Length < 80,
                 "The model guide overview is incomplete.");
+        }
+
+        private static void SelfUpdateIsOfficialAndBounded()
+        {
+            Assert(
+                SelfUpdater.InstallerUrl.StartsWith(
+                    "https://github.com/datap0nd/outlook-local-ai-chat/releases/",
+                    StringComparison.Ordinal),
+                "The updater must download only the official release installer over HTTPS.");
+
+            var script = SelfUpdater.BuildUpdateScript();
+            Assert(
+                script.Contains("OUTLOOK.EXE") &&
+                script.Contains("if %tries% GEQ 150 exit /b 1") &&
+                script.Contains(
+                    "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART") &&
+                script.Contains("start \"\" outlook.exe") &&
+                script.Contains("%~1"),
+                "The update script must wait for Outlook to close, install " +
+                "silently with a bounded wait, and restart Outlook.");
         }
 
         private static void Assert(bool condition, string message)

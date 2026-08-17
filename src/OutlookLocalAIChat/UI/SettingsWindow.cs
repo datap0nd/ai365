@@ -35,6 +35,9 @@ namespace OutlookLocalAIChat.UI
             MakeButton("Refresh models", false, 120);
         private readonly Button _analyzeTone =
             MakeButton("Analyze 15 sent emails", false, 176);
+        private readonly Button _updateButton =
+            MakeButton("Update MailAI", false, 128);
+        private readonly Label _updateStatus = new Label();
         private readonly Button _save =
             MakeButton("Save", true, 96);
         private readonly OpenAiCompatibleClient _client =
@@ -43,9 +46,11 @@ namespace OutlookLocalAIChat.UI
         private readonly object _outlookApplication;
         private CancellationTokenSource _checkCancellation;
         private CancellationTokenSource _toneCancellation;
+        private CancellationTokenSource _updateCancellation;
         private bool _checking;
         private bool _analyzingTone;
         private bool _refreshingModels;
+        private bool _updating;
 
         public SettingsWindow(
             SettingsStore store,
@@ -137,8 +142,10 @@ namespace OutlookLocalAIChat.UI
         {
             _checkCancellation?.Cancel();
             _toneCancellation?.Cancel();
+            _updateCancellation?.Cancel();
             _checkCancellation?.Dispose();
             _toneCancellation?.Dispose();
+            _updateCancellation?.Dispose();
             _client.Dispose();
             base.OnFormClosed(eventArgs);
         }
@@ -238,7 +245,7 @@ namespace OutlookLocalAIChat.UI
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 ColumnCount = 1,
-                RowCount = 12,
+                RowCount = 14,
                 Padding = new Padding(18, 16, 18, 12),
                 Width = 640
             };
@@ -251,6 +258,8 @@ namespace OutlookLocalAIChat.UI
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -291,8 +300,110 @@ namespace OutlookLocalAIChat.UI
             ConfigureSupportingLabel(_transportWarning);
             _transportWarning.AccessibleRole = AccessibleRole.Alert;
             layout.Controls.Add(_transportWarning, 0, 11);
+
+            _updateButton.Click += UpdateClick;
+            var updateRow = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                Padding = new Padding(0, 14, 0, 0),
+                Margin = new Padding(0)
+            };
+            updateRow.Controls.Add(_updateButton);
+            var versionLabel = SupportingText(
+                "Installed version " +
+                SelfUpdater.InstalledVersion() + ".");
+            versionLabel.Padding = new Padding(8, 8, 0, 0);
+            updateRow.Controls.Add(versionLabel);
+            layout.Controls.Add(updateRow, 0, 12);
+
+            ConfigureSupportingLabel(_updateStatus);
+            _updateStatus.Text =
+                "Update downloads the latest MailAI release, closes Outlook, " +
+                "installs silently, and reopens Outlook.";
+            _updateStatus.AccessibleRole = AccessibleRole.StatusBar;
+            layout.Controls.Add(_updateStatus, 0, 13);
             page.Controls.Add(layout);
             return page;
+        }
+
+        private async void UpdateClick(
+            object sender,
+            EventArgs eventArgs)
+        {
+            if (_updating || _checking || _analyzingTone)
+            {
+                return;
+            }
+
+            _error.Text = string.Empty;
+            if (_outlookApplication == null)
+            {
+                _error.Text =
+                    "[OUTLOOK_NOT_READY] Open MailAI from Outlook before updating.";
+                return;
+            }
+
+            var confirm = MessageBox.Show(
+                this,
+                "MailAI will download the latest version, close Outlook, " +
+                "install the update silently, and reopen Outlook. Open " +
+                "items may ask to be saved while Outlook closes. Continue?",
+                "Update MailAI",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+            if (confirm != DialogResult.Yes)
+            {
+                return;
+            }
+
+            _updating = true;
+            SetCommonControlsEnabled(false);
+            _updateButton.Enabled = false;
+            _updateCancellation = new CancellationTokenSource();
+            try
+            {
+                _updateStatus.Text =
+                    "Downloading the latest installer (up to five minutes)...";
+                var installerPath =
+                    await SelfUpdater.DownloadInstallerAsync(
+                        _updateCancellation.Token);
+                _updateStatus.ForeColor = SuccessText;
+                _updateStatus.Text =
+                    "Update downloaded. Outlook will close and reopen with " +
+                    "the new version.";
+                SelfUpdater.LaunchUpdateAndQuitOutlook(
+                    _outlookApplication,
+                    installerPath);
+                _updating = false;
+                Close();
+            }
+            catch (OperationCanceledException)
+            {
+                _updating = false;
+                _updateStatus.ForeColor = SecondaryText;
+                _updateStatus.Text =
+                    "The update was cancelled. MailAI is unchanged.";
+                SetCommonControlsEnabled(true);
+            }
+            catch (Exception exception)
+            {
+                _updating = false;
+                _updateStatus.ForeColor = SecondaryText;
+                _updateStatus.Text =
+                    "The update did not start. MailAI is unchanged.";
+                _error.Text = DiagnosticDetails.ForException(
+                    exception,
+                    "UPDATE_FAILED");
+                SetCommonControlsEnabled(true);
+            }
+            finally
+            {
+                _updateCancellation?.Dispose();
+                _updateCancellation = null;
+            }
         }
 
         private TabPage BuildWritingStylePage()
@@ -951,6 +1062,7 @@ namespace OutlookLocalAIChat.UI
                 !_checking &&
                 !_refreshingModels;
             _analyzeTone.Enabled = enabled || _analyzingTone;
+            _updateButton.Enabled = enabled && !_updating;
         }
 
         private void SaveClick(object sender, EventArgs eventArgs)
@@ -976,7 +1088,7 @@ namespace OutlookLocalAIChat.UI
             object sender,
             FormClosingEventArgs eventArgs)
         {
-            if (!_checking && !_analyzingTone)
+            if (!_checking && !_analyzingTone && !_updating)
             {
                 return;
             }
@@ -984,6 +1096,7 @@ namespace OutlookLocalAIChat.UI
             eventArgs.Cancel = true;
             _checkCancellation?.Cancel();
             _toneCancellation?.Cancel();
+            _updateCancellation?.Cancel();
             _error.Text =
                 "Cancelling the active settings operation. Close again when it finishes.";
         }

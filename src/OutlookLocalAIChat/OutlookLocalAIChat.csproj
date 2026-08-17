@@ -91,6 +91,7 @@
     <Compile Include="UI\SubjectDisplay.cs" />
     <Compile Include="Utilities\DiagnosticDetails.cs" />
     <Compile Include="Utilities\Log.cs" />
+    <Compile Include="Utilities\SelfUpdater.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

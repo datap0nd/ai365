@@ -30,6 +30,10 @@ an external Outlook MCP server.
 9. Optional: open **Writing style**, click **Analyze 15 sent emails**, review
    the generated drafting instructions, edit them, and enable the profile.
 
+To update later, open **Settings** and click **Update MailAI**. After a
+confirmation it downloads the latest release installer, closes Outlook,
+installs silently for your Windows account, and reopens Outlook.
+
 Examples:
 
 ```text
