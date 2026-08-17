@@ -1181,6 +1181,7 @@ namespace GuardrailTests
                 .ToArray();
             var expected = new[]
             {
+                "max_tokens",
                 "messages",
                 "model",
                 "stream",
