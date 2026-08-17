@@ -25,7 +25,9 @@ namespace OutlookLocalAIChat.Chat
 
         public List<ChatToolDefinition> tools { get; set; }
 
-        public string tool_choice { get; set; }
+        public object tool_choice { get; set; }
+
+        public int? max_tokens { get; set; }
     }
 
     public sealed class ChatCompletionInputMessage

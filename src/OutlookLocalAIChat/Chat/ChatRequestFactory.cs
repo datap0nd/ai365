@@ -117,6 +117,55 @@ namespace OutlookLocalAIChat.Chat
             };
         }
 
+        public static ChatCompletionRequest CreateEndpointCheck(
+            string model)
+        {
+            var searchTool = MailboxToolCatalog
+                .CreateDefinitions(false)
+                .First(tool =>
+                    tool.function.name ==
+                    MailboxToolCatalog.SearchMailbox);
+            return new ChatCompletionRequest
+            {
+                model = TextBoundary.PlainText(model, 200),
+                messages = new List<object>
+                {
+                    new ChatCompletionInputMessage
+                    {
+                        role = "system",
+                        content =
+                            "Configuration check only. Respond with one " +
+                            "search_mailbox tool call and no other output."
+                    },
+                    new ChatCompletionInputMessage
+                    {
+                        role = "user",
+                        content =
+                            "Call search_mailbox with query " +
+                            "\"configuration-check\", folder \"inbox\", " +
+                            "days_back 1, and max_results 1."
+                    }
+                },
+                stream = false,
+                tools = new List<ChatToolDefinition> { searchTool },
+                tool_choice = new Dictionary<string, object>
+                {
+                    { "type", "function" },
+                    {
+                        "function",
+                        new Dictionary<string, object>
+                        {
+                            {
+                                "name",
+                                MailboxToolCatalog.SearchMailbox
+                            }
+                        }
+                    }
+                },
+                max_tokens = 1
+            };
+        }
+
         private static string BuildSystemBoundary(
             bool allowDraftCreate,
             bool allowDraftUpdate,

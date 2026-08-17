@@ -18,7 +18,7 @@ namespace OutlookLocalAIChat.Configuration
             var value = (model ?? string.Empty).Trim();
             if (value.Length == 0)
             {
-                return "Choose a model from your endpoint after checking it, or enter one manually.";
+                return "Use Refresh models to load choices from your endpoint, or enter a model manually.";
             }
 
             return "The model must support OpenAI-compatible chat tool calls.";

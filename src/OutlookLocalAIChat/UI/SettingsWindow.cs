@@ -14,6 +14,9 @@ namespace OutlookLocalAIChat.UI
 {
     public sealed class SettingsWindow : Form
     {
+        private const int ModelDiscoveryTimeoutSeconds = 15;
+        private const int EndpointProbeTimeoutSeconds = 90;
+
         private readonly TextBox _endpoint = new TextBox();
         private readonly ComboBox _model = new ComboBox();
         private readonly TextBox _apiKey = new TextBox();
@@ -27,6 +30,8 @@ namespace OutlookLocalAIChat.UI
         private readonly Label _error = new Label();
         private readonly Button _checkEndpoint =
             MakeButton("Check endpoint", false, 128);
+        private readonly Button _refreshModels =
+            MakeButton("Refresh models", false, 120);
         private readonly Button _analyzeTone =
             MakeButton("Analyze 15 sent emails", false, 176);
         private readonly Button _save =
@@ -39,6 +44,7 @@ namespace OutlookLocalAIChat.UI
         private CancellationTokenSource _toneCancellation;
         private bool _checking;
         private bool _analyzingTone;
+        private bool _refreshingModels;
 
         public SettingsWindow(
             SettingsStore store,
@@ -250,11 +256,13 @@ namespace OutlookLocalAIChat.UI
             layout.Controls.Add(hint, 0, 9);
             ConfigureSupportingLabel(_testStatus);
             _testStatus.Text =
-                "Check the endpoint to verify authentication, model discovery, and tool-call compatibility.";
+                "Use Refresh models to load the model list from your endpoint. " +
+                "Check endpoint also verifies tool-call compatibility.";
             _testStatus.AccessibleRole = AccessibleRole.StatusBar;
             layout.Controls.Add(_testStatus, 0, 10);
 
             _checkEndpoint.Click += CheckEndpointClick;
+            _refreshModels.Click += RefreshModelsClick;
             var checkRow = new FlowLayoutPanel
             {
                 Dock = DockStyle.Fill,
@@ -262,6 +270,7 @@ namespace OutlookLocalAIChat.UI
                 Padding = new Padding(0, 8, 0, 0)
             };
             checkRow.Controls.Add(_checkEndpoint);
+            checkRow.Controls.Add(_refreshModels);
             layout.Controls.Add(checkRow, 0, 11);
             page.Controls.Add(layout);
             return page;
@@ -576,8 +585,7 @@ namespace OutlookLocalAIChat.UI
             }
 
             SetChecking(true);
-            _checkCancellation = new CancellationTokenSource(
-                TimeSpan.FromSeconds(45));
+            _checkCancellation = new CancellationTokenSource();
             try
             {
                 IReadOnlyList<string> models = null;
@@ -585,11 +593,34 @@ namespace OutlookLocalAIChat.UI
                 try
                 {
                     _testStatus.Text =
-                        "Checking authentication and available models...";
-                    models = await _client.GetModelsAsync(
-                        settings,
-                        _checkCancellation.Token);
+                        "Checking authentication and available models " +
+                        "(up to " + ModelDiscoveryTimeoutSeconds +
+                        " seconds)...";
+                    using (var modelsTimeout =
+                        CancellationTokenSource.CreateLinkedTokenSource(
+                            _checkCancellation.Token))
+                    {
+                        modelsTimeout.CancelAfter(
+                            TimeSpan.FromSeconds(
+                                ModelDiscoveryTimeoutSeconds));
+                        models = await _client.GetModelsAsync(
+                            settings,
+                            modelsTimeout.Token);
+                    }
+
                     AddDiscoveredModels(models);
+                }
+                catch (OperationCanceledException)
+                {
+                    if (_checkCancellation.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+
+                    discoveryNote =
+                        " Model discovery timed out after " +
+                        ModelDiscoveryTimeoutSeconds +
+                        " seconds, so the entered model was tested directly.";
                 }
                 catch (AiEndpointException exception)
                 {
@@ -603,32 +634,37 @@ namespace OutlookLocalAIChat.UI
                 {
                     throw new AiEndpointException(
                         "MODEL_REQUIRED",
-                        "Choose a model or run Check endpoint after model discovery returns at least one generative model.");
+                        "Choose a model or use Refresh models after model discovery returns at least one generative model.");
                 }
 
                 _testStatus.Text =
-                    "Testing OpenAI-compatible mailbox tool calls...";
-                var probe = ChatRequestFactory.Create(
-                    settings.Model,
-                    null,
-                    new List<ChatTurn>(),
-                    "Configuration check only. Call search_mailbox with query " +
-                    "\"configuration-check\", folder \"inbox\", days_back 1, " +
-                    "and max_results 1 before answering.");
-                var response = await _client.CompleteAsync(
-                    settings,
-                    probe,
-                    _checkCancellation.Token);
-                var validCall = response.tool_calls != null &&
-                    response.tool_calls.Any(call =>
-                        call?.function != null &&
-                        MailboxToolCatalog.IsApproved(
-                            call.function.name));
-                if (!validCall)
+                    "Testing mailbox tool calls with " + settings.Model +
+                    " (up to " + EndpointProbeTimeoutSeconds +
+                    " seconds)...";
+                using (var probeTimeout =
+                    CancellationTokenSource.CreateLinkedTokenSource(
+                        _checkCancellation.Token))
                 {
-                    throw new AiEndpointException(
-                        "MODEL_TOOL_CALL_UNSUPPORTED",
-                        "The endpoint answered, but this model did not return a compatible mailbox tool call.");
+                    probeTimeout.CancelAfter(
+                        TimeSpan.FromSeconds(
+                            EndpointProbeTimeoutSeconds));
+                    var probe = ChatRequestFactory.CreateEndpointCheck(
+                        settings.Model);
+                    var response = await _client.CompleteAsync(
+                        settings,
+                        probe,
+                        probeTimeout.Token);
+                    var validCall = response.tool_calls != null &&
+                        response.tool_calls.Any(call =>
+                            call?.function != null &&
+                            MailboxToolCatalog.IsApproved(
+                                call.function.name));
+                    if (!validCall)
+                    {
+                        throw new AiEndpointException(
+                            "MODEL_TOOL_CALL_UNSUPPORTED",
+                            "The endpoint answered, but this model did not return a compatible mailbox tool call.");
+                    }
                 }
 
                 _testStatus.ForeColor = SuccessText;
@@ -639,7 +675,12 @@ namespace OutlookLocalAIChat.UI
             catch (OperationCanceledException)
             {
                 _error.Text =
-                    "[ENDPOINT_CHECK_CANCELLED] The endpoint check was cancelled or timed out after 45 seconds.";
+                    "[ENDPOINT_CHECK_CANCELLED] The endpoint check was cancelled or timed out. " +
+                    "Model discovery allows up to " +
+                    ModelDiscoveryTimeoutSeconds +
+                    " seconds. The tool-call probe allows up to " +
+                    EndpointProbeTimeoutSeconds +
+                    " seconds.";
             }
             catch (Exception exception)
             {
@@ -652,6 +693,68 @@ namespace OutlookLocalAIChat.UI
                 _checkCancellation?.Dispose();
                 _checkCancellation = null;
                 SetChecking(false);
+            }
+        }
+
+        private async void RefreshModelsClick(
+            object sender,
+            EventArgs eventArgs)
+        {
+            if (_refreshingModels || _checking)
+            {
+                return;
+            }
+
+            _error.Text = string.Empty;
+            var settings = ReadFormSettings();
+            if (!settings.HasConnectionSettings)
+            {
+                _error.Text =
+                    "[CONFIGURATION_INCOMPLETE] Enter a valid endpoint and API key first.";
+                return;
+            }
+
+            _refreshingModels = true;
+            _refreshModels.Enabled = false;
+            try
+            {
+                _testStatus.ForeColor = SecondaryText;
+                _testStatus.Text =
+                    "Loading models from the endpoint (up to " +
+                    ModelDiscoveryTimeoutSeconds +
+                    " seconds)...";
+                using (var cancellation = new CancellationTokenSource(
+                    TimeSpan.FromSeconds(ModelDiscoveryTimeoutSeconds)))
+                {
+                    var models = await _client.GetModelsAsync(
+                        settings,
+                        cancellation.Token);
+                    AddDiscoveredModels(models);
+                    _testStatus.ForeColor = SuccessText;
+                    _testStatus.Text =
+                        "Loaded " +
+                        models.Count.ToString() +
+                        " generative models into the model list.";
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                _error.Text =
+                    "[MODEL_REFRESH_TIMEOUT] Model discovery timed out after " +
+                    ModelDiscoveryTimeoutSeconds +
+                    " seconds.";
+            }
+            catch (Exception exception)
+            {
+                _error.Text = DiagnosticDetails.ForException(
+                    exception,
+                    "MODEL_REFRESH_FAILED");
+            }
+            finally
+            {
+                _refreshingModels = false;
+                _refreshModels.Enabled =
+                    !_checking && !_analyzingTone;
             }
         }
 
@@ -705,6 +808,10 @@ namespace OutlookLocalAIChat.UI
             _useToneProfile.Enabled = enabled;
             _toneProfile.Enabled = enabled;
             _checkEndpoint.Enabled = enabled || _checking;
+            _refreshModels.Enabled =
+                (enabled || _refreshingModels) &&
+                !_checking &&
+                !_refreshingModels;
             _analyzeTone.Enabled = enabled || _analyzingTone;
         }
 

@@ -48,6 +48,9 @@ namespace GuardrailTests
                     "Compatible endpoint model discovery is verified",
                     ModelDiscoveryUsesCompatibleContract);
                 Run(
+                    "Endpoint check uses a lightweight tool probe",
+                    EndpointCheckUsesLightweightProbe);
+                Run(
                     "Compatible tool calls tolerate a missing call id",
                     ToolCallResponseIsNormalized);
                 Run("Text boundary removes controls and truncates", TextIsBounded);
@@ -331,6 +334,24 @@ namespace GuardrailTests
             }
         }
 
+        private static void EndpointCheckUsesLightweightProbe()
+        {
+            var probe = ChatRequestFactory.CreateEndpointCheck(
+                "local-model");
+            var json = new JavaScriptSerializer()
+                .Serialize(probe);
+            Assert(
+                probe.tools.Count == 1 &&
+                probe.tools[0].function.name ==
+                MailboxToolCatalog.SearchMailbox &&
+                probe.max_tokens == 1 &&
+                json.Contains("\"tool_choice\"") &&
+                json.Contains("search_mailbox") &&
+                !json.Contains("read_messages") &&
+                !json.Contains("read_thread"),
+                "The endpoint check probe was not minimized.");
+        }
+
         private static void ToolCallResponseIsNormalized()
         {
             const string response =
@@ -361,7 +382,7 @@ namespace GuardrailTests
                     server.RequestLine);
                 Assert(
                     server.Body.Contains(
-                        "\"model\":\"qwen3.5-35b-a3b\"") &&
+                        "\"model\":\"local-model\"") &&
                     server.Body.Contains("\"stream\":false") &&
                     server.Body.Contains("\"tools\""),
                     "The completion request contract is incomplete.");
