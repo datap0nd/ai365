@@ -71,6 +71,9 @@ namespace GuardrailTests
                     "CID-font PDF text decodes through ToUnicode maps",
                     PdfCidFontTextIsDecoded);
                 Run(
+                    "Legacy Office, RTF, and unknown attachments are handled",
+                    LegacyAndUnknownAttachmentsAreHandled);
+                Run(
                     "Model catalog describes vision capability",
                     ModelCatalogDescribesVisionCapability);
                 Run("HTTPS endpoint is accepted", HttpsEndpointIsAccepted);
@@ -319,7 +322,7 @@ namespace GuardrailTests
                 var reference =
                     MessageContent(request.messages[1]);
                 Assert(
-                    reference.Contains("Supported attachments (1): budget.csv"),
+                    reference.Contains("Attachments (1): budget.csv"),
                     "Attachment metadata was not exposed in the context reference.");
 
                 var host = new MailboxToolHost(
@@ -2031,6 +2034,287 @@ namespace GuardrailTests
                     File.Delete(pngPath);
                 }
             }
+        }
+
+        private static void LegacyAndUnknownAttachmentsAreHandled()
+        {
+            var temp = Path.Combine(
+                Path.GetTempPath(),
+                "MetoMail-legacy-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(temp);
+            try
+            {
+                const string pptSentence =
+                    "Roadmap kickoff agenda for the team";
+                const string docSentence =
+                    "Contract renewal terms with the northern supplier";
+                var pptPath = Path.Combine(temp, "deck.ppt");
+                File.WriteAllBytes(
+                    pptPath,
+                    BuildCompoundFile(
+                        "PowerPoint Document",
+                        BuildPptStream(pptSentence)));
+                var docPath = Path.Combine(temp, "notes.doc");
+                var docBytes = BuildCompoundFile(
+                    "WordDocument",
+                    BuildDocStream(docSentence));
+                File.WriteAllBytes(docPath, docBytes);
+                var datPath = Path.Combine(temp, "mystery.dat");
+                File.WriteAllBytes(datPath, docBytes);
+                var rtfPath = Path.Combine(temp, "memo.rtf");
+                File.WriteAllText(
+                    rtfPath,
+                    "{\\rtf1\\ansi{\\fonttbl{\\f0 Calibri;}}" +
+                    "\\f0\\fs22 Meeting notes:\\par Budget " +
+                    "\\b approved\\b0  for the third quarter.}",
+                    Encoding.ASCII);
+                var binPath = Path.Combine(temp, "data.bin");
+                var noise = new byte[256];
+                new Random(7).NextBytes(noise);
+                noise[0] = 0;
+                File.WriteAllBytes(binPath, noise);
+
+                var attachments = new FakeOutlookAttachments();
+                attachments.Add(new FakeOutlookAttachment(
+                    "deck.ppt",
+                    pptPath));
+                attachments.Add(new FakeOutlookAttachment(
+                    "notes.doc",
+                    docPath));
+                attachments.Add(new FakeOutlookAttachment(
+                    "mystery.dat",
+                    datPath));
+                attachments.Add(new FakeOutlookAttachment(
+                    "memo.rtf",
+                    rtfPath));
+                attachments.Add(new FakeOutlookAttachment(
+                    "data.bin",
+                    binPath));
+                var mail = new FakeSelectedMailItem(
+                    "legacy-entry",
+                    "Old documents")
+                {
+                    Attachments = attachments
+                };
+                var application = new FakeOutlookApplication();
+                application.Session.Register(
+                    "legacy-entry",
+                    "store",
+                    mail);
+                var snapshot = new MessageReader(application)
+                    .CaptureById("legacy-entry", "store");
+                Assert(
+                    snapshot.AttachmentNames.Count == 5,
+                    "All attachments should be listed regardless of type: " +
+                    string.Join(", ", snapshot.AttachmentNames));
+
+                var host = new MailboxToolHost(application, snapshot);
+                var loaded = host.Execute(
+                    MailboxCall(
+                        "read-legacy",
+                        MailboxToolCatalog.ReadMessages,
+                        "{\"handles\":[\"selected\"]}"));
+                Assert(
+                    loaded.Content.Contains(pptSentence),
+                    "Legacy .ppt slide text was not extracted.");
+                Assert(
+                    loaded.Content.Contains(docSentence),
+                    "Legacy .doc text was not extracted twice over: " +
+                    "direct extension failed.");
+                Assert(
+                    loaded.Content.Contains("Meeting notes:") &&
+                    loaded.Content.Contains("approved") &&
+                    !loaded.Content.Contains("Calibri"),
+                    "RTF text was not stripped of control words.");
+                Assert(
+                    loaded.Content.Contains("data.bin") &&
+                    loaded.Content.Contains(
+                        "could not be converted"),
+                    "Unreadable attachments must be visibly noted.");
+            }
+            finally
+            {
+                if (Directory.Exists(temp))
+                {
+                    Directory.Delete(temp, true);
+                }
+            }
+        }
+
+        private static byte[] BuildPptStream(string sentence)
+        {
+            var chars = Encoding.Unicode.GetBytes(sentence);
+            var stream = new MemoryStream();
+            WriteRecordHeader(
+                stream,
+                0x000F,
+                0x03E8,
+                chars.Length + 8);
+            WriteRecordHeader(stream, 0x0000, 0x0FA0, chars.Length);
+            stream.Write(chars, 0, chars.Length);
+            var padded = new byte[Math.Max(
+                4096,
+                (int)stream.Length)];
+            Array.Copy(
+                stream.ToArray(),
+                padded,
+                (int)stream.Length);
+            return padded;
+        }
+
+        private static void WriteRecordHeader(
+            MemoryStream stream,
+            int verInstance,
+            int recordType,
+            int length)
+        {
+            WriteUInt16(stream, verInstance);
+            WriteUInt16(stream, recordType);
+            WriteUInt32(stream, (uint)length);
+        }
+
+        private static byte[] BuildDocStream(string sentence)
+        {
+            var stream = new byte[4096];
+            var text = Encoding.GetEncoding("ISO-8859-1")
+                .GetBytes(sentence);
+            const int fcMin = 0x400;
+            Array.Copy(text, 0, stream, fcMin, text.Length);
+            WriteUInt32At(stream, 0x18, fcMin);
+            WriteUInt32At(stream, 0x1C, (uint)(fcMin + text.Length));
+            return stream;
+        }
+
+        private static byte[] BuildCompoundFile(
+            string streamName,
+            byte[] payload)
+        {
+            const int sectorSize = 512;
+            var dataSectors =
+                (payload.Length + sectorSize - 1) / sectorSize;
+            var file = new byte[
+                512 + 512 + 512 + dataSectors * sectorSize];
+            file[0] = 0xD0;
+            file[1] = 0xCF;
+            file[2] = 0x11;
+            file[3] = 0xE0;
+            file[4] = 0xA1;
+            file[5] = 0xB1;
+            file[6] = 0x1A;
+            file[7] = 0xE1;
+            WriteUInt16At(file, 24, 0x3E);
+            WriteUInt16At(file, 26, 3);
+            WriteUInt16At(file, 28, 0xFFFE);
+            WriteUInt16At(file, 30, 9);
+            WriteUInt16At(file, 32, 6);
+            WriteUInt32At(file, 44, 1);
+            WriteUInt32At(file, 48, 1);
+            WriteUInt32At(file, 56, 4096);
+            WriteUInt32At(file, 60, 0xFFFFFFFE);
+            WriteUInt32At(file, 68, 0xFFFFFFFE);
+            WriteUInt32At(file, 76, 0);
+            for (var index = 1; index < 109; index++)
+            {
+                WriteUInt32At(file, 76 + index * 4, 0xFFFFFFFF);
+            }
+
+            for (var index = 0; index < 128; index++)
+            {
+                WriteUInt32At(file, 512 + index * 4, 0xFFFFFFFF);
+            }
+
+            WriteUInt32At(file, 512, 0xFFFFFFFD);
+            WriteUInt32At(file, 516, 0xFFFFFFFE);
+            for (var index = 0; index < dataSectors; index++)
+            {
+                WriteUInt32At(
+                    file,
+                    512 + (2 + index) * 4,
+                    index == dataSectors - 1
+                        ? 0xFFFFFFFE
+                        : (uint)(3 + index));
+            }
+
+            WriteDirectoryEntry(
+                file,
+                1024,
+                "Root Entry",
+                5,
+                0xFFFFFFFE,
+                0,
+                1);
+            WriteDirectoryEntry(
+                file,
+                1024 + 128,
+                streamName,
+                2,
+                2,
+                (uint)payload.Length,
+                0xFFFFFFFF);
+            Array.Copy(payload, 0, file, 1536, payload.Length);
+            return file;
+        }
+
+        private static void WriteDirectoryEntry(
+            byte[] file,
+            int offset,
+            string name,
+            byte objectType,
+            uint startSector,
+            uint size,
+            uint child)
+        {
+            var encoded = Encoding.Unicode.GetBytes(name);
+            Array.Copy(encoded, 0, file, offset, encoded.Length);
+            WriteUInt16At(
+                file,
+                offset + 64,
+                (ushort)(encoded.Length + 2));
+            file[offset + 66] = objectType;
+            file[offset + 67] = 1;
+            WriteUInt32At(file, offset + 68, 0xFFFFFFFF);
+            WriteUInt32At(file, offset + 72, 0xFFFFFFFF);
+            WriteUInt32At(file, offset + 76, child);
+            WriteUInt32At(file, offset + 116, startSector);
+            WriteUInt32At(file, offset + 120, size);
+        }
+
+        private static void WriteUInt16(
+            MemoryStream stream,
+            int value)
+        {
+            stream.WriteByte((byte)(value & 0xFF));
+            stream.WriteByte((byte)((value >> 8) & 0xFF));
+        }
+
+        private static void WriteUInt32(
+            MemoryStream stream,
+            uint value)
+        {
+            stream.WriteByte((byte)(value & 0xFF));
+            stream.WriteByte((byte)((value >> 8) & 0xFF));
+            stream.WriteByte((byte)((value >> 16) & 0xFF));
+            stream.WriteByte((byte)((value >> 24) & 0xFF));
+        }
+
+        private static void WriteUInt16At(
+            byte[] target,
+            int offset,
+            ushort value)
+        {
+            target[offset] = (byte)(value & 0xFF);
+            target[offset + 1] = (byte)((value >> 8) & 0xFF);
+        }
+
+        private static void WriteUInt32At(
+            byte[] target,
+            int offset,
+            uint value)
+        {
+            target[offset] = (byte)(value & 0xFF);
+            target[offset + 1] = (byte)((value >> 8) & 0xFF);
+            target[offset + 2] = (byte)((value >> 16) & 0xFF);
+            target[offset + 3] = (byte)((value >> 24) & 0xFF);
         }
 
         private static void PdfCidFontTextIsDecoded()

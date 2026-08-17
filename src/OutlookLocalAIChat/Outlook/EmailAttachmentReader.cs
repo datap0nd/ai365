@@ -80,7 +80,8 @@ namespace OutlookLocalAIChat.Outlook
             new HashSet<string>(
                 new[]
                 {
-                    ".pdf", ".pptx", ".docx", ".ppt", ".doc"
+                    ".pdf", ".pptx", ".docx", ".ppt", ".doc",
+                    ".rtf"
                 },
                 StringComparer.OrdinalIgnoreCase);
 
@@ -89,7 +90,7 @@ namespace OutlookLocalAIChat.Outlook
                 new[]
                 {
                     ".txt", ".md", ".log", ".json",
-                    ".xml", ".html", ".htm"
+                    ".xml", ".html", ".htm", ".eml"
                 },
                 StringComparer.OrdinalIgnoreCase);
 
@@ -161,33 +162,44 @@ namespace OutlookLocalAIChat.Outlook
                         }
 
                         var extension = Path.GetExtension(fileName);
-                        // Images pasted into a body sometimes arrive with no
-                        // usable extension; those are saved and sniffed by
-                        // magic bytes instead of being skipped.
-                        var isExtensionless = extension.Length == 0;
-                        if (!IsSupportedExtension(extension) &&
-                            !isExtensionless)
-                        {
-                            continue;
-                        }
-
+                        // Every attachment is saved and attempted;
+                        // unknown extensions are identified by content
+                        // and unreadable ones produce a visible note.
+                        var safeExtension =
+                            System.Text.RegularExpressions.Regex
+                                .IsMatch(
+                                    extension,
+                                    "^\\.[A-Za-z0-9]{1,10}$")
+                                ? extension
+                                : ".bin";
                         tempPath = Path.Combine(
                             Path.GetTempPath(),
                             "MetoMail-" +
                             Guid.NewGuid().ToString("N") +
-                            (isExtensionless ? ".bin" : extension));
+                            safeExtension);
                         outlookAttachment.SaveAsFile(tempPath);
 
                         var fileInfo = new FileInfo(tempPath);
-                        var sizeLimit =
-                            ImageExtensions.Contains(extension) ||
-                            DocumentExtensions.Contains(extension) ||
-                            isExtensionless
-                                ? MaxImageBytesPerAttachment
-                                : MaxBytesPerAttachment;
-                        if (!fileInfo.Exists ||
-                            fileInfo.Length > sizeLimit)
+                        if (!fileInfo.Exists)
                         {
+                            continue;
+                        }
+
+                        var sizeLimit =
+                            ExcelExtensions.Contains(extension) ||
+                            TextExtensions.Contains(extension)
+                                ? MaxBytesPerAttachment
+                                : MaxImageBytesPerAttachment;
+                        if (fileInfo.Length > sizeLimit)
+                        {
+                            results.Add(new EmailAttachmentContent(
+                                fileName,
+                                "unreadable",
+                                "[Attachment: " + fileName + ", " +
+                                fileInfo.Length.ToString() +
+                                " bytes. Too large for MetoMail to " +
+                                "read.]"));
+                            totalCharacters += 80;
                             continue;
                         }
 
@@ -198,6 +210,15 @@ namespace OutlookLocalAIChat.Outlook
                         if (extracted == null ||
                             extracted.Text.Length == 0)
                         {
+                            results.Add(new EmailAttachmentContent(
+                                fileName,
+                                "unreadable",
+                                "[Attachment: " + fileName + ", " +
+                                fileInfo.Length.ToString() +
+                                " bytes. This file type could not " +
+                                "be converted to text or image " +
+                                "input.]"));
+                            totalCharacters += 80;
                             continue;
                         }
 
@@ -293,10 +314,174 @@ namespace OutlookLocalAIChat.Outlook
                     ReadTextFile(path));
             }
 
+            return SniffUnknownContent(path, fileName);
+        }
+
+        // Unknown or missing extensions are identified by content so
+        // every attachment is at least attempted: image magic bytes,
+        // OOXML zip parts, OLE compound streams, then plain text.
+        private static EmailAttachmentContent SniffUnknownContent(
+            string path,
+            string fileName)
+        {
             var sniffedMimeType = SniffImageMimeType(path);
-            return sniffedMimeType != null
-                ? ExtractImage(path, fileName, sniffedMimeType)
-                : null;
+            if (sniffedMimeType != null)
+            {
+                return ExtractImage(path, fileName, sniffedMimeType);
+            }
+
+            var header = ReadHeader(path, 4096);
+            if (header.Length > 3 &&
+                header[0] == (byte)'P' &&
+                header[1] == (byte)'K')
+            {
+                if (ZipContainsEntry(path, "word/document.xml"))
+                {
+                    return ExtractDocument(path, fileName, ".docx");
+                }
+
+                if (ZipContainsEntry(path, "ppt/presentation.xml"))
+                {
+                    return ExtractDocument(path, fileName, ".pptx");
+                }
+
+                if (ZipContainsEntry(path, "xl/workbook.xml"))
+                {
+                    return ExtractSpreadsheet(
+                        path,
+                        fileName,
+                        ".xlsx");
+                }
+
+                return null;
+            }
+
+            if (LegacyOfficeTextExtractor.LooksLikeCompoundFile(
+                header))
+            {
+                var bytes = File.ReadAllBytes(path);
+                if (LegacyOfficeTextExtractor.CompoundStreamExists(
+                    bytes,
+                    "WordDocument"))
+                {
+                    return ExtractDocument(path, fileName, ".doc");
+                }
+
+                if (LegacyOfficeTextExtractor.CompoundStreamExists(
+                    bytes,
+                    "PowerPoint Document"))
+                {
+                    return ExtractDocument(path, fileName, ".ppt");
+                }
+
+                if (LegacyOfficeTextExtractor.CompoundStreamExists(
+                        bytes,
+                        "Workbook") ||
+                    LegacyOfficeTextExtractor.CompoundStreamExists(
+                        bytes,
+                        "Book"))
+                {
+                    return ExtractSpreadsheet(
+                        path,
+                        fileName,
+                        ".xls");
+                }
+
+                return null;
+            }
+
+            if (header.Length > 4 &&
+                header[0] == (byte)'%' &&
+                header[1] == (byte)'P' &&
+                header[2] == (byte)'D' &&
+                header[3] == (byte)'F')
+            {
+                return ExtractDocument(path, fileName, ".pdf");
+            }
+
+            if (LooksLikeText(header))
+            {
+                return new EmailAttachmentContent(
+                    fileName,
+                    "text",
+                    ReadTextFile(path));
+            }
+
+            return null;
+        }
+
+        private static byte[] ReadHeader(string path, int count)
+        {
+            using (var stream = File.OpenRead(path))
+            {
+                var buffer = new byte[count];
+                var read = stream.Read(buffer, 0, buffer.Length);
+                if (read == buffer.Length)
+                {
+                    return buffer;
+                }
+
+                var bounded = new byte[Math.Max(0, read)];
+                Array.Copy(buffer, bounded, bounded.Length);
+                return bounded;
+            }
+        }
+
+        private static bool ZipContainsEntry(
+            string path,
+            string entryName)
+        {
+            try
+            {
+                using (var zip = ZipFile.OpenRead(path))
+                {
+                    return zip.GetEntry(entryName) != null;
+                }
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool LooksLikeText(byte[] header)
+        {
+            if (header.Length == 0)
+            {
+                return false;
+            }
+
+            var printable = 0;
+            foreach (var value in header)
+            {
+                if (value == 0)
+                {
+                    return false;
+                }
+
+                if (value == 9 ||
+                    value == 10 ||
+                    value == 13 ||
+                    (value >= 32 && value < 127) ||
+                    value >= 160)
+                {
+                    printable++;
+                }
+            }
+
+            return printable * 100 >= header.Length * 90;
+        }
+
+        private static string WithLegacyHeader(
+            string fileName,
+            string format,
+            string extracted)
+        {
+            return extracted.Trim().Length > 0
+                ? "[" + format + " attachment: " + fileName +
+                  " - legacy format, best-effort text extraction]\n" +
+                  extracted
+                : string.Empty;
         }
 
         private static EmailAttachmentContent ExtractDocument(
@@ -341,13 +526,32 @@ namespace OutlookLocalAIChat.Outlook
                         kind = "word";
                         text = ExtractDocxText(path);
                         break;
+                    case ".ppt":
+                        kind = "powerpoint";
+                        text = WithLegacyHeader(
+                            fileName,
+                            "PowerPoint",
+                            LegacyOfficeTextExtractor
+                                .ExtractPptText(
+                                    File.ReadAllBytes(path)));
+                        break;
+                    case ".doc":
+                        kind = "word";
+                        text = WithLegacyHeader(
+                            fileName,
+                            "Word",
+                            LegacyOfficeTextExtractor
+                                .ExtractDocText(
+                                    File.ReadAllBytes(path)));
+                        break;
+                    case ".rtf":
+                        kind = "word";
+                        text = LegacyOfficeTextExtractor
+                            .ExtractRtfText(
+                                File.ReadAllBytes(path));
+                        break;
                     default:
-                        text =
-                            "[Office attachment: " + fileName +
-                            ". Legacy binary " + extension +
-                            " files are listed but not parsed. Save " +
-                            "as .pptx, .docx, or PDF for text " +
-                            "extraction.]";
+                        text = string.Empty;
                         break;
                 }
             }
@@ -744,10 +948,16 @@ namespace OutlookLocalAIChat.Outlook
                 ".xls",
                 StringComparison.OrdinalIgnoreCase))
             {
-                text =
-                    "[Excel attachment: " + fileName +
-                    ". Legacy .xls binary workbooks are listed but not parsed. " +
-                    "Save as .xlsx or .csv for text extraction.]";
+                var extracted = LegacyOfficeTextExtractor
+                    .ExtractXlsText(File.ReadAllBytes(path));
+                text = extracted.Trim().Length > 0
+                    ? "[Excel attachment: " + fileName +
+                      " - legacy .xls cell text without positions]\n" +
+                      extracted
+                    : "[Excel attachment: " + fileName +
+                      ". No readable cell text was extracted from " +
+                      "the legacy workbook. Save as .xlsx or .csv " +
+                      "for full extraction.]";
             }
             else
             {

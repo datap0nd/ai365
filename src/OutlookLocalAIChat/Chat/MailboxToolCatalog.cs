@@ -81,9 +81,10 @@ namespace OutlookLocalAIChat.Chat
                             "Load the bounded plain-text bodies of messages returned by " +
                             "search_mailbox, the selected email, or the user-approved " +
                             "ten-message working set. At most ten unique message bodies " +
-                            "can be loaded in one request. Spreadsheet, PDF, PowerPoint, " +
-                            "Word, and text attachments are " +
-                            "included as extracted text. Supported image attachments are " +
+                            "can be loaded in one request. Attachments are included as " +
+                            "extracted text where possible (Excel, PDF, PowerPoint, " +
+                            "Word including legacy formats, RTF, and text files); " +
+                            "unreadable types are noted. Image attachments are " +
                             "delivered to vision-capable models as image input right " +
                             "after this tool result, so call this tool when the user " +
                             "asks about an image in a message.",

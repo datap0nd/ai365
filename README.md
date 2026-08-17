@@ -105,14 +105,16 @@ the tool-call probe allows up to 90 seconds.
    invites and calendar items are readable like email — subject, body, time,
    location, and attachments — but MetoMail can never accept, decline, or
    schedule anything. When a body
-   is loaded, MetoMail also reads up to ten supported **email attachments** per
+   is loaded, MetoMail also reads up to ten **email attachments** per
    message: images (PNG, JPEG, GIF, BMP, WebP, TIFF), spreadsheets (XLSX,
-   XLSM, CSV), documents (PDF, PPTX, DOCX), and text files (TXT, MD, LOG,
-   JSON, XML, HTML). PDF extraction is best-effort text-layer reading —
-   scanned PDFs and exotic font encodings yield a clear "no readable text"
-   note instead of content. Legacy `.xls`, `.ppt`, and `.doc` binaries are
-   listed but not parsed. Attachments are decrypted locally through Outlook
-   COM before reading.
+   XLSM, XLS, CSV), documents (PDF, PPTX, DOCX, PPT, DOC, RTF), and text
+   files (TXT, MD, LOG, JSON, XML, HTML, EML). Unknown extensions are
+   identified by content (image, Office, PDF, or plain text). PDF
+   extraction reads the text layer, including CID-font PDFs from Word and
+   Chrome — scanned PDFs yield a clear "no readable text" note. Legacy
+   binary Office files get best-effort extraction. Every attachment is
+   listed; anything unreadable is noted rather than silently skipped.
+   Attachments are decrypted locally through Outlook COM before reading.
 7. The sidebar records which bounded context operations ran.
 8. Ask explicitly, for example "create a reply draft" or "write an email."
    Local code recognizes that drafting intent and exposes one creation attempt

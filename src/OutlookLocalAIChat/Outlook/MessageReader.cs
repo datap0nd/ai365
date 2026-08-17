@@ -494,14 +494,8 @@ namespace OutlookLocalAIChat.Outlook
                             continue;
                         }
 
-                        var extension = System.IO.Path.GetExtension(
-                            fileName);
-                        if (!EmailAttachmentReader.IsSupportedExtension(
-                            extension))
-                        {
-                            continue;
-                        }
-
+                        // Every attachment is listed; read_messages
+                        // notes the ones that cannot be converted.
                         names.Add(
                             TextBoundary.SingleLine(fileName, 180));
                     }
