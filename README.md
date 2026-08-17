@@ -14,17 +14,20 @@ an external Outlook MCP server.
 1. Close Outlook.
 2. Download
    [OutlookLocalAIChatSetup.exe](https://github.com/datap0nd/outlook-local-ai-chat/releases/latest/download/OutlookLocalAIChatSetup.exe).
+   This link tracks the **Latest** release, which is rebuilt automatically on
+   every push to `main`.
 3. Run the installer for your Windows account.
 4. Start classic Outlook.
 5. Choose **MailAI > MailAI** on the ribbon.
 6. Open **Settings** and enter:
    - the OpenAI-compatible endpoint or base URL;
-   - the model name, with `qwen3.5-35b-a3b` recommended;
-   - the API key.
+   - the API key;
    - **Allow insecure HTTP** only when a non-local endpoint uses plain HTTP.
-7. Choose **Check endpoint**. Save only after authentication, the selected
+7. Click **Refresh models** to load available model IDs from `GET /v1/models`,
+   then choose or type a model that supports OpenAI-compatible chat tool calls.
+8. Click **Check endpoint**. Save only after authentication, the selected
    model, and mailbox tool calling pass.
-8. Optional: open **Writing style**, click **Analyze 15 sent emails**, review
+9. Optional: open **Writing style**, click **Analyze 15 sent emails**, review
    the generated drafting instructions, edit them, and enable the profile.
 
 Examples:
@@ -46,22 +49,14 @@ distribution.
 
 ## Model choice
 
-The default is `qwen3.5-35b-a3b`. For mailbox search, context selection, and
-drafting, it is the best balance of tool-use quality, response speed, and server
-load among the commonly exposed options supported by this project.
+MailAI does not ship with a preset model list or a preferred default. After you
+enter an endpoint and API key, use **Refresh models** in Settings to populate the
+dropdown from `GET /v1/models`. You can also type any model ID manually.
 
-- `qwen3.5-35b-a3b`: recommended balanced default.
-- `gpt-oss-120b`: quality-first fallback when the server can absorb higher
-  latency and load.
-- `gpt-oss-20b`: speed-first fallback.
-- Other editable model IDs remain available when they support OpenAI-compatible
-  chat tool calls.
-
-The add-in does not recommend Gauss or Gausso variants. It also excludes
-embedding-only models from endpoint discovery. **Check endpoint** makes a
-harmless configuration request and requires the selected model to return one of
-the add-in's read-only mailbox tool calls. It does not execute that tool or read
-email during the check.
+Embedding-only models are excluded from discovery. **Check endpoint** verifies
+authentication with a lightweight `search_mailbox` tool-call probe. It does not
+read mailbox data during the check. Model discovery allows up to 15 seconds;
+the tool-call probe allows up to 90 seconds.
 
 ## Use
 
@@ -87,7 +82,11 @@ email during the check.
    characters, with 24,000 characters total.
 6. Ask a normal mailbox question. When a working set exists, the model can read
    only those emails. Without one, it may perform one bounded mailbox search
-   and load no more than five unique email bodies for the request.
+   and load no more than five unique email bodies for the request. When a body
+   is loaded, MailAI also reads up to ten supported **email attachments** per
+   message: images (PNG, JPEG, GIF, BMP, WebP, TIFF) and spreadsheets (XLSX,
+   XLSM, CSV). Legacy `.xls` files are listed but not parsed. Attachments are
+   decrypted locally through Outlook COM before reading.
 7. The sidebar records which bounded context operations ran.
 8. Ask explicitly, for example "create a reply draft" or "write an email."
    Local code recognizes that drafting intent and exposes one creation attempt
@@ -212,8 +211,9 @@ read-only tool. The add-in does not index, upload, or transmit the entire
 mailbox automatically.
 
 The optional Settings check sends the API key to `GET /v1/models` when that route
-is available, then submits a synthetic chat request that contains no mailbox
-data. A successful check proves that authentication, the entered model, and the
+is available, then submits a lightweight synthetic chat request that contains no
+mailbox data. **Refresh models** loads the dropdown without running that probe.
+A successful check proves that authentication, the entered model, and the
 tool-call response shape work before the first real mailbox question.
 
 Nothing is sent to Microsoft 365 by the add-in. Outlook itself continues to use
@@ -233,7 +233,8 @@ The request uses `model`, `messages`, `stream: false`, and standard
 OpenAI-compatible function tools. The endpoint and selected model must support
 chat-completions tool calling. The final response must provide
 `choices[0].message.content` as text. `GET /v1/models` is optional. When
-available, it populates the editable model list in Settings.
+available, **Refresh models** or **Check endpoint** populates the editable model
+list in Settings.
 
 If a request fails, the sidebar shows diagnostic identifiers such as:
 
@@ -319,6 +320,8 @@ artifacts\OutlookLocalAIChatSetup.exe
 ```
 
 GitHub Actions builds, smoke-tests, and publishes the same single-file installer.
+Every push to `main` updates the **Latest** GitHub release so the install link
+above always points at the newest build.
 
 ## Compatibility
 
