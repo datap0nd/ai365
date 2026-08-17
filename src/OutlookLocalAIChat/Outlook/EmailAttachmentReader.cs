@@ -83,11 +83,18 @@ namespace OutlookLocalAIChat.Outlook
                 dynamic application = outlookApplication;
                 session = application.Session;
                 dynamic outlookSession = session;
-                item = message.StoreId.Length > 0
-                    ? outlookSession.GetItemFromID(
-                        message.EntryId,
-                        message.StoreId)
-                    : outlookSession.GetItemFromID(message.EntryId);
+                try
+                {
+                    item = message.StoreId.Length > 0
+                        ? outlookSession.GetItemFromID(
+                            message.EntryId,
+                            message.StoreId)
+                        : outlookSession.GetItemFromID(message.EntryId);
+                }
+                catch
+                {
+                    return new EmailAttachmentContent[0];
+                }
 
                 dynamic mail = item;
                 attachments = mail.Attachments;
@@ -184,6 +191,10 @@ namespace OutlookLocalAIChat.Outlook
                 }
 
                 return results;
+            }
+            catch
+            {
+                return new EmailAttachmentContent[0];
             }
             finally
             {
