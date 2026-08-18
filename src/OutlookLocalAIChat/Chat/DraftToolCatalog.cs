@@ -63,7 +63,7 @@ namespace OutlookLocalAIChat.Chat
                 {
                     "body",
                     BoundedString(
-                        "Complete draft body. Use # heading, ## subheading, - list item, 1. numbered item, and --- divider when a visual layout is requested. Never return raw HTML. Do not include commentary outside the draft.")
+                        "Complete draft body. Use # heading, ## subheading, - list item, 1. numbered item, --- divider, and | cell | cell | table rows with a | --- | separator under the header row when a visual layout is requested. Never return raw HTML. Do not include commentary outside the draft.")
                 },
                 {
                     "subject",

@@ -38,7 +38,9 @@ namespace OutlookLocalAIChat.Chat
                             "attach_current_file. For a visual email use " +
                             "only these layout lines in body: # heading, " +
                             "## subheading, - list item, 1. numbered item, " +
-                            "and --- divider.",
+                            "--- divider, and | cell | cell | table rows " +
+                            "with a | --- | --- | separator under the " +
+                            "header row.",
                         parameters = ToolSchema.Build(
                             new Dictionary<string, object>
                             {

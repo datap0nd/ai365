@@ -279,8 +279,9 @@ namespace OutlookLocalAIChat.Chat
                     "For a reply, pass the exact handle of the email being answered in " +
                     "reply_handle. Never substitute the selected or latest email. Never " +
                     "return raw HTML. For a visual email, use only these local layout lines " +
-                    "in body: # heading, ## subheading, - list item, 1. numbered item, and " +
-                    "--- divider. Use bold_phrases only for exact phrases that should be " +
+                    "in body: # heading, ## subheading, - list item, 1. numbered item, " +
+                    "--- divider, and | cell | cell | table rows with a | --- | separator " +
+                    "under the header row. Use bold_phrases only for exact phrases that should be " +
                     "bold. After the tool " +
                     "result, state that the draft is unsent, open, and linked for review.";
             }
@@ -293,7 +294,8 @@ namespace OutlookLocalAIChat.Chat
                     "to revise or format it, call update_draft with the complete revised " +
                     "body as the only tool call in that response. Never return raw HTML. " +
                     "For visual formatting, use only # heading, ## subheading, - list item, " +
-                    "1. numbered item, and --- divider. Use bold_phrases only for exact " +
+                    "1. numbered item, --- divider, and | cell | cell | table rows with a " +
+                    "| --- | separator under the header row. Use bold_phrases only for exact " +
                     "phrases that should be bold. The local host applies " +
                     "safe formatting and can update only that one linked draft. Never " +
                     "claim it was sent.";
