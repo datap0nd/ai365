@@ -49,6 +49,9 @@ namespace OutlookLocalAIChat.Configuration
                     Model = stored.Model ?? string.Empty,
                     ApiKey = Unprotect(stored.ProtectedApiKey),
                     AllowInsecureHttp = stored.AllowInsecureHttp,
+                    UseGeminiSignIn = stored.UseGeminiSignIn,
+                    GeminiRefreshToken = Unprotect(
+                        stored.ProtectedGeminiRefreshToken),
                     ToneProfile = TextBoundary.PlainText(
                         stored.ToneProfile,
                         TextBoundary.MaxToneProfileCharacters),
@@ -72,24 +75,27 @@ namespace OutlookLocalAIChat.Configuration
                 throw new ArgumentNullException(nameof(settings));
             }
 
-            Uri endpoint;
-            if (!AppSettings.TryGetChatCompletionsUri(
-                settings.BaseUrl,
-                settings.AllowInsecureHttp,
-                out endpoint))
-            {
-                throw new InvalidOperationException(
-                    "Use HTTPS, loopback HTTP, or explicitly allow insecure HTTP.");
-            }
-
             if (settings.Model.Trim().Length == 0)
             {
                 throw new InvalidOperationException("Enter a model name.");
             }
 
-            if (settings.ApiKey.Trim().Length == 0)
+            if (!settings.UseGeminiSignIn)
             {
-                throw new InvalidOperationException("Enter an API key.");
+                Uri endpoint;
+                if (!AppSettings.TryGetChatCompletionsUri(
+                    settings.BaseUrl,
+                    settings.AllowInsecureHttp,
+                    out endpoint))
+                {
+                    throw new InvalidOperationException(
+                        "Use HTTPS, loopback HTTP, or explicitly allow insecure HTTP.");
+                }
+
+                if (settings.ApiKey.Trim().Length == 0)
+                {
+                    throw new InvalidOperationException("Enter an API key.");
+                }
             }
 
             var directory = Path.GetDirectoryName(_settingsPath);
@@ -99,8 +105,17 @@ namespace OutlookLocalAIChat.Configuration
             {
                 BaseUrl = settings.BaseUrl.Trim(),
                 Model = settings.Model.Trim(),
-                ProtectedApiKey = Protect(settings.ApiKey.Trim()),
+                ProtectedApiKey =
+                    settings.ApiKey.Trim().Length > 0
+                        ? Protect(settings.ApiKey.Trim())
+                        : string.Empty,
                 AllowInsecureHttp = settings.AllowInsecureHttp,
+                UseGeminiSignIn = settings.UseGeminiSignIn,
+                ProtectedGeminiRefreshToken =
+                    settings.GeminiRefreshToken.Trim().Length > 0
+                        ? Protect(
+                            settings.GeminiRefreshToken.Trim())
+                        : string.Empty,
                 ToneProfile = TextBoundary.PlainText(
                     settings.ToneProfile,
                     TextBoundary.MaxToneProfileCharacters),
@@ -163,6 +178,10 @@ namespace OutlookLocalAIChat.Configuration
             public string ProtectedApiKey { get; set; }
 
             public bool AllowInsecureHttp { get; set; }
+
+            public bool UseGeminiSignIn { get; set; }
+
+            public string ProtectedGeminiRefreshToken { get; set; }
 
             public string ToneProfile { get; set; }
 

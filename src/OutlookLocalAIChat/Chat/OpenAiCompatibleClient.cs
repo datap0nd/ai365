@@ -27,6 +27,9 @@ namespace OutlookLocalAIChat.Chat
                 MaxJsonLength = int.MaxValue
             };
 
+        private readonly GeminiCodeAssistGateway _gemini =
+            new GeminiCodeAssistGateway();
+
         public OpenAiCompatibleClient()
         {
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
@@ -34,6 +37,13 @@ namespace OutlookLocalAIChat.Chat
             {
                 Timeout = Timeout.InfiniteTimeSpan
             };
+        }
+
+        // Lets the settings window prime the Gemini token cache
+        // right after a browser sign-in completes.
+        public GeminiCodeAssistGateway GeminiGateway
+        {
+            get { return _gemini; }
         }
 
         public async Task<ChatCompletionResponseMessage> CompleteAsync(
@@ -51,6 +61,15 @@ namespace OutlookLocalAIChat.Chat
             if (requestModel == null)
             {
                 throw new ArgumentNullException(nameof(requestModel));
+            }
+
+            if (settings.UseGeminiSignIn)
+            {
+                return await _gemini.GenerateAsync(
+                    _httpClient,
+                    settings,
+                    requestModel,
+                    cancellationToken).ConfigureAwait(true);
             }
 
             Uri endpoint;
@@ -201,6 +220,14 @@ namespace OutlookLocalAIChat.Chat
             if (settings == null)
             {
                 throw new ArgumentNullException(nameof(settings));
+            }
+
+            if (settings.UseGeminiSignIn)
+            {
+                return await _gemini.VerifySignInAsync(
+                    _httpClient,
+                    settings,
+                    cancellationToken).ConfigureAwait(true);
             }
 
             Uri endpoint;

@@ -38,6 +38,10 @@ namespace OutlookLocalAIChat.UI
         private readonly Button _updateButton =
             MakeButton("Update MetoAI", false, 128);
         private readonly Label _updateStatus = new Label();
+        private readonly CheckBox _useGeminiSignIn = new CheckBox();
+        private readonly Button _googleSignIn =
+            MakeButton("Sign in with Google", false, 160);
+        private readonly Label _googleStatus = new Label();
         private readonly Button _save =
             MakeButton("Save", true, 96);
         private readonly OpenAiCompatibleClient _client =
@@ -51,6 +55,9 @@ namespace OutlookLocalAIChat.UI
         private bool _analyzingTone;
         private bool _refreshingModels;
         private bool _updating;
+        private bool _signingIn;
+        private bool _commonControlsEnabled = true;
+        private string _geminiRefreshToken = string.Empty;
 
         public SettingsWindow(
             SettingsStore store,
@@ -131,8 +138,13 @@ namespace OutlookLocalAIChat.UI
             _switchVisionForImages.Checked =
                 current?.SwitchToVisionModelForImages ?? false;
             RestoreDiscoveredModels(current?.DiscoveredModels);
+            _geminiRefreshToken =
+                current?.GeminiRefreshToken ?? string.Empty;
+            _useGeminiSignIn.Checked =
+                current?.UseGeminiSignIn ?? false;
             UpdateModelGuidance();
             UpdateTransportWarning();
+            UpdateGeminiModeUi();
         }
 
         public AppSettings SavedSettings { get; private set; }
@@ -193,6 +205,18 @@ namespace OutlookLocalAIChat.UI
                 "Encrypted for the current Windows user.");
             _apiKey.UseSystemPasswordChar = true;
 
+            _useGeminiSignIn.AutoSize = true;
+            _useGeminiSignIn.Text =
+                "Use Google Gemini with browser sign-in " +
+                "(no endpoint or API key needed)";
+            _useGeminiSignIn.AccessibleName =
+                "Use Gemini with Google sign-in";
+            _useGeminiSignIn.AccessibleDescription =
+                "Signs in with your Google account in the browser " +
+                "and uses Gemini models. Email context is sent to " +
+                "Google instead of a local endpoint.";
+            _useGeminiSignIn.CheckedChanged += GeminiModeChanged;
+
             _allowInsecureHttp.AutoSize = true;
             _allowInsecureHttp.Text =
                 "Allow insecure HTTP for non-local endpoints";
@@ -245,10 +269,12 @@ namespace OutlookLocalAIChat.UI
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 ColumnCount = 1,
-                RowCount = 14,
+                RowCount = 16,
                 Padding = new Padding(18, 16, 18, 12),
                 Width = 640
             };
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -264,10 +290,29 @@ namespace OutlookLocalAIChat.UI
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-            layout.Controls.Add(FieldLabel("Endpoint or base URL"), 0, 0);
-            layout.Controls.Add(_endpoint, 0, 1);
-            layout.Controls.Add(FieldLabel("Model"), 0, 2);
-            layout.Controls.Add(_model, 0, 3);
+            _googleSignIn.Click += GoogleSignInClick;
+            var geminiRow = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                Padding = new Padding(0, 2, 0, 4),
+                Margin = new Padding(0)
+            };
+            geminiRow.Controls.Add(_googleSignIn);
+            ConfigureSupportingLabel(_googleStatus);
+            _googleStatus.Padding = new Padding(8, 6, 0, 0);
+            _googleStatus.AccessibleRole =
+                AccessibleRole.StatusBar;
+            geminiRow.Controls.Add(_googleStatus);
+            layout.Controls.Add(_useGeminiSignIn, 0, 0);
+            layout.Controls.Add(geminiRow, 0, 1);
+
+            layout.Controls.Add(FieldLabel("Endpoint or base URL"), 0, 2);
+            layout.Controls.Add(_endpoint, 0, 3);
+            layout.Controls.Add(FieldLabel("Model"), 0, 4);
+            layout.Controls.Add(_model, 0, 5);
 
             _checkEndpoint.Click += CheckEndpointClick;
             _refreshModels.Click += RefreshModelsClick;
@@ -282,24 +327,24 @@ namespace OutlookLocalAIChat.UI
             };
             checkRow.Controls.Add(_checkEndpoint);
             checkRow.Controls.Add(_refreshModels);
-            layout.Controls.Add(checkRow, 0, 4);
+            layout.Controls.Add(checkRow, 0, 6);
 
             ConfigureSupportingLabel(_testStatus);
             _testStatus.Text =
                 "Use Refresh models to load the model list from your endpoint. " +
                 "Check endpoint also verifies tool-call compatibility.";
             _testStatus.AccessibleRole = AccessibleRole.StatusBar;
-            layout.Controls.Add(_testStatus, 0, 5);
+            layout.Controls.Add(_testStatus, 0, 7);
 
             ConfigureSupportingLabel(_modelGuidance);
-            layout.Controls.Add(_modelGuidance, 0, 6);
-            layout.Controls.Add(_switchVisionForImages, 0, 7);
-            layout.Controls.Add(FieldLabel("API key"), 0, 8);
-            layout.Controls.Add(_apiKey, 0, 9);
-            layout.Controls.Add(_allowInsecureHttp, 0, 10);
+            layout.Controls.Add(_modelGuidance, 0, 8);
+            layout.Controls.Add(_switchVisionForImages, 0, 9);
+            layout.Controls.Add(FieldLabel("API key"), 0, 10);
+            layout.Controls.Add(_apiKey, 0, 11);
+            layout.Controls.Add(_allowInsecureHttp, 0, 12);
             ConfigureSupportingLabel(_transportWarning);
             _transportWarning.AccessibleRole = AccessibleRole.Alert;
-            layout.Controls.Add(_transportWarning, 0, 11);
+            layout.Controls.Add(_transportWarning, 0, 13);
 
             _updateButton.Click += UpdateClick;
             var updateRow = new FlowLayoutPanel
@@ -317,14 +362,14 @@ namespace OutlookLocalAIChat.UI
                 SelfUpdater.InstalledVersion() + ".");
             versionLabel.Padding = new Padding(8, 8, 0, 0);
             updateRow.Controls.Add(versionLabel);
-            layout.Controls.Add(updateRow, 0, 12);
+            layout.Controls.Add(updateRow, 0, 14);
 
             ConfigureSupportingLabel(_updateStatus);
             _updateStatus.Text =
                 "Update downloads the latest MetoAI release, closes Outlook, " +
                 "installs silently, and reopens Outlook.";
             _updateStatus.AccessibleRole = AccessibleRole.StatusBar;
-            layout.Controls.Add(_updateStatus, 0, 13);
+            layout.Controls.Add(_updateStatus, 0, 15);
             page.Controls.Add(layout);
             return page;
         }
@@ -659,6 +704,8 @@ namespace OutlookLocalAIChat.UI
                 Model = _model.Text,
                 ApiKey = _apiKey.Text,
                 AllowInsecureHttp = _allowInsecureHttp.Checked,
+                UseGeminiSignIn = _useGeminiSignIn.Checked,
+                GeminiRefreshToken = _geminiRefreshToken,
                 ToneProfile = profile,
                 UseToneProfile =
                     _useToneProfile.Checked && profile.Length > 0,
@@ -1063,6 +1110,8 @@ namespace OutlookLocalAIChat.UI
                 !_refreshingModels;
             _analyzeTone.Enabled = enabled || _analyzingTone;
             _updateButton.Enabled = enabled && !_updating;
+            _commonControlsEnabled = enabled;
+            UpdateGeminiModeUi();
         }
 
         private void SaveClick(object sender, EventArgs eventArgs)
@@ -1104,6 +1153,113 @@ namespace OutlookLocalAIChat.UI
         private void InsecureHttpChanged(object sender, EventArgs eventArgs)
         {
             UpdateTransportWarning();
+        }
+
+        private void GeminiModeChanged(
+            object sender,
+            EventArgs eventArgs)
+        {
+            if (_useGeminiSignIn.Checked &&
+                _model.Text.Trim().Length == 0)
+            {
+                _model.Text = "gemini-2.5-flash";
+            }
+
+            UpdateGeminiModeUi();
+        }
+
+        private void UpdateGeminiModeUi()
+        {
+            var gemini = _useGeminiSignIn.Checked;
+            var baseline = _commonControlsEnabled;
+            _endpoint.Enabled = baseline && !gemini;
+            _apiKey.Enabled = baseline && !gemini;
+            _allowInsecureHttp.Enabled = baseline && !gemini;
+            _useGeminiSignIn.Enabled = baseline && !_signingIn;
+            _googleSignIn.Enabled =
+                baseline && gemini && !_signingIn;
+            if (!gemini)
+            {
+                _googleStatus.Text =
+                    "Off - MetoAI talks to the endpoint below.";
+            }
+            else if (_signingIn)
+            {
+                _googleStatus.Text =
+                    "Complete the Google sign-in in the browser " +
+                    "window...";
+            }
+            else if (_geminiRefreshToken.Trim().Length > 0)
+            {
+                _googleStatus.Text =
+                    "Signed in with Google. Click Save to keep " +
+                    "this sign-in.";
+            }
+            else
+            {
+                _googleStatus.Text =
+                    "Not signed in yet. Email context will go to " +
+                    "Google Gemini after sign-in.";
+            }
+
+            if (gemini && _model.Items.Count == 0)
+            {
+                RestoreDiscoveredModels(
+                    GeminiCodeAssistGateway.KnownModels);
+            }
+        }
+
+        private async void GoogleSignInClick(
+            object sender,
+            EventArgs eventArgs)
+        {
+            if (_signingIn || _checking || _updating)
+            {
+                return;
+            }
+
+            _signingIn = true;
+            _error.Text = string.Empty;
+            UpdateGeminiModeUi();
+            try
+            {
+                using (var httpClient =
+                    new System.Net.Http.HttpClient())
+                {
+                    var result = await GoogleSignInFlow
+                        .SignInAsync(
+                            httpClient,
+                            TimeSpan.FromMinutes(3));
+                    _geminiRefreshToken = result.RefreshToken;
+                    _client.GeminiGateway.PrimeAccessToken(
+                        result.AccessToken,
+                        result.ExpiresInSeconds);
+                }
+
+                _googleStatus.Text =
+                    "Signed in. Verifying Gemini access...";
+                var models = await _client.GetModelsAsync(
+                    ReadFormSettings(),
+                    CancellationToken.None);
+                RestoreDiscoveredModels(models);
+                if (_model.Text.Trim().Length == 0)
+                {
+                    _model.Text = "gemini-2.5-flash";
+                }
+
+                _error.Text = string.Empty;
+            }
+            catch (Exception exception)
+            {
+                _error.Text = DiagnosticDetails.ForException(
+                    exception,
+                    "GOOGLE_SIGNIN_FAILED");
+            }
+            finally
+            {
+                _signingIn = false;
+                UpdateGeminiModeUi();
+            }
         }
 
         private void UpdateModelGuidance()

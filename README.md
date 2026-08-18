@@ -294,10 +294,23 @@ list in Settings.
 Cloud OpenAI-compatibility layers work too. For **Google Gemini**, set the
 base URL to `https://generativelanguage.googleapis.com/v1beta/openai` and use
 an API key from Google AI Studio as the key; Gemini models are detected as
-vision-capable and support tool calling. Be aware that a cloud endpoint means
-email content leaves your machine — the local-endpoint setup keeps everything
-on-device. Google sign-in (OAuth, as used by Gemini CLI) is not supported;
-only bearer API keys are sent.
+vision-capable and support tool calling.
+
+**Gemini with Google sign-in (no API key):** enable *Use Google Gemini with
+browser sign-in* in Settings and click **Sign in with Google**. A browser
+window opens on Google's own sign-in pages (standard OAuth installed-app flow
+with PKCE and a loopback redirect — the same flow, OAuth client, and scopes
+the open-source Gemini CLI uses, so a Google Workspace org that allows Gemini
+CLI allows this identically). MetoAI never sees the password; it receives
+tokens on 127.0.0.1, stores the refresh token encrypted for the current
+Windows user (DPAPI), and calls Google's Code Assist `generateContent` API,
+where enterprise Gemini licensing resolves from the account alone. Requests
+are translated to Gemini's native format and back, so tool calling, vision,
+and every hard guardrail (read-only mailbox, one-shot unsent drafts, no send
+capability) apply unchanged. An existing Gemini CLI sign-in on the machine is
+honored automatically as a fallback. Note that with any cloud provider, email
+content leaves your machine — the local-endpoint setup keeps everything
+on-device.
 
 If a request fails, the sidebar shows diagnostic identifiers such as:
 

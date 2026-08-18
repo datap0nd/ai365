@@ -92,6 +92,12 @@ namespace GuardrailTests
                     "Suggested reply questions are bounded",
                     SuggestedReplyQuestionsAreBounded);
                 Run(
+                    "Gemini translation preserves the tool contract",
+                    GeminiTranslationPreservesToolContract);
+                Run(
+                    "Gemini sign-in settings are mode-aware",
+                    GeminiSignInSettingsAreModeAware);
+                Run(
                     "Small inline signature images are ignored",
                     SignatureImagesAreIgnored);
                 Run(
@@ -3190,6 +3196,172 @@ namespace GuardrailTests
                 SuggestQuestionsRequestFactory.Parse(
                     null).Count == 0,
                 "Empty model output must parse to no questions.");
+        }
+
+        private static void GeminiTranslationPreservesToolContract()
+        {
+            var request = new ChatCompletionRequest
+            {
+                model = "models/gemini-2.5-flash",
+                messages = new List<object>
+                {
+                    new ChatCompletionInputMessage
+                    {
+                        role = "system",
+                        content = "Mailbox boundary text."
+                    },
+                    new ChatCompletionInputMessage
+                    {
+                        role = "user",
+                        content = "Summarize the selected email."
+                    },
+                    new ChatCompletionAssistantToolMessage
+                    {
+                        role = "assistant",
+                        content = string.Empty,
+                        tool_calls = new List<ChatToolCall>
+                        {
+                            new ChatToolCall
+                            {
+                                id = "call_1",
+                                type = "function",
+                                function = new ChatToolCallFunction
+                                {
+                                    name = "read_messages",
+                                    arguments =
+                                        "{\"handles\":[\"selected\"]}"
+                                }
+                            }
+                        }
+                    },
+                    new ChatCompletionToolResultMessage
+                    {
+                        role = "tool",
+                        tool_call_id = "call_1",
+                        content = "{\"messages\":[]}"
+                    }
+                },
+                tools = new List<ChatToolDefinition>
+                {
+                    MailboxToolCatalog.CreateDefinitions(
+                        false)[0],
+                    DraftToolCatalog.CreateDefinition()
+                },
+                tool_choice = "auto",
+                max_tokens = 500
+            };
+
+            Assert(
+                GeminiCodeAssistGateway.NormalizeModel(
+                    request.model) == "gemini-2.5-flash",
+                "The models/ prefix was not stripped.");
+            var translated =
+                GeminiCodeAssistGateway.TranslateRequest(request);
+            var serializer = new JavaScriptSerializer();
+            var json = serializer.Serialize(translated);
+            Assert(
+                json.Contains("systemInstruction") &&
+                json.Contains("Mailbox boundary text."),
+                "The system prompt did not become a " +
+                "systemInstruction: " + json);
+            Assert(
+                json.Contains("functionDeclarations") &&
+                json.Contains("read_messages") &&
+                json.Contains("create_draft"),
+                "Tool declarations were not translated.");
+            Assert(
+                json.Contains("functionCall") &&
+                json.Contains("functionResponse"),
+                "The tool round-trip was not translated.");
+            Assert(
+                !json.Contains("additionalProperties") &&
+                json.Contains("\"OBJECT\"") &&
+                json.Contains("maxOutputTokens"),
+                "Schema sanitizing or generation config is " +
+                "wrong: " + json);
+
+            var response = serializer.DeserializeObject(
+                "{\"candidates\":[{\"content\":{\"role\":" +
+                "\"model\",\"parts\":[{\"text\":\"Here is the " +
+                "summary.\"},{\"functionCall\":{\"name\":" +
+                "\"read_messages\",\"args\":{\"handles\":" +
+                "[\"selected\"]}}}]}}]}")
+                as IDictionary<string, object>;
+            var message =
+                GeminiCodeAssistGateway.TranslateResponse(
+                    response);
+            Assert(
+                message != null &&
+                message.content.Contains(
+                    "Here is the summary.") &&
+                message.tool_calls != null &&
+                message.tool_calls.Count == 1 &&
+                message.tool_calls[0].function.name ==
+                "read_messages" &&
+                message.tool_calls[0].function.arguments
+                    .Contains("selected"),
+                "The Gemini response did not translate back to " +
+                "the OpenAI shape.");
+
+            var inline = GeminiCodeAssistGateway.TranslateDataUrl(
+                "data:image/png;base64,AAAA");
+            Assert(
+                inline != null &&
+                Convert.ToString(inline["mimeType"]) ==
+                "image/png" &&
+                Convert.ToString(inline["data"]) == "AAAA",
+                "Data URL translation failed.");
+            Assert(
+                GeminiCodeAssistGateway.TranslateDataUrl(
+                    "https://example.test/image.png") == null,
+                "Web URLs must not become inline data.");
+
+            var credentials =
+                GeminiCodeAssistGateway.ParseCredentials(
+                    "{\"access_token\":\"at\"," +
+                    "\"refresh_token\":\"rt\"," +
+                    "\"expiry_date\":1700000000000}");
+            Assert(
+                credentials != null &&
+                credentials.AccessToken == "at" &&
+                credentials.RefreshToken == "rt" &&
+                GeminiCodeAssistGateway.NeedsRefresh(
+                    credentials,
+                    1700000000000L),
+                "Cached credential parsing failed.");
+            Assert(
+                GeminiCodeAssistGateway.ParseCredentials(
+                    "{\"access_token\":\"at\"}") == null,
+                "Credentials without a refresh token must be " +
+                "rejected.");
+        }
+
+        private static void GeminiSignInSettingsAreModeAware()
+        {
+            var settings = new AppSettings
+            {
+                UseGeminiSignIn = true,
+                Model = "gemini-2.5-flash"
+            };
+            Assert(
+                settings.IsConfigured &&
+                settings.HasConnectionSettings,
+                "Gemini sign-in mode must not require an " +
+                "endpoint or API key.");
+            settings.Model = string.Empty;
+            Assert(
+                !settings.IsConfigured,
+                "Gemini sign-in mode still requires a model.");
+
+            var classic = new AppSettings
+            {
+                UseGeminiSignIn = false,
+                Model = "qwen3-vl-30b"
+            };
+            Assert(
+                !classic.IsConfigured,
+                "Endpoint mode must still require endpoint and " +
+                "key.");
         }
 
         private static void OversizedTextCarriesTruncationNotice()

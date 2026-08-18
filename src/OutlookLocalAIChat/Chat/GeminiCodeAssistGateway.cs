@@ -1,0 +1,1138 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Web.Script.Serialization;
+using OutlookLocalAIChat.Configuration;
+using OutlookLocalAIChat.Security;
+
+namespace OutlookLocalAIChat.Chat
+{
+    // Gemini over Google sign-in, end to end inside MetoAI. The user
+    // clicks Sign in with Google in Settings (GoogleSignInFlow runs
+    // the browser OAuth flow); the refresh token is stored
+    // DPAPI-protected in MetoAI's own settings and exchanged here
+    // for short-lived access tokens. Requests go to the same Code
+    // Assist generateContent API the Gemini CLI uses, so enterprise
+    // Gemini licensing resolves server-side from the account alone -
+    // no API key and no cloud project setup. An existing Gemini CLI
+    // session on the machine is honored as a silent fallback. The
+    // OpenAI-shaped requests the rest of the app builds are
+    // translated to Gemini's native format and back, so every
+    // existing guardrail (read-only mailbox, one-shot drafts, no
+    // send capability) applies unchanged.
+    public sealed class GeminiCliCredentials
+    {
+        public GeminiCliCredentials(
+            string accessToken,
+            string refreshToken,
+            long expiryUtcMilliseconds)
+        {
+            AccessToken = accessToken ?? string.Empty;
+            RefreshToken = refreshToken ?? string.Empty;
+            ExpiryUtcMilliseconds = expiryUtcMilliseconds;
+        }
+
+        public string AccessToken { get; }
+
+        public string RefreshToken { get; }
+
+        public long ExpiryUtcMilliseconds { get; }
+    }
+
+    public sealed class GeminiCodeAssistGateway
+    {
+        public const string ApiBase =
+            "https://cloudcode-pa.googleapis.com/v1internal";
+        // Access tokens are refreshed this long before their expiry.
+        private const long RefreshMarginMilliseconds = 120000;
+
+        public static readonly IReadOnlyList<string> KnownModels =
+            new[]
+            {
+                "gemini-2.5-pro",
+                "gemini-2.5-flash",
+                "gemini-2.5-flash-lite"
+            };
+
+        private readonly JavaScriptSerializer _serializer =
+            new JavaScriptSerializer
+            {
+                MaxJsonLength = int.MaxValue
+            };
+
+        private string _cachedAccessToken = string.Empty;
+        private long _cachedTokenExpiryMs;
+        private string _cachedProject;
+
+        public static string CredentialsPath
+        {
+            get
+            {
+                return Path.Combine(
+                    Environment.GetFolderPath(
+                        Environment.SpecialFolder.UserProfile),
+                    ".gemini",
+                    "oauth_creds.json");
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // Credentials.
+        // ------------------------------------------------------------------
+
+        public static GeminiCliCredentials ParseCredentials(
+            string json)
+        {
+            try
+            {
+                var serializer = new JavaScriptSerializer();
+                var map = serializer.DeserializeObject(json)
+                    as IDictionary<string, object>;
+                if (map == null)
+                {
+                    return null;
+                }
+
+                object accessValue;
+                object refreshValue;
+                object expiryValue;
+                map.TryGetValue("access_token", out accessValue);
+                map.TryGetValue("refresh_token", out refreshValue);
+                map.TryGetValue("expiry_date", out expiryValue);
+                var refresh =
+                    Convert.ToString(refreshValue) ?? string.Empty;
+                if (refresh.Trim().Length == 0)
+                {
+                    return null;
+                }
+
+                long expiry = 0;
+                if (expiryValue != null)
+                {
+                    long.TryParse(
+                        Convert.ToString(
+                            expiryValue,
+                            System.Globalization.CultureInfo
+                                .InvariantCulture),
+                        System.Globalization.NumberStyles.Any,
+                        System.Globalization.CultureInfo
+                            .InvariantCulture,
+                        out expiry);
+                }
+
+                return new GeminiCliCredentials(
+                    Convert.ToString(accessValue) ?? string.Empty,
+                    refresh,
+                    expiry);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        public static bool NeedsRefresh(
+            GeminiCliCredentials credentials,
+            long nowUtcMilliseconds)
+        {
+            return credentials.AccessToken.Trim().Length == 0 ||
+                   credentials.ExpiryUtcMilliseconds -
+                   nowUtcMilliseconds < RefreshMarginMilliseconds;
+        }
+
+        // Primes the in-memory token cache right after a fresh
+        // browser sign-in so the first request needs no refresh.
+        public void PrimeAccessToken(
+            string accessToken,
+            long expiresInSeconds)
+        {
+            _cachedAccessToken = accessToken ?? string.Empty;
+            _cachedTokenExpiryMs = NowUtcMilliseconds() +
+                expiresInSeconds * 1000;
+        }
+
+        private async Task<string> GetAccessTokenAsync(
+            HttpClient httpClient,
+            AppSettings settings,
+            CancellationToken cancellationToken)
+        {
+            var nowMs = NowUtcMilliseconds();
+            if (_cachedAccessToken.Length > 0 &&
+                _cachedTokenExpiryMs - nowMs >
+                RefreshMarginMilliseconds)
+            {
+                return _cachedAccessToken;
+            }
+
+            // MetoAI's own browser sign-in is the primary source;
+            // an existing Gemini CLI session on the same machine
+            // works as a silent fallback.
+            var refreshToken =
+                (settings?.GeminiRefreshToken ?? string.Empty)
+                .Trim();
+            if (refreshToken.Length == 0)
+            {
+                var path = CredentialsPath;
+                if (File.Exists(path))
+                {
+                    var credentials = ParseCredentials(
+                        File.ReadAllText(path, Encoding.UTF8));
+                    if (credentials != null)
+                    {
+                        if (!NeedsRefresh(credentials, nowMs))
+                        {
+                            _cachedAccessToken =
+                                credentials.AccessToken;
+                            _cachedTokenExpiryMs =
+                                credentials.ExpiryUtcMilliseconds;
+                            return _cachedAccessToken;
+                        }
+
+                        refreshToken = credentials.RefreshToken;
+                    }
+                }
+            }
+
+            if (refreshToken.Length == 0)
+            {
+                throw new AiEndpointException(
+                    "GEMINI_SIGNIN_MISSING",
+                    "No Google sign-in was found. Open MetoAI " +
+                    "Settings and click Sign in with Google.");
+            }
+
+            return await RefreshAccessTokenAsync(
+                httpClient,
+                refreshToken,
+                cancellationToken).ConfigureAwait(true);
+        }
+
+        private async Task<string> RefreshAccessTokenAsync(
+            HttpClient httpClient,
+            string refreshToken,
+            CancellationToken cancellationToken)
+        {
+            using (var request = new HttpRequestMessage(
+                HttpMethod.Post,
+                GoogleSignInFlow.TokenEndpoint))
+            {
+                request.Content = new FormUrlEncodedContent(
+                    new Dictionary<string, string>
+                    {
+                        {
+                            "client_id",
+                            GoogleSignInFlow.OAuthClientId
+                        },
+                        {
+                            "client_secret",
+                            GoogleSignInFlow.OAuthClientSecret
+                        },
+                        { "refresh_token", refreshToken },
+                        { "grant_type", "refresh_token" }
+                    });
+                using (var response = await httpClient
+                    .SendAsync(request, cancellationToken)
+                    .ConfigureAwait(true))
+                {
+                    var body = await ReadBodyAsync(
+                        response,
+                        cancellationToken).ConfigureAwait(true);
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        throw new AiEndpointException(
+                            "GEMINI_SIGNIN_EXPIRED",
+                            "The Google sign-in could not be " +
+                            "refreshed (" +
+                            (int)response.StatusCode +
+                            "). Open MetoAI Settings and click " +
+                            "Sign in with Google again.",
+                            responseSnippet: body);
+                    }
+
+                    var map = _serializer.DeserializeObject(body)
+                        as IDictionary<string, object>;
+                    object tokenValue;
+                    object expiresValue;
+                    if (map == null ||
+                        !map.TryGetValue(
+                            "access_token",
+                            out tokenValue))
+                    {
+                        throw new AiEndpointException(
+                            "GEMINI_SIGNIN_EXPIRED",
+                            "Google returned no access token. " +
+                            "Open MetoAI Settings and click Sign " +
+                            "in with Google again.",
+                            responseSnippet: body);
+                    }
+
+                    map.TryGetValue("expires_in", out expiresValue);
+                    long expiresSeconds = 3600;
+                    if (expiresValue != null)
+                    {
+                        long.TryParse(
+                            Convert.ToString(
+                                expiresValue,
+                                System.Globalization.CultureInfo
+                                    .InvariantCulture),
+                            out expiresSeconds);
+                    }
+
+                    _cachedAccessToken =
+                        Convert.ToString(tokenValue) ??
+                        string.Empty;
+                    _cachedTokenExpiryMs = NowUtcMilliseconds() +
+                        expiresSeconds * 1000;
+                    return _cachedAccessToken;
+                }
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // Project discovery (loadCodeAssist / onboardUser).
+        // ------------------------------------------------------------------
+
+        private async Task<string> GetProjectAsync(
+            HttpClient httpClient,
+            AppSettings settings,
+            CancellationToken cancellationToken)
+        {
+            if (_cachedProject != null)
+            {
+                return _cachedProject;
+            }
+
+            var load = await PostJsonAsync(
+                httpClient,
+                settings,
+                ":loadCodeAssist",
+                new Dictionary<string, object>
+                {
+                    { "metadata", ClientMetadata() }
+                },
+                cancellationToken).ConfigureAwait(true);
+            var project = ReadString(
+                load,
+                "cloudaicompanionProject");
+            if (project.Length > 0)
+            {
+                _cachedProject = project;
+                return project;
+            }
+
+            var tierId = FindDefaultTierId(load);
+            for (var attempt = 0; attempt < 5; attempt++)
+            {
+                var onboard = await PostJsonAsync(
+                    httpClient,
+                    settings,
+                    ":onboardUser",
+                    new Dictionary<string, object>
+                    {
+                        { "tierId", tierId },
+                        { "metadata", ClientMetadata() }
+                    },
+                    cancellationToken).ConfigureAwait(true);
+                if (onboard != null)
+                {
+                    object doneValue;
+                    onboard.TryGetValue("done", out doneValue);
+                    if (doneValue is bool && (bool)doneValue)
+                    {
+                        object responseValue;
+                        onboard.TryGetValue(
+                            "response",
+                            out responseValue);
+                        var responseMap = responseValue
+                            as IDictionary<string, object>;
+                        object projectValue = null;
+                        responseMap?.TryGetValue(
+                            "cloudaicompanionProject",
+                            out projectValue);
+                        var projectMap = projectValue
+                            as IDictionary<string, object>;
+                        var id = projectMap != null
+                            ? ReadString(projectMap, "id")
+                            : string.Empty;
+                        _cachedProject = id;
+                        return id;
+                    }
+                }
+
+                await Task.Delay(2000, cancellationToken)
+                    .ConfigureAwait(true);
+            }
+
+            _cachedProject = string.Empty;
+            return string.Empty;
+        }
+
+        private static string FindDefaultTierId(
+            IDictionary<string, object> load)
+        {
+            object tiersValue = null;
+            load?.TryGetValue("allowedTiers", out tiersValue);
+            var tiers = tiersValue as object[];
+            if (tiers != null)
+            {
+                foreach (var entry in tiers)
+                {
+                    var tier = entry as IDictionary<string, object>;
+                    if (tier == null)
+                    {
+                        continue;
+                    }
+
+                    object isDefaultValue;
+                    tier.TryGetValue(
+                        "isDefault",
+                        out isDefaultValue);
+                    if (isDefaultValue is bool &&
+                        (bool)isDefaultValue)
+                    {
+                        var id = ReadString(tier, "id");
+                        if (id.Length > 0)
+                        {
+                            return id;
+                        }
+                    }
+                }
+            }
+
+            return "free-tier";
+        }
+
+        private static Dictionary<string, object> ClientMetadata()
+        {
+            return new Dictionary<string, object>
+            {
+                { "ideType", "IDE_UNSPECIFIED" },
+                { "platform", "PLATFORM_UNSPECIFIED" },
+                { "pluginType", "GEMINI" }
+            };
+        }
+
+        // ------------------------------------------------------------------
+        // Public entry points.
+        // ------------------------------------------------------------------
+
+        public async Task<IReadOnlyList<string>> VerifySignInAsync(
+            HttpClient httpClient,
+            AppSettings settings,
+            CancellationToken cancellationToken)
+        {
+            await GetAccessTokenAsync(
+                httpClient,
+                settings,
+                cancellationToken).ConfigureAwait(true);
+            await GetProjectAsync(
+                httpClient,
+                settings,
+                cancellationToken).ConfigureAwait(true);
+            return KnownModels;
+        }
+
+        public async Task<ChatCompletionResponseMessage>
+            GenerateAsync(
+                HttpClient httpClient,
+                AppSettings settings,
+                ChatCompletionRequest requestModel,
+                CancellationToken cancellationToken)
+        {
+            var project = await GetProjectAsync(
+                httpClient,
+                settings,
+                cancellationToken).ConfigureAwait(true);
+            var envelope = new Dictionary<string, object>
+            {
+                { "model", NormalizeModel(requestModel.model) },
+                { "project", project },
+                { "request", TranslateRequest(requestModel) }
+            };
+            var root = await PostJsonAsync(
+                httpClient,
+                settings,
+                ":generateContent",
+                envelope,
+                cancellationToken).ConfigureAwait(true);
+            object responseValue = null;
+            root?.TryGetValue("response", out responseValue);
+            var message = TranslateResponse(
+                responseValue as IDictionary<string, object> ??
+                root);
+            if (message == null)
+            {
+                throw new AiEndpointException(
+                    "RESPONSE_MISSING_CONTENT",
+                    "The Gemini endpoint returned neither message " +
+                    "text nor tool calls.");
+            }
+
+            return message;
+        }
+
+        // ------------------------------------------------------------------
+        // Request translation (OpenAI chat shape to Gemini native).
+        // Public and pure so the guardrail tests can cover it.
+        // ------------------------------------------------------------------
+
+        public static string NormalizeModel(string model)
+        {
+            var value = (model ?? string.Empty).Trim();
+            const string prefix = "models/";
+            return value.StartsWith(
+                prefix,
+                StringComparison.OrdinalIgnoreCase)
+                ? value.Substring(prefix.Length)
+                : value;
+        }
+
+        public static Dictionary<string, object> TranslateRequest(
+            ChatCompletionRequest request)
+        {
+            var contents = new List<object>();
+            var systemText = new StringBuilder();
+            var callNames =
+                new Dictionary<string, string>(
+                    StringComparer.Ordinal);
+            foreach (var entry in request.messages ??
+                new List<object>())
+            {
+                var input = entry as ChatCompletionInputMessage;
+                if (input != null)
+                {
+                    if (string.Equals(
+                        input.role,
+                        "system",
+                        StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (systemText.Length > 0)
+                        {
+                            systemText.Append("\n");
+                        }
+
+                        systemText.Append(
+                            Convert.ToString(input.content) ??
+                            string.Empty);
+                        continue;
+                    }
+
+                    var parts = TranslateParts(input.content);
+                    if (parts.Count > 0)
+                    {
+                        contents.Add(new Dictionary<string, object>
+                        {
+                            {
+                                "role",
+                                string.Equals(
+                                    input.role,
+                                    "assistant",
+                                    StringComparison
+                                        .OrdinalIgnoreCase)
+                                    ? "model"
+                                    : "user"
+                            },
+                            { "parts", parts }
+                        });
+                    }
+
+                    continue;
+                }
+
+                var assistant =
+                    entry as ChatCompletionAssistantToolMessage;
+                if (assistant != null)
+                {
+                    var parts = new List<object>();
+                    if (!string.IsNullOrEmpty(assistant.content))
+                    {
+                        parts.Add(new Dictionary<string, object>
+                        {
+                            { "text", assistant.content }
+                        });
+                    }
+
+                    foreach (var call in assistant.tool_calls ??
+                        new List<ChatToolCall>())
+                    {
+                        if (call?.function == null)
+                        {
+                            continue;
+                        }
+
+                        var name = call.function.name ??
+                            string.Empty;
+                        if (!string.IsNullOrEmpty(call.id))
+                        {
+                            callNames[call.id] = name;
+                        }
+
+                        parts.Add(new Dictionary<string, object>
+                        {
+                            {
+                                "functionCall",
+                                new Dictionary<string, object>
+                                {
+                                    { "name", name },
+                                    {
+                                        "args",
+                                        ParseArguments(
+                                            call.function
+                                                .arguments)
+                                    }
+                                }
+                            }
+                        });
+                    }
+
+                    if (parts.Count > 0)
+                    {
+                        contents.Add(new Dictionary<string, object>
+                        {
+                            { "role", "model" },
+                            { "parts", parts }
+                        });
+                    }
+
+                    continue;
+                }
+
+                var toolResult =
+                    entry as ChatCompletionToolResultMessage;
+                if (toolResult != null)
+                {
+                    string name;
+                    if (toolResult.tool_call_id == null ||
+                        !callNames.TryGetValue(
+                            toolResult.tool_call_id,
+                            out name) ||
+                        name.Length == 0)
+                    {
+                        name = "tool";
+                    }
+
+                    contents.Add(new Dictionary<string, object>
+                    {
+                        { "role", "user" },
+                        {
+                            "parts",
+                            new List<object>
+                            {
+                                new Dictionary<string, object>
+                                {
+                                    {
+                                        "functionResponse",
+                                        new Dictionary<string, object>
+                                        {
+                                            { "name", name },
+                                            {
+                                                "response",
+                                                new Dictionary<string, object>
+                                                {
+                                                    {
+                                                        "result",
+                                                        toolResult
+                                                            .content ??
+                                                        string.Empty
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+
+            var translated = new Dictionary<string, object>
+            {
+                { "contents", contents }
+            };
+            if (systemText.Length > 0)
+            {
+                translated["systemInstruction"] =
+                    new Dictionary<string, object>
+                    {
+                        {
+                            "parts",
+                            new List<object>
+                            {
+                                new Dictionary<string, object>
+                                {
+                                    {
+                                        "text",
+                                        systemText.ToString()
+                                    }
+                                }
+                            }
+                        }
+                    };
+            }
+
+            if (request.tools != null && request.tools.Count > 0)
+            {
+                var declarations = new List<object>();
+                foreach (var tool in request.tools)
+                {
+                    if (tool?.function == null)
+                    {
+                        continue;
+                    }
+
+                    declarations.Add(new Dictionary<string, object>
+                    {
+                        { "name", tool.function.name },
+                        {
+                            "description",
+                            tool.function.description
+                        },
+                        {
+                            "parameters",
+                            SanitizeSchema(
+                                tool.function.parameters)
+                        }
+                    });
+                }
+
+                translated["tools"] = new List<object>
+                {
+                    new Dictionary<string, object>
+                    {
+                        { "functionDeclarations", declarations }
+                    }
+                };
+
+                var forcedName = ReadForcedToolName(
+                    request.tool_choice);
+                if (forcedName.Length > 0)
+                {
+                    translated["toolConfig"] =
+                        new Dictionary<string, object>
+                        {
+                            {
+                                "functionCallingConfig",
+                                new Dictionary<string, object>
+                                {
+                                    { "mode", "ANY" },
+                                    {
+                                        "allowedFunctionNames",
+                                        new List<object>
+                                        {
+                                            forcedName
+                                        }
+                                    }
+                                }
+                            }
+                        };
+                }
+            }
+
+            if (request.max_tokens.HasValue)
+            {
+                translated["generationConfig"] =
+                    new Dictionary<string, object>
+                    {
+                        {
+                            "maxOutputTokens",
+                            request.max_tokens.Value
+                        }
+                    };
+            }
+
+            return translated;
+        }
+
+        private static string ReadForcedToolName(object toolChoice)
+        {
+            var map = toolChoice as IDictionary<string, object>;
+            if (map == null)
+            {
+                return string.Empty;
+            }
+
+            object functionValue;
+            map.TryGetValue("function", out functionValue);
+            var function = functionValue
+                as IDictionary<string, object>;
+            return function != null
+                ? ReadString(function, "name")
+                : string.Empty;
+        }
+
+        private static List<object> TranslateParts(object content)
+        {
+            var parts = new List<object>();
+            var text = content as string;
+            if (text != null)
+            {
+                if (text.Length > 0)
+                {
+                    parts.Add(new Dictionary<string, object>
+                    {
+                        { "text", text }
+                    });
+                }
+
+                return parts;
+            }
+
+            var list = content as System.Collections.IEnumerable;
+            if (list == null)
+            {
+                return parts;
+            }
+
+            foreach (var item in list)
+            {
+                var textPart = item as ChatMultimodalTextPart;
+                if (textPart != null &&
+                    !string.IsNullOrEmpty(textPart.text))
+                {
+                    parts.Add(new Dictionary<string, object>
+                    {
+                        { "text", textPart.text }
+                    });
+                    continue;
+                }
+
+                var imagePart = item as ChatMultimodalImagePart;
+                var url = imagePart?.image_url?.url ?? string.Empty;
+                var inline = TranslateDataUrl(url);
+                if (inline != null)
+                {
+                    parts.Add(new Dictionary<string, object>
+                    {
+                        { "inlineData", inline }
+                    });
+                }
+            }
+
+            return parts;
+        }
+
+        public static Dictionary<string, object> TranslateDataUrl(
+            string url)
+        {
+            const string prefix = "data:";
+            const string marker = ";base64,";
+            if (url == null ||
+                !url.StartsWith(
+                    prefix,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            var markerIndex = url.IndexOf(
+                marker,
+                StringComparison.OrdinalIgnoreCase);
+            if (markerIndex <= prefix.Length)
+            {
+                return null;
+            }
+
+            return new Dictionary<string, object>
+            {
+                {
+                    "mimeType",
+                    url.Substring(
+                        prefix.Length,
+                        markerIndex - prefix.Length)
+                },
+                {
+                    "data",
+                    url.Substring(markerIndex + marker.Length)
+                }
+            };
+        }
+
+        // Gemini's schema accepts a strict subset of JSON Schema, so
+        // only supported keywords survive and type names become the
+        // uppercase enum values the API expects.
+        public static object SanitizeSchema(object schema)
+        {
+            var map = schema as IDictionary<string, object>;
+            if (map == null)
+            {
+                return new Dictionary<string, object>
+                {
+                    { "type", "OBJECT" }
+                };
+            }
+
+            var result = new Dictionary<string, object>();
+            foreach (var pair in map)
+            {
+                switch (pair.Key)
+                {
+                    case "type":
+                        result["type"] =
+                            (Convert.ToString(pair.Value) ??
+                             "object").ToUpperInvariant();
+                        break;
+                    case "description":
+                    case "required":
+                    case "enum":
+                        result[pair.Key] = pair.Value;
+                        break;
+                    case "properties":
+                        var properties = pair.Value
+                            as IDictionary<string, object>;
+                        if (properties != null)
+                        {
+                            var sanitized =
+                                new Dictionary<string, object>();
+                            foreach (var property in properties)
+                            {
+                                sanitized[property.Key] =
+                                    SanitizeSchema(property.Value);
+                            }
+
+                            result["properties"] = sanitized;
+                        }
+
+                        break;
+                    case "items":
+                        result["items"] = SanitizeSchema(
+                            pair.Value);
+                        break;
+                }
+            }
+
+            if (!result.ContainsKey("type"))
+            {
+                result["type"] = "OBJECT";
+            }
+
+            return result;
+        }
+
+        private static object ParseArguments(string arguments)
+        {
+            try
+            {
+                var serializer = new JavaScriptSerializer();
+                return serializer.DeserializeObject(
+                    arguments ?? string.Empty)
+                    as IDictionary<string, object> ??
+                    (object)new Dictionary<string, object>();
+            }
+            catch
+            {
+                return new Dictionary<string, object>();
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // Response translation (Gemini native to OpenAI chat shape).
+        // ------------------------------------------------------------------
+
+        public static ChatCompletionResponseMessage
+            TranslateResponse(IDictionary<string, object> response)
+        {
+            if (response == null)
+            {
+                return null;
+            }
+
+            object candidatesValue;
+            response.TryGetValue(
+                "candidates",
+                out candidatesValue);
+            var candidates = candidatesValue as object[];
+            var candidate = candidates != null &&
+                candidates.Length > 0
+                ? candidates[0] as IDictionary<string, object>
+                : null;
+            object contentValue = null;
+            candidate?.TryGetValue("content", out contentValue);
+            var content = contentValue
+                as IDictionary<string, object>;
+            object partsValue = null;
+            content?.TryGetValue("parts", out partsValue);
+            var parts = partsValue as object[];
+            if (parts == null)
+            {
+                return null;
+            }
+
+            var text = new StringBuilder();
+            var toolCalls = new List<ChatToolCall>();
+            var serializer = new JavaScriptSerializer
+            {
+                MaxJsonLength = int.MaxValue
+            };
+            foreach (var entry in parts)
+            {
+                var part = entry as IDictionary<string, object>;
+                if (part == null)
+                {
+                    continue;
+                }
+
+                object textValue;
+                if (part.TryGetValue("text", out textValue) &&
+                    textValue is string)
+                {
+                    text.Append((string)textValue);
+                    continue;
+                }
+
+                object callValue;
+                if (part.TryGetValue(
+                        "functionCall",
+                        out callValue))
+                {
+                    var call = callValue
+                        as IDictionary<string, object>;
+                    if (call == null)
+                    {
+                        continue;
+                    }
+
+                    object argsValue;
+                    call.TryGetValue("args", out argsValue);
+                    toolCalls.Add(new ChatToolCall
+                    {
+                        id = "gemini_call_" +
+                            (toolCalls.Count + 1),
+                        type = "function",
+                        function = new ChatToolCallFunction
+                        {
+                            name = ReadString(call, "name"),
+                            arguments = serializer.Serialize(
+                                argsValue ??
+                                new Dictionary<string, object>())
+                        }
+                    });
+                }
+            }
+
+            var boundedText = TextBoundary.PlainText(
+                text.ToString(),
+                TextBoundary.MaxAssistantCharacters);
+            if (boundedText.Length == 0 && toolCalls.Count == 0)
+            {
+                return null;
+            }
+
+            return new ChatCompletionResponseMessage
+            {
+                role = "assistant",
+                content = boundedText,
+                tool_calls = toolCalls.Count > 0
+                    ? toolCalls
+                    : null
+            };
+        }
+
+        // ------------------------------------------------------------------
+        // HTTP plumbing.
+        // ------------------------------------------------------------------
+
+        private async Task<IDictionary<string, object>>
+            PostJsonAsync(
+                HttpClient httpClient,
+                AppSettings settings,
+                string method,
+                Dictionary<string, object> payload,
+                CancellationToken cancellationToken)
+        {
+            var token = await GetAccessTokenAsync(
+                httpClient,
+                settings,
+                cancellationToken).ConfigureAwait(true);
+            using (var request = new HttpRequestMessage(
+                HttpMethod.Post,
+                ApiBase + method))
+            {
+                request.Headers.Authorization =
+                    new AuthenticationHeaderValue(
+                        "Bearer",
+                        token);
+                request.Headers.Accept.Add(
+                    new MediaTypeWithQualityHeaderValue(
+                        "application/json"));
+                request.Content = new StringContent(
+                    _serializer.Serialize(payload),
+                    Encoding.UTF8,
+                    "application/json");
+                using (var response = await httpClient
+                    .SendAsync(request, cancellationToken)
+                    .ConfigureAwait(true))
+                {
+                    var body = await ReadBodyAsync(
+                        response,
+                        cancellationToken).ConfigureAwait(true);
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        var status = (int)response.StatusCode;
+                        var hint = status == 401 || status == 403
+                            ? " The Google sign-in may have " +
+                              "expired - run \"gemini\" in a " +
+                              "terminal to sign in again."
+                            : string.Empty;
+                        throw new AiEndpointException(
+                            "GEMINI_HTTP_" + status,
+                            "The Gemini endpoint rejected " +
+                            method.TrimStart(':') + ": " + status +
+                            "." + hint,
+                            httpStatus: status,
+                            responseSnippet: body);
+                    }
+
+                    return _serializer.DeserializeObject(body)
+                        as IDictionary<string, object>;
+                }
+            }
+        }
+
+        private static async Task<string> ReadBodyAsync(
+            HttpResponseMessage response,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var body = await response.Content
+                .ReadAsStringAsync().ConfigureAwait(true);
+            if (body.Length >
+                TextBoundary.MaxHttpResponseCharacters)
+            {
+                throw new AiEndpointException(
+                    "RESPONSE_TOO_LARGE",
+                    "The Gemini endpoint response was too large.");
+            }
+
+            return body;
+        }
+
+        private static string ReadString(
+            IDictionary<string, object> map,
+            string key)
+        {
+            object value;
+            return map != null && map.TryGetValue(key, out value)
+                ? Convert.ToString(value) ?? string.Empty
+                : string.Empty;
+        }
+
+        private static long NowUtcMilliseconds()
+        {
+            return (long)(DateTime.UtcNow -
+                new DateTime(
+                    1970,
+                    1,
+                    1,
+                    0,
+                    0,
+                    0,
+                    DateTimeKind.Utc)).TotalMilliseconds;
+        }
+    }
+}

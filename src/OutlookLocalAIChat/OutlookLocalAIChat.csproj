@@ -69,6 +69,8 @@
     <Compile Include="Chat\OpenAiCompatibleClient.cs" />
     <Compile Include="Chat\ToneProfileRequestFactory.cs" />
     <Compile Include="Chat\SuggestQuestionsRequestFactory.cs" />
+    <Compile Include="Chat\GeminiCodeAssistGateway.cs" />
+    <Compile Include="Configuration\GoogleSignInFlow.cs" />
     <Compile Include="Configuration\AppSettings.cs" />
     <Compile Include="Chat\VisionImagePrefetch.cs" />
     <Compile Include="Chat\VisionAttachmentExchange.cs" />

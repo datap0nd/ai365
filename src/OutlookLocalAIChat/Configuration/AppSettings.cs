@@ -19,6 +19,15 @@ namespace OutlookLocalAIChat.Configuration
 
         public bool SwitchToVisionModelForImages { get; set; }
 
+        // Gemini via Google sign-in: when enabled, requests go to
+        // Google's Code Assist API with OAuth tokens instead of the
+        // OpenAI-compatible endpoint, and no endpoint or API key is
+        // required. The refresh token is stored DPAPI-protected.
+        public bool UseGeminiSignIn { get; set; }
+
+        public string GeminiRefreshToken { get; set; } =
+            string.Empty;
+
         public List<string> DiscoveredModels { get; set; } =
             new List<string>();
 
@@ -26,6 +35,11 @@ namespace OutlookLocalAIChat.Configuration
         {
             get
             {
+                if (UseGeminiSignIn)
+                {
+                    return Model.Trim().Length > 0;
+                }
+
                 Uri endpoint;
                 return Model.Trim().Length > 0 &&
                        ApiKey.Trim().Length > 0 &&
@@ -40,6 +54,11 @@ namespace OutlookLocalAIChat.Configuration
         {
             get
             {
+                if (UseGeminiSignIn)
+                {
+                    return true;
+                }
+
                 Uri endpoint;
                 return ApiKey.Trim().Length > 0 &&
                        TryGetChatCompletionsUri(
