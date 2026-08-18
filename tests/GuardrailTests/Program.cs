@@ -3440,34 +3440,81 @@ namespace GuardrailTests
             var tried = new HashSet<string>(
                 StringComparer.OrdinalIgnoreCase);
             Assert(
+                GeminiCodeAssistGateway.CapacityFallbackChain
+                    .Count == 8 &&
                 GeminiCodeAssistGateway.NextFallbackModel(
                     "gemini-3.5-flash", tried) ==
-                "gemini-2.5-flash" &&
+                "gemini-3-flash" &&
                 GeminiCodeAssistGateway.NextFallbackModel(
                     "gemini-2.5-flash", tried) ==
-                "gemini-2.5-flash-lite" &&
+                "gemini-3.5-flash" &&
                 GeminiCodeAssistGateway.NextFallbackModel(
                     "qwen3-vl-30b", tried) == null,
                 "The capacity chain must hop to the next unused " +
                 "Gemini model.");
-            tried.Add("gemini-2.5-flash");
-            tried.Add("gemini-2.5-flash-lite");
+            foreach (var chained in
+                GeminiCodeAssistGateway.CapacityFallbackChain)
+            {
+                if (chained != "gemini-2.5-pro")
+                {
+                    tried.Add(chained);
+                }
+            }
+
             Assert(
                 GeminiCodeAssistGateway.NextFallbackModel(
                     "gemini-3.5-flash", tried) ==
-                "gemini-2.5-pro" &&
+                "gemini-2.5-pro",
+                "The chain must reach the last untried bucket.");
+            tried.Add("gemini-2.5-pro");
+            Assert(
                 GeminiCodeAssistGateway.NextFallbackModel(
-                    "gemini-2.5-pro",
-                    new HashSet<string>(
-                        new[]
-                        {
-                            "gemini-2.5-flash",
-                            "gemini-2.5-flash-lite"
-                        },
-                        StringComparer.OrdinalIgnoreCase)) ==
-                null,
+                    "gemini-3.5-flash", tried) == null,
                 "The chain must exhaust once every bucket was " +
                 "tried.");
+
+            var envelope = new Dictionary<string, object>
+            {
+                { "model", "gemini-2.5-flash" },
+                {
+                    "request",
+                    new Dictionary<string, object>
+                    {
+                        {
+                            "generationConfig",
+                            new Dictionary<string, object>
+                            {
+                                {
+                                    "thinkingConfig",
+                                    new Dictionary<string, object>
+                                    {
+                                        { "thinkingBudget", 0 }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+            GeminiCodeAssistGateway.ApplyThinkingConfig(
+                envelope,
+                "gemini-3-flash");
+            var envelopeRequest =
+                (IDictionary<string, object>)
+                envelope["request"];
+            Assert(
+                !envelopeRequest.ContainsKey(
+                    "generationConfig"),
+                "A hop to a non-2.5 model must strip the " +
+                "2.5-only thinking config.");
+            GeminiCodeAssistGateway.ApplyThinkingConfig(
+                envelope,
+                "gemini-2.5-flash");
+            Assert(
+                serializer.Serialize(envelope).Contains(
+                    "\"thinkingBudget\":0"),
+                "A hop back to a 2.5 model must restore its " +
+                "thinking budget.");
         }
 
         private static void GeminiSignInSettingsAreModeAware()

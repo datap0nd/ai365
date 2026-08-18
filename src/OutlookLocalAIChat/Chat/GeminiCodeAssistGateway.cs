@@ -100,16 +100,23 @@ namespace OutlookLocalAIChat.Chat
         // longer, and a persistent-429 fallback from pro to flash
         // that sticks for the rest of the session.
         public const int MaxRetryAttempts = 10;
-        // The CLI never parks on an exhausted model: on capacity
-        // errors it silently hops through a chain of models, each
-        // with its own quota bucket, until one answers. This is the
-        // same chain its internal calls use.
+        // Every known model is a separate quota bucket, and hopping
+        // costs only one HTTP round trip, so on a capacity error the
+        // request hops the whole family instantly - fast models
+        // first, pro-class last - and only waits when every bucket
+        // is dry. Tier-blocked models simply answer 429 and cost a
+        // fraction of a second to skip.
         public static readonly IReadOnlyList<string>
             CapacityFallbackChain =
                 new[]
                 {
+                    "gemini-3.5-flash",
+                    "gemini-3-flash",
                     "gemini-2.5-flash",
+                    "gemini-3.1-flash-lite",
                     "gemini-2.5-flash-lite",
+                    "gemini-3.1-pro-preview",
+                    "gemini-3-pro-preview",
                     "gemini-2.5-pro"
                 };
         private readonly Random _retryJitter = new Random();
@@ -178,6 +185,63 @@ namespace OutlookLocalAIChat.Chat
             return null;
         }
 
+        // The thinking budget is model-family specific, so a hop
+        // must rewrite it: 2.5 models get their explicit budget and
+        // other families must not receive the 2.5-only field.
+        public static void ApplyThinkingConfig(
+            IDictionary<string, object> envelope,
+            string model)
+        {
+            object requestValue;
+            if (!envelope.TryGetValue(
+                    "request",
+                    out requestValue))
+            {
+                return;
+            }
+
+            var request = requestValue
+                as IDictionary<string, object>;
+            if (request == null)
+            {
+                return;
+            }
+
+            object configValue;
+            var generationConfig = request.TryGetValue(
+                "generationConfig",
+                out configValue)
+                ? configValue as IDictionary<string, object>
+                : null;
+            var budget = ThinkingBudgetFor(model);
+            if (budget < 0)
+            {
+                if (generationConfig != null)
+                {
+                    generationConfig.Remove("thinkingConfig");
+                    if (generationConfig.Count == 0)
+                    {
+                        request.Remove("generationConfig");
+                    }
+                }
+
+                return;
+            }
+
+            if (generationConfig == null)
+            {
+                generationConfig =
+                    new Dictionary<string, object>();
+                request["generationConfig"] = generationConfig;
+            }
+
+            generationConfig["thinkingConfig"] =
+                new Dictionary<string, object>
+                {
+                    { "thinkingBudget", budget }
+                };
+        }
+
         private string EffectiveModel(string model)
         {
             var normalized = NormalizeModel(model);
@@ -193,9 +257,12 @@ namespace OutlookLocalAIChat.Chat
         }
 
         // Central 429 policy for generateContent. Returns 1 when the
-        // caller should retry after the wait, 2 when the request
+        // caller should retry after a wait, 2 when the request
         // hopped to the next model in the chain (caller restarts its
-        // attempt counter), and 0 when everything is exhausted.
+        // attempt counter), and 0 when everything is exhausted. Hops
+        // happen immediately - waiting is reserved for the case
+        // where the entire chain is dry, and each waited cycle
+        // re-probes the whole chain.
         private async Task<int> HandleCapacityAsync(
             IDictionary<string, object> envelope,
             int attempt,
@@ -205,23 +272,18 @@ namespace OutlookLocalAIChat.Chat
             CancellationToken cancellationToken)
         {
             var current = Convert.ToString(envelope["model"]);
-            if (attempt >= 2)
+            triedModels.Add(NormalizeModel(current)
+                .ToLowerInvariant());
+            var next = NextFallbackModel(current, triedModels);
+            if (next != null)
             {
-                triedModels.Add(NormalizeModel(current)
-                    .ToLowerInvariant());
-                var next = NextFallbackModel(
-                    current,
-                    triedModels);
-                if (next != null)
-                {
-                    envelope["model"] = next;
-                    _stickyModelRoutes[
-                        NormalizeModel(originalModel)] = next;
-                    StatusListener?.Invoke(
-                        current + " is at capacity - trying " +
-                        next);
-                    return 2;
-                }
+                envelope["model"] = next;
+                ApplyThinkingConfig(envelope, next);
+                _stickyModelRoutes[
+                    NormalizeModel(originalModel)] = next;
+                StatusListener?.Invoke(
+                    current + " is at capacity - trying " + next);
+                return 2;
             }
 
             if (attempt >= MaxRetryAttempts - 1)
@@ -229,12 +291,14 @@ namespace OutlookLocalAIChat.Chat
                 return 0;
             }
 
+            // Whole chain dry: wait, then re-probe every bucket.
+            triedModels.Clear();
             var delay = ComputeRetryDelaySeconds(
                 attempt,
                 body,
                 _retryJitter.NextDouble());
             StatusListener?.Invoke(
-                "Gemini is at capacity - retry " +
+                "All Gemini models are at capacity - retry " +
                 (attempt + 1) + " of " + MaxRetryAttempts +
                 " in " + delay + "s");
             await Task.Delay(
@@ -728,6 +792,9 @@ namespace OutlookLocalAIChat.Chat
                         _thoughtSignatures)
                 }
             };
+            ApplyThinkingConfig(
+                envelope,
+                Convert.ToString(envelope["model"]));
             IDictionary<string, object> root = null;
             var triedModels = new HashSet<string>(
                 StringComparer.OrdinalIgnoreCase);
@@ -816,6 +883,9 @@ namespace OutlookLocalAIChat.Chat
                         _thoughtSignatures)
                 }
             };
+            ApplyThinkingConfig(
+                envelope,
+                Convert.ToString(envelope["model"]));
             var triedModels = new HashSet<string>(
                 StringComparer.OrdinalIgnoreCase);
             for (var attempt = 0;
