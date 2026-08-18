@@ -85,6 +85,9 @@ jobs:
           if (-not $registration.Contains("OutlookLocalAIChat.PowerPointAddIn")) {
             throw "RegAsm did not export the PowerPoint add-in COM class."
           }
+          if (-not $registration.Contains("OutlookLocalAIChat.WordAddIn")) {
+            throw "RegAsm did not export the Word add-in COM class."
+          }
           if (-not $registration.Contains("OutlookLocalAIChat.UI.OfficeChatPane")) {
             throw "The Excel/PowerPoint sidebar control was not exported to COM."
           }
@@ -167,7 +170,10 @@ jobs:
                   "OutlookLocalAIChat.ExcelAddIn"),
                 @("Software\Microsoft\Office\PowerPoint\Addins\AI365.PowerPointAddIn",
                   "{69FAE812-274F-43F8-8F45-1B4EB22B5248}",
-                  "OutlookLocalAIChat.PowerPointAddIn")
+                  "OutlookLocalAIChat.PowerPointAddIn"),
+                @("Software\Microsoft\Office\Word\Addins\AI365.WordAddIn",
+                  "{B49E9DB7-0C40-46A8-80A3-547626FE5331}",
+                  "OutlookLocalAIChat.WordAddIn")
               )) {
                 $suiteAddin = $root.OpenSubKey($suite[0])
                 if ($null -eq $suiteAddin -or

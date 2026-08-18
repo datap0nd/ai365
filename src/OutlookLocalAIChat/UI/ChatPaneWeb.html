@@ -998,6 +998,15 @@
       line("\"add slides about ...\"", " appends marked draft slides - never saved");
       line("\"email these slides to ...\"", " opens an unsent Outlook draft");
       line("\"put this in excel\"", " writes the AI365 Draft sheet");
+    } else if (hostMode === "word") {
+      body.appendChild(document.createTextNode(
+        "Chat with your document - AI365 never saves, deletes, or sends anything.\n\n"));
+      line("+", " adds the selected text, files, or pictures");
+      body.appendChild(document.createTextNode(
+        "Ask about the document, its structure, or its wording.\n"));
+      line("\"write the revised text to a draft\"", " opens a new unsaved draft document");
+      line("\"email this to ...\"", " opens an unsent Outlook draft");
+      line("\"put this in excel / powerpoint\"", " drafts into the other apps");
     } else {
       body.appendChild(document.createTextNode(
         "Chat with your mailbox - local models, nothing is ever sent.\n\n"));
@@ -1015,7 +1024,9 @@
   }
 
   function applyMode(host) {
-    hostMode = host === "excel" || host === "powerpoint"
+    hostMode = host === "excel" ||
+      host === "powerpoint" ||
+      host === "word"
       ? host
       : "outlook";
     var addLabel = document.getElementById("menuAddEmail");
@@ -1023,6 +1034,8 @@
       addLabel.textContent = "▦︎  Add current selection";
     } else if (hostMode === "powerpoint") {
       addLabel.textContent = "▤︎  Add current slide";
+    } else if (hostMode === "word") {
+      addLabel.textContent = "▥︎  Add selected text";
     } else {
       addLabel.textContent = "✉︎  Add selected emails";
     }

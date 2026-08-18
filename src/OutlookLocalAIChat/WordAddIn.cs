@@ -7,20 +7,20 @@ using OutlookLocalAIChat.Utilities;
 
 namespace OutlookLocalAIChat
 {
-    // AI365 for PowerPoint: the same restrained chat pane, hosted by
-    // PowerPoint. The add-in itself holds no capability beyond
-    // opening the sidebar; every read and draft boundary lives in
-    // the pane and its tool hosts.
+    // AI365 for Word: the same restrained chat pane, hosted by
+    // Word. The add-in itself holds no capability beyond opening
+    // the sidebar; every read and draft boundary lives in the pane
+    // and its tool hosts.
     [ComVisible(true)]
-    [Guid("69FAE812-274F-43F8-8F45-1B4EB22B5248")]
-    [ProgId("AI365.PowerPointAddIn")]
+    [Guid("B49E9DB7-0C40-46A8-80A3-547626FE5331")]
+    [ProgId("AI365.WordAddIn")]
     [ClassInterface(ClassInterfaceType.AutoDispatch)]
-    public sealed class PowerPointAddIn :
+    public sealed class WordAddIn :
         IDTExtensibility2,
         IRibbonExtensibility,
         ICustomTaskPaneConsumer
     {
-        private object _powerPointApplication;
+        private object _wordApplication;
         private object _ctpFactory;
         private object _taskPane;
         private OfficeChatPane _chatPane;
@@ -31,7 +31,7 @@ namespace OutlookLocalAIChat
             object addInInstance,
             ref Array custom)
         {
-            _powerPointApplication = application;
+            _wordApplication = application;
         }
 
         public void OnDisconnection(
@@ -39,7 +39,7 @@ namespace OutlookLocalAIChat
             ref Array custom)
         {
             CloseTaskPane();
-            _powerPointApplication = null;
+            _wordApplication = null;
         }
 
         public void OnAddInsUpdate(ref Array custom)
@@ -62,12 +62,9 @@ namespace OutlookLocalAIChat
 
         public string GetCustomUI(string ribbonId)
         {
-            // This add-in is registered only under PowerPoint, so
-            // any ribbon id it receives is PowerPoint's. The id's
-            // exact casing has varied across Office versions
-            // ("Microsoft.Powerpoint.Presentation" vs
-            // "Microsoft.PowerPoint.Presentation"), and a mismatch
-            // silently hides the button.
+            // This add-in is registered only under Word, so any
+            // ribbon id it receives is Word's; exact-id matching
+            // would silently hide the button on a casing change.
             if (string.IsNullOrEmpty(ribbonId))
             {
                 return null;
@@ -77,11 +74,11 @@ namespace OutlookLocalAIChat
                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
                 "<customUI xmlns=\"http://schemas.microsoft.com/office/2009/07/customui\">" +
                 "<ribbon><tabs><tab idMso=\"TabHome\">" +
-                "<group id=\"AI365.PowerPoint.Group\" label=\"AI365\">" +
-                "<button id=\"AI365.PowerPoint.Open\" label=\"AI365\" " +
+                "<group id=\"AI365.Word.Group\" label=\"AI365\">" +
+                "<button id=\"AI365.Word.Open\" label=\"AI365\" " +
                 "size=\"large\" imageMso=\"ResearchPane\" onAction=\"OnOpenChat\" " +
                 "screentip=\"Open AI365\" " +
-                "supertip=\"Chat with your presentation. AI365 never saves, deletes, or sends anything.\"/>" +
+                "supertip=\"Chat with your document. AI365 never saves, deletes, or sends anything.\"/>" +
                 "</group></tab></tabs></ribbon>" +
                 "</customUI>";
         }
@@ -90,10 +87,10 @@ namespace OutlookLocalAIChat
         {
             try
             {
-                if (_powerPointApplication == null)
+                if (_wordApplication == null)
                 {
                     MessageBox.Show(
-                        "PowerPoint is not ready. Restart PowerPoint and try again.",
+                        "Word is not ready. Restart Word and try again.",
                         "AI365",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Warning);
@@ -103,7 +100,7 @@ namespace OutlookLocalAIChat
                 if (_ctpFactory == null)
                 {
                     MessageBox.Show(
-                        "PowerPoint has not made the sidebar service available yet. " +
+                        "Word has not made the sidebar service available yet. " +
                         "Wait a moment and try again.",
                         "AI365",
                         MessageBoxButtons.OK,
@@ -129,12 +126,12 @@ namespace OutlookLocalAIChat
                     if (_chatPane == null)
                     {
                         throw new InvalidOperationException(
-                            "PowerPoint created the sidebar but its chat control was unavailable.");
+                            "Word created the sidebar but its chat control was unavailable.");
                     }
 
                     _chatPane.Initialize(
-                        "powerpoint",
-                        _powerPointApplication);
+                        "word",
+                        _wordApplication);
                     pane.Visible = true;
                 }
                 else
@@ -145,7 +142,7 @@ namespace OutlookLocalAIChat
             }
             catch (Exception exception)
             {
-                Log.Error("PowerPointOpenChat", exception);
+                Log.Error("WordOpenChat", exception);
                 MessageBox.Show(
                     DiagnosticDetails.ForException(
                         exception,
@@ -169,7 +166,7 @@ namespace OutlookLocalAIChat
             }
             catch (Exception exception)
             {
-                Log.Error("PowerPointCloseTaskPane", exception);
+                Log.Error("WordCloseTaskPane", exception);
             }
 
             Release(_taskPane);

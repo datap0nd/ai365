@@ -147,8 +147,8 @@ namespace OutlookLocalAIChat.UI
                 return;
             }
 
-            _hostKind = hostKind == "excel"
-                ? "excel"
+            _hostKind = hostKind == "excel" || hostKind == "word"
+                ? hostKind
                 : "powerpoint";
             _hostApplication = hostApplication ??
                 throw new ArgumentNullException(
@@ -165,7 +165,9 @@ namespace OutlookLocalAIChat.UI
             {
                 return _hostKind == "excel"
                     ? "Excel"
-                    : "PowerPoint";
+                    : (_hostKind == "word"
+                        ? "Word"
+                        : "PowerPoint");
             }
         }
 
@@ -770,6 +772,12 @@ namespace OutlookLocalAIChat.UI
                         _hostApplication).DescribeSelection(
                         out title);
                 }
+                else if (_hostKind == "word")
+                {
+                    content = new WordToolHost(
+                        _hostApplication).DescribeSelection(
+                        out title);
+                }
                 else
                 {
                     content = new PresentationToolHost(
@@ -1264,6 +1272,7 @@ namespace OutlookLocalAIChat.UI
                 imagesExpected);
             WorkbookToolHost workbookTools = null;
             PresentationToolHost presentationTools = null;
+            WordToolHost wordTools = null;
             string activeContext;
             if (_hostKind == "excel")
             {
@@ -1271,6 +1280,13 @@ namespace OutlookLocalAIChat.UI
                     _hostApplication);
                 activeContext =
                     workbookTools.DescribeActiveContext();
+            }
+            else if (_hostKind == "word")
+            {
+                wordTools = new WordToolHost(
+                    _hostApplication);
+                activeContext =
+                    wordTools.DescribeActiveContext();
             }
             else
             {
@@ -1387,6 +1403,10 @@ namespace OutlookLocalAIChat.UI
                     else if (workbookTools != null)
                     {
                         result = workbookTools.Execute(toolCall);
+                    }
+                    else if (wordTools != null)
+                    {
+                        result = wordTools.Execute(toolCall);
                     }
                     else
                     {

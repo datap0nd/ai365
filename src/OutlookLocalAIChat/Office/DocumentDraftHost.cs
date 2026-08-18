@@ -43,6 +43,13 @@ namespace OutlookLocalAIChat.Office
                 "slides"
             };
 
+        private static readonly HashSet<string> DocumentArguments =
+            new HashSet<string>(StringComparer.Ordinal)
+            {
+                "title",
+                "body"
+            };
+
         private readonly string _hostKind;
         private readonly object _hostApplication;
         private readonly JavaScriptSerializer _serializer =
@@ -70,7 +77,8 @@ namespace OutlookLocalAIChat.Office
                         CrossAppToolCatalog.SendToPowerPoint,
                         StringComparison.Ordinal))
                 {
-                    return hostKind == "excel";
+                    return hostKind == "excel" ||
+                           hostKind == "word";
                 }
 
                 if (string.Equals(
@@ -78,7 +86,17 @@ namespace OutlookLocalAIChat.Office
                         CrossAppToolCatalog.SendToExcel,
                         StringComparison.Ordinal))
                 {
-                    return hostKind == "powerpoint";
+                    return hostKind == "powerpoint" ||
+                           hostKind == "word";
+                }
+
+                if (string.Equals(
+                        name,
+                        CrossAppToolCatalog.SendToWord,
+                        StringComparison.Ordinal))
+                {
+                    return hostKind == "excel" ||
+                           hostKind == "powerpoint";
                 }
 
                 return true;
@@ -92,6 +110,11 @@ namespace OutlookLocalAIChat.Office
             if (hostKind == "powerpoint")
             {
                 return PresentationToolCatalog.IsDraftTool(name);
+            }
+
+            if (hostKind == "word")
+            {
+                return WordToolCatalog.IsDraftTool(name);
             }
 
             return false;
@@ -209,6 +232,33 @@ namespace OutlookLocalAIChat.Office
                             string.Empty),
                         ParsedRows(arguments));
                 }
+                else if (string.Equals(
+                             name,
+                             WordToolCatalog.WriteDraftDocument,
+                             StringComparison.Ordinal))
+                {
+                    status = WordDraftWriter.WriteDraftDocument(
+                        _hostApplication,
+                        ToolArguments.GetString(
+                            arguments,
+                            "title",
+                            string.Empty),
+                        GetLongString(arguments, "body"));
+                }
+                else if (string.Equals(
+                             name,
+                             CrossAppToolCatalog.SendToWord,
+                             StringComparison.Ordinal))
+                {
+                    status = WordDraftWriter.WriteDraftDocument(
+                        GetSiblingApplication(
+                            "Word.Application"),
+                        ToolArguments.GetString(
+                            arguments,
+                            "title",
+                            string.Empty),
+                        GetLongString(arguments, "body"));
+                }
                 else
                 {
                     throw new InvalidOperationException(
@@ -251,6 +301,20 @@ namespace OutlookLocalAIChat.Office
             _emailDraft = null;
         }
 
+        // Long text arguments (draft bodies) must not ride through
+        // the 1000-character generic string reader.
+        private static string GetLongString(
+            IDictionary<string, object> arguments,
+            string key)
+        {
+            object value;
+            return arguments.TryGetValue(key, out value)
+                ? TextBoundary.PlainText(
+                    Convert.ToString(value),
+                    WordDraftWriter.MaxDraftCharacters)
+                : string.Empty;
+        }
+
         private static IReadOnlyList<IReadOnlyList<string>>
             ParsedRows(IDictionary<string, object> arguments)
         {
@@ -276,10 +340,7 @@ namespace OutlookLocalAIChat.Office
             IDictionary<string, object> arguments)
         {
             var body = TextBoundary.PlainText(
-                ToolArguments.GetString(
-                    arguments,
-                    "body",
-                    string.Empty),
+                GetLongString(arguments, "body"),
                 TextBoundary.MaxAssistantCharacters);
             if (body.Length == 0)
             {
@@ -334,9 +395,19 @@ namespace OutlookLocalAIChat.Office
             try
             {
                 dynamic application = _hostApplication;
-                dynamic document = _hostKind == "excel"
-                    ? application.ActiveWorkbook
-                    : application.ActivePresentation;
+                dynamic document;
+                if (_hostKind == "excel")
+                {
+                    document = application.ActiveWorkbook;
+                }
+                else if (_hostKind == "word")
+                {
+                    document = application.ActiveDocument;
+                }
+                else
+                {
+                    document = application.ActivePresentation;
+                }
                 if (document == null)
                 {
                     return string.Empty;
@@ -417,6 +488,18 @@ namespace OutlookLocalAIChat.Office
                     StringComparison.Ordinal))
             {
                 allowed = SheetArguments;
+            }
+            else if (
+                string.Equals(
+                    name,
+                    WordToolCatalog.WriteDraftDocument,
+                    StringComparison.Ordinal) ||
+                string.Equals(
+                    name,
+                    CrossAppToolCatalog.SendToWord,
+                    StringComparison.Ordinal))
+            {
+                allowed = DocumentArguments;
             }
             else
             {

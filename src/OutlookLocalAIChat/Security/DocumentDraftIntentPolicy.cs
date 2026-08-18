@@ -67,6 +67,61 @@ namespace OutlookLocalAIChat.Security
             "turn this into"
         };
 
+        // Editing verbs authorize a draft only together with a
+        // document reference, mirroring the Outlook update policy:
+        // "update the table" or "fix column B" unlocks the marked
+        // draft surface, while "update me on the project" does not.
+        private static readonly string[] EditActions =
+        {
+            "edit",
+            "update",
+            "change",
+            "fix",
+            "correct",
+            "fill",
+            "populate",
+            "revise",
+            "rewrite",
+            "modify",
+            "adjust",
+            "calculate",
+            "compute",
+            "sort",
+            "reformat",
+            "clean up",
+            "improve",
+            "translate",
+            "shorten",
+            "expand"
+        };
+
+        private static readonly string[] DocumentReferences =
+        {
+            "sheet",
+            "cell",
+            "cells",
+            "column",
+            "row",
+            "rows",
+            "table",
+            "workbook",
+            "spreadsheet",
+            "range",
+            "formula",
+            "slide",
+            "slides",
+            "deck",
+            "presentation",
+            "document",
+            "paragraph",
+            "section",
+            "text",
+            "draft",
+            "data",
+            "numbers",
+            "values"
+        };
+
         public static bool AllowsDraft(string userPrompt)
         {
             var prompt = TextBoundary.PlainText(
@@ -74,6 +129,24 @@ namespace OutlookLocalAIChat.Security
                     TextBoundary.MaxUserPromptCharacters)
                 .ToLowerInvariant();
             foreach (var phrase in DraftPhrases)
+            {
+                if (prompt.IndexOf(
+                        phrase,
+                        StringComparison.Ordinal) >= 0)
+                {
+                    return true;
+                }
+            }
+
+            return ContainsAny(prompt, EditActions) &&
+                   ContainsAny(prompt, DocumentReferences);
+        }
+
+        private static bool ContainsAny(
+            string prompt,
+            string[] phrases)
+        {
+            foreach (var phrase in phrases)
             {
                 if (prompt.IndexOf(
                         phrase,

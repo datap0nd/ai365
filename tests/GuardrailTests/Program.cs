@@ -4006,6 +4006,7 @@ namespace GuardrailTests
                 script.Contains("OUTLOOK.EXE") &&
                 script.Contains("EXCEL.EXE") &&
                 script.Contains("POWERPNT.EXE") &&
+                script.Contains("WINWORD.EXE") &&
                 script.Contains("if %tries% GEQ 150 exit /b 1") &&
                 script.Contains(
                     "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART") &&
@@ -4047,6 +4048,18 @@ namespace GuardrailTests
                 DocumentDraftIntentPolicy.AllowsDraft(
                     "add slides about pricing"),
                 "An explicit slide request must authorize a draft.");
+            Assert(
+                DocumentDraftIntentPolicy.AllowsDraft(
+                    "update the table with the new totals"),
+                "An edit verb plus a document reference must authorize a draft.");
+            Assert(
+                DocumentDraftIntentPolicy.AllowsDraft(
+                    "fix the formula in column B"),
+                "A fix request on document content must authorize a draft.");
+            Assert(
+                !DocumentDraftIntentPolicy.AllowsDraft(
+                    "give me an overview of the project"),
+                "An overview request must not authorize a document draft.");
         }
 
         private static void WorkbookAndPresentationCatalogsStayReadOnly()
@@ -4072,11 +4085,22 @@ namespace GuardrailTests
                     "read_slide"
                 }),
                 "The presentation read catalog gained an unexpected capability.");
+            var wordNames = WordToolCatalog.ApprovedNames
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToArray();
+            Assert(
+                wordNames.SequenceEqual(new[]
+                {
+                    "read_document"
+                }),
+                "The Word read catalog gained an unexpected capability.");
             Assert(
                 !WorkbookToolCatalog.IsApproved(
                     WorkbookToolCatalog.WriteDraftSheet) &&
                 !PresentationToolCatalog.IsApproved(
-                    PresentationToolCatalog.AddDraftSlides),
+                    PresentationToolCatalog.AddDraftSlides) &&
+                !WordToolCatalog.IsApproved(
+                    WordToolCatalog.WriteDraftDocument),
                 "Draft writers must never pass the read-only approval check.");
 
             Assert(
@@ -4099,10 +4123,31 @@ namespace GuardrailTests
                     "powerpoint",
                     CrossAppToolCatalog.SendToPowerPoint) &&
                 DocumentDraftHost.IsDraftTool(
+                    "word",
+                    WordToolCatalog.WriteDraftDocument) &&
+                !DocumentDraftHost.IsDraftTool(
+                    "word",
+                    CrossAppToolCatalog.SendToWord) &&
+                DocumentDraftHost.IsDraftTool(
+                    "word",
+                    CrossAppToolCatalog.SendToExcel) &&
+                DocumentDraftHost.IsDraftTool(
+                    "word",
+                    CrossAppToolCatalog.SendToPowerPoint) &&
+                DocumentDraftHost.IsDraftTool(
+                    "excel",
+                    CrossAppToolCatalog.SendToWord) &&
+                DocumentDraftHost.IsDraftTool(
+                    "powerpoint",
+                    CrossAppToolCatalog.SendToWord) &&
+                DocumentDraftHost.IsDraftTool(
                     "excel",
                     CrossAppToolCatalog.CreateEmailDraft) &&
                 DocumentDraftHost.IsDraftTool(
                     "powerpoint",
+                    CrossAppToolCatalog.CreateEmailDraft) &&
+                DocumentDraftHost.IsDraftTool(
+                    "word",
                     CrossAppToolCatalog.CreateEmailDraft) &&
                 !DocumentDraftHost.IsDraftTool(
                     "excel",
@@ -4118,7 +4163,8 @@ namespace GuardrailTests
                 excelCross.SequenceEqual(new[]
                 {
                     "create_email_draft",
-                    "send_to_powerpoint"
+                    "send_to_powerpoint",
+                    "send_to_word"
                 }),
                 "Excel cross-app tools changed unexpectedly.");
             var powerPointCross = CrossAppToolCatalog
@@ -4130,9 +4176,23 @@ namespace GuardrailTests
                 powerPointCross.SequenceEqual(new[]
                 {
                     "create_email_draft",
-                    "send_to_excel"
+                    "send_to_excel",
+                    "send_to_word"
                 }),
                 "PowerPoint cross-app tools changed unexpectedly.");
+            var wordCross = CrossAppToolCatalog
+                .CreateDefinitions("word")
+                .Select(tool => tool.function.name)
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToArray();
+            Assert(
+                wordCross.SequenceEqual(new[]
+                {
+                    "create_email_draft",
+                    "send_to_excel",
+                    "send_to_powerpoint"
+                }),
+                "Word cross-app tools changed unexpectedly.");
             var emailTool = CrossAppToolCatalog
                 .CreateDefinitions("excel")
                 .First(tool =>
@@ -4207,6 +4267,36 @@ namespace GuardrailTests
                 authorizedSystem.Contains(
                     "Never claim content was saved"),
                 "The authorized document boundary is incomplete.");
+
+            var wordAuthorized = DocumentChatRequestFactory.Create(
+                "test-model",
+                "word",
+                "Document: Report1",
+                new List<ChatTurn>(),
+                "fix the second paragraph",
+                true);
+            var wordNames = wordAuthorized.tools
+                .Select(tool => tool.function.name)
+                .ToArray();
+            Assert(
+                wordNames.Contains("read_document") &&
+                wordNames.Contains("write_draft_document") &&
+                wordNames.Contains("create_email_draft") &&
+                wordNames.Contains("send_to_excel") &&
+                wordNames.Contains("send_to_powerpoint") &&
+                !wordNames.Contains("send_to_word"),
+                "Authorized Word requests expose the wrong draft tools.");
+            var wordUnauthorized = DocumentChatRequestFactory.Create(
+                "test-model",
+                "word",
+                "Document: Report1",
+                new List<ChatTurn>(),
+                "what does the intro say");
+            Assert(
+                wordUnauthorized.tools
+                    .Select(tool => tool.function.name)
+                    .SequenceEqual(new[] { "read_document" }),
+                "Unauthorized Word requests must expose read tools only.");
 
             var withMcp = DocumentChatRequestFactory.Create(
                 "test-model",

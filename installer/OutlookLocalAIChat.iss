@@ -11,6 +11,8 @@
 #define ExcelClsid "{{C0ABFA36-9854-434D-A542-DD834938737F}"
 #define PptProgId "AI365.PowerPointAddIn"
 #define PptClsid "{{69FAE812-274F-43F8-8F45-1B4EB22B5248}"
+#define WordProgId "AI365.WordAddIn"
+#define WordClsid "{{B49E9DB7-0C40-46A8-80A3-547626FE5331}"
 #define OfficePaneProgId "AI365.OfficePane"
 #define OfficePaneClsid "{{BC9047E7-9AFE-4F75-BBBC-27241B1DE2FA}"
 #define ManagedCategory "{{62C8FE65-4EBB-45E7-B440-6E39B2CDBF29}"
@@ -34,11 +36,11 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 CloseApplications=yes
-CloseApplicationsFilter=outlook.exe,excel.exe,powerpnt.exe
+CloseApplicationsFilter=outlook.exe,excel.exe,powerpnt.exe,winword.exe
 RestartApplications=no
 UninstallDisplayName={#AppName}
 VersionInfoVersion={#AppVersion}
-VersionInfoDescription=AI assistant suite for Outlook, Excel, and PowerPoint - drafts only, never sends or saves
+VersionInfoDescription=AI assistant suite for Outlook, Excel, PowerPoint, and Word - drafts only, never sends or saves
 VersionInfoProductName={#AppName}
 VersionInfoCompany={#AppPublisher}
 
@@ -258,6 +260,49 @@ Root: HKCU64; Subkey: "Software\Classes\CLSID\{#OfficePaneClsid}\Implemented Cat
 Root: HKCU64; Subkey: "Software\Classes\CLSID\{#OfficePaneClsid}\Programmable"; ValueType: string; ValueName: ""; ValueData: ""; Check: IsWin64
 Root: HKCU64; Subkey: "Software\Classes\{#OfficePaneProgId}"; ValueType: string; ValueName: ""; ValueData: "AI365 Sidebar"; Flags: uninsdeletekey; Check: IsWin64
 Root: HKCU64; Subkey: "Software\Classes\{#OfficePaneProgId}\CLSID"; ValueType: string; ValueName: ""; ValueData: "{#OfficePaneClsid}"; Check: IsWin64
+
+
+; AI365 for Word add-in (32-bit).
+Root: HKCU32; Subkey: "Software\Classes\CLSID\{#WordClsid}"; ValueType: string; ValueName: ""; ValueData: "AI365 for Word"; Flags: uninsdeletekey
+Root: HKCU32; Subkey: "Software\Classes\CLSID\{#WordClsid}\InprocServer32"; ValueType: string; ValueName: ""; ValueData: "mscoree.dll"; Flags: uninsdeletekey
+Root: HKCU32; Subkey: "Software\Classes\CLSID\{#WordClsid}\InprocServer32"; ValueType: string; ValueName: "ThreadingModel"; ValueData: "Both"
+Root: HKCU32; Subkey: "Software\Classes\CLSID\{#WordClsid}\InprocServer32"; ValueType: string; ValueName: "Class"; ValueData: "OutlookLocalAIChat.WordAddIn"
+Root: HKCU32; Subkey: "Software\Classes\CLSID\{#WordClsid}\InprocServer32"; ValueType: string; ValueName: "Assembly"; ValueData: "{#AssemblyName}"
+Root: HKCU32; Subkey: "Software\Classes\CLSID\{#WordClsid}\InprocServer32"; ValueType: string; ValueName: "RuntimeVersion"; ValueData: "v4.0.30319"
+Root: HKCU32; Subkey: "Software\Classes\CLSID\{#WordClsid}\InprocServer32"; ValueType: string; ValueName: "CodeBase"; ValueData: "{code:GetAssemblyCodeBase}"
+Root: HKCU32; Subkey: "Software\Classes\CLSID\{#WordClsid}\InprocServer32\1.1.0.0"; ValueType: string; ValueName: "Class"; ValueData: "OutlookLocalAIChat.WordAddIn"
+Root: HKCU32; Subkey: "Software\Classes\CLSID\{#WordClsid}\InprocServer32\1.1.0.0"; ValueType: string; ValueName: "Assembly"; ValueData: "{#AssemblyName}"
+Root: HKCU32; Subkey: "Software\Classes\CLSID\{#WordClsid}\InprocServer32\1.1.0.0"; ValueType: string; ValueName: "RuntimeVersion"; ValueData: "v4.0.30319"
+Root: HKCU32; Subkey: "Software\Classes\CLSID\{#WordClsid}\InprocServer32\1.1.0.0"; ValueType: string; ValueName: "CodeBase"; ValueData: "{code:GetAssemblyCodeBase}"
+Root: HKCU32; Subkey: "Software\Classes\CLSID\{#WordClsid}\ProgId"; ValueType: string; ValueName: ""; ValueData: "{#WordProgId}"
+Root: HKCU32; Subkey: "Software\Classes\CLSID\{#WordClsid}\Implemented Categories\{#ManagedCategory}"; ValueType: string; ValueName: ""; ValueData: ""
+Root: HKCU32; Subkey: "Software\Classes\{#WordProgId}"; ValueType: string; ValueName: ""; ValueData: "AI365 for Word"; Flags: uninsdeletekey
+Root: HKCU32; Subkey: "Software\Classes\{#WordProgId}\CLSID"; ValueType: string; ValueName: ""; ValueData: "{#WordClsid}"
+Root: HKCU32; Subkey: "Software\Microsoft\Office\Word\Addins\{#WordProgId}"; ValueType: string; ValueName: "FriendlyName"; ValueData: "AI365"; Flags: uninsdeletekey
+Root: HKCU32; Subkey: "Software\Microsoft\Office\Word\Addins\{#WordProgId}"; ValueType: string; ValueName: "Description"; ValueData: "Chat with your document. AI365 never saves, deletes, or sends."
+Root: HKCU32; Subkey: "Software\Microsoft\Office\Word\Addins\{#WordProgId}"; ValueType: dword; ValueName: "LoadBehavior"; ValueData: "3"
+Root: HKCU32; Subkey: "Software\Microsoft\Office\Word\Addins\{#WordProgId}"; ValueType: dword; ValueName: "CommandLineSafe"; ValueData: "0"
+
+; AI365 for Word add-in (64-bit).
+Root: HKCU64; Subkey: "Software\Classes\CLSID\{#WordClsid}"; ValueType: string; ValueName: ""; ValueData: "AI365 for Word"; Flags: uninsdeletekey; Check: IsWin64
+Root: HKCU64; Subkey: "Software\Classes\CLSID\{#WordClsid}\InprocServer32"; ValueType: string; ValueName: ""; ValueData: "mscoree.dll"; Flags: uninsdeletekey; Check: IsWin64
+Root: HKCU64; Subkey: "Software\Classes\CLSID\{#WordClsid}\InprocServer32"; ValueType: string; ValueName: "ThreadingModel"; ValueData: "Both"; Check: IsWin64
+Root: HKCU64; Subkey: "Software\Classes\CLSID\{#WordClsid}\InprocServer32"; ValueType: string; ValueName: "Class"; ValueData: "OutlookLocalAIChat.WordAddIn"; Check: IsWin64
+Root: HKCU64; Subkey: "Software\Classes\CLSID\{#WordClsid}\InprocServer32"; ValueType: string; ValueName: "Assembly"; ValueData: "{#AssemblyName}"; Check: IsWin64
+Root: HKCU64; Subkey: "Software\Classes\CLSID\{#WordClsid}\InprocServer32"; ValueType: string; ValueName: "RuntimeVersion"; ValueData: "v4.0.30319"; Check: IsWin64
+Root: HKCU64; Subkey: "Software\Classes\CLSID\{#WordClsid}\InprocServer32"; ValueType: string; ValueName: "CodeBase"; ValueData: "{code:GetAssemblyCodeBase}"; Check: IsWin64
+Root: HKCU64; Subkey: "Software\Classes\CLSID\{#WordClsid}\InprocServer32\1.1.0.0"; ValueType: string; ValueName: "Class"; ValueData: "OutlookLocalAIChat.WordAddIn"; Check: IsWin64
+Root: HKCU64; Subkey: "Software\Classes\CLSID\{#WordClsid}\InprocServer32\1.1.0.0"; ValueType: string; ValueName: "Assembly"; ValueData: "{#AssemblyName}"; Check: IsWin64
+Root: HKCU64; Subkey: "Software\Classes\CLSID\{#WordClsid}\InprocServer32\1.1.0.0"; ValueType: string; ValueName: "RuntimeVersion"; ValueData: "v4.0.30319"; Check: IsWin64
+Root: HKCU64; Subkey: "Software\Classes\CLSID\{#WordClsid}\InprocServer32\1.1.0.0"; ValueType: string; ValueName: "CodeBase"; ValueData: "{code:GetAssemblyCodeBase}"; Check: IsWin64
+Root: HKCU64; Subkey: "Software\Classes\CLSID\{#WordClsid}\ProgId"; ValueType: string; ValueName: ""; ValueData: "{#WordProgId}"; Check: IsWin64
+Root: HKCU64; Subkey: "Software\Classes\CLSID\{#WordClsid}\Implemented Categories\{#ManagedCategory}"; ValueType: string; ValueName: ""; ValueData: ""; Check: IsWin64
+Root: HKCU64; Subkey: "Software\Classes\{#WordProgId}"; ValueType: string; ValueName: ""; ValueData: "AI365 for Word"; Flags: uninsdeletekey; Check: IsWin64
+Root: HKCU64; Subkey: "Software\Classes\{#WordProgId}\CLSID"; ValueType: string; ValueName: ""; ValueData: "{#WordClsid}"; Check: IsWin64
+Root: HKCU64; Subkey: "Software\Microsoft\Office\Word\Addins\{#WordProgId}"; ValueType: string; ValueName: "FriendlyName"; ValueData: "AI365"; Flags: uninsdeletekey; Check: IsWin64
+Root: HKCU64; Subkey: "Software\Microsoft\Office\Word\Addins\{#WordProgId}"; ValueType: string; ValueName: "Description"; ValueData: "Chat with your document. AI365 never saves, deletes, or sends."; Check: IsWin64
+Root: HKCU64; Subkey: "Software\Microsoft\Office\Word\Addins\{#WordProgId}"; ValueType: dword; ValueName: "LoadBehavior"; ValueData: "3"; Check: IsWin64
+Root: HKCU64; Subkey: "Software\Microsoft\Office\Word\Addins\{#WordProgId}"; ValueType: dword; ValueName: "CommandLineSafe"; ValueData: "0"; Check: IsWin64
 
 [Code]
 function GetAssemblyCodeBase(Param: String): String;

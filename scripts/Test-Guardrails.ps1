@@ -267,9 +267,12 @@ $officeGuardedFiles = @(
     (Join-Path $sourceRoot "Office\WorkbookDraftWriter.cs"),
     (Join-Path $sourceRoot "Office\PresentationToolHost.cs"),
     (Join-Path $sourceRoot "Office\PresentationDraftWriter.cs"),
+    (Join-Path $sourceRoot "Office\WordToolHost.cs"),
+    (Join-Path $sourceRoot "Office\WordDraftWriter.cs"),
     (Join-Path $sourceRoot "Office\DocumentDraftHost.cs"),
     (Join-Path $sourceRoot "ExcelAddIn.cs"),
     (Join-Path $sourceRoot "PowerPointAddIn.cs"),
+    (Join-Path $sourceRoot "WordAddIn.cs"),
     (Join-Path $sourceRoot "UI\OfficeChatPane.cs")
 )
 foreach ($guardedFile in $officeGuardedFiles) {
@@ -291,6 +294,8 @@ $presentationCatalogSource = Get-Content (
     Join-Path $sourceRoot "Chat\PresentationToolCatalog.cs") -Raw
 $crossAppCatalogSource = Get-Content (
     Join-Path $sourceRoot "Chat\CrossAppToolCatalog.cs") -Raw
+$wordCatalogSource = Get-Content (
+    Join-Path $sourceRoot "Chat\WordToolCatalog.cs") -Raw
 $documentFactorySource = Get-Content (
     Join-Path $sourceRoot "Chat\DocumentChatRequestFactory.cs") -Raw
 
@@ -323,8 +328,19 @@ $crossAppToolNames = [regex]::Matches(
 if (Compare-Object $crossAppToolNames (@(
     "create_email_draft",
     "send_to_powerpoint",
-    "send_to_excel") | Sort-Object)) {
+    "send_to_excel",
+    "send_to_word") | Sort-Object)) {
     throw "Cross-app tool catalog contains an unexpected capability."
+}
+
+$wordToolNames = [regex]::Matches(
+    $wordCatalogSource,
+    'public const string \w+ = "([^"]+)";'
+) | ForEach-Object { $_.Groups[1].Value } | Sort-Object
+if (Compare-Object $wordToolNames (@(
+    "read_document",
+    "write_draft_document") | Sort-Object)) {
+    throw "Word tool catalog contains an unexpected capability."
 }
 
 $documentDraftHostSource = Get-Content (
@@ -353,6 +369,14 @@ $presentationWriterSource = Get-Content (
 if (-not $presentationWriterSource.Contains(
         'DraftMarker = "[AI365 draft]"')) {
     throw "Appended slides must stay marked as AI365 drafts."
+}
+
+$wordWriterSource = Get-Content (
+    Join-Path $sourceRoot "Office\WordDraftWriter.cs") -Raw
+if (-not $wordWriterSource.Contains(
+        'DraftMarker = "[AI365 draft]"') -or
+    -not $wordWriterSource.Contains("Documents.Add()")) {
+    throw "Word drafts must stay marked, new, and unsaved."
 }
 
 foreach ($requiredDocumentBoundary in @(
@@ -408,6 +432,7 @@ $documentModelFacingSource =
     $workbookCatalogSource +
     $presentationCatalogSource +
     $crossAppCatalogSource +
+    $wordCatalogSource +
     $documentFactorySource
 foreach ($capability in @(
     "DraftService",

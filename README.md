@@ -2,7 +2,7 @@
 
 A Windows-only AI assistant suite for classic Microsoft Office
 (Professional Plus 2021): one installer adds an **AI365** sidebar to
-**Outlook, Excel, and PowerPoint**. Every pane shares the same chat stack -
+**Outlook, Excel, PowerPoint, and Word**. Every pane shares the same chat stack -
 local OpenAI-compatible models or Google Gemini via browser sign-in, the same
 settings and writing soul, rich markdown output with tables, optional MCP
 tool servers, and the same hard guardrails: the model can read bounded
@@ -16,28 +16,31 @@ context but can never send email, save a file, or delete anything.
 - **PowerPoint**: chat with the open presentation (bounded slide and notes
   reads); the only write surface is appended **[AI365 draft]** slides that
   the add-in never saves.
-- **Connected**: from Excel or PowerPoint, "email this to ..." opens an
+- **Word**: chat with the open document (bounded text reads); the only write
+  surface is a brand-new, unsaved **[AI365 draft]** document that the add-in
+  never saves.
+- **Connected**: from any document pane, "email this to ..." opens an
   unsent Outlook draft (optionally attaching the saved file); "put this in
-  PowerPoint" / "put this in Excel" drafts into the sibling app; and a
-  deliberate **Share to AI365 apps** hand-off moves one bounded snippet
-  between panes. One **Update** click in Settings refreshes all three add-ins
-  together.
+  PowerPoint" / "put this in Excel" / "put this in Word" drafts into the
+  sibling app; and a deliberate **Share to AI365 apps** hand-off moves one
+  bounded snippet between panes. One **Update** click in Settings refreshes
+  all four add-ins together.
 
 It does not use Microsoft 365 add-in deployment, Microsoft Graph, or
 Entra ID.
 
 ## Install
 
-1. Close Outlook, Excel, and PowerPoint.
+1. Close Outlook, Excel, PowerPoint, and Word.
 2. Download
    [AI365Setup.exe](https://github.com/datap0nd/ai365/releases/latest/download/AI365Setup.exe).
    This link tracks the **Latest** release, which is rebuilt automatically on
    every push to `main`.
 3. Run the installer for your Windows account. It registers the add-in for
-   all three Office apps at once.
-4. Start classic Outlook, Excel, or PowerPoint.
-5. In Outlook choose **AI365 > AI365** on the ribbon; in Excel and PowerPoint
-   the **AI365** button sits on the **Home** tab.
+   all four Office apps at once.
+4. Start classic Outlook, Excel, PowerPoint, or Word.
+5. In Outlook choose **AI365 > AI365** on the ribbon; in Excel, PowerPoint,
+   and Word the **AI365** button sits on the **Home** tab.
 6. Open **Settings** and enter:
    - the OpenAI-compatible endpoint or base URL;
    - the API key;
@@ -51,7 +54,7 @@ Entra ID.
 
 To update later, open **Settings** in any AI365 pane and click
 **Update AI365**. After a confirmation it downloads the latest release
-installer, waits for Outlook, Excel, and PowerPoint to close (Outlook closes
+installer, waits for Outlook, Excel, PowerPoint, and Word to close (Outlook closes
 and reopens automatically when the update starts there), and installs
 silently for your Windows account. One update refreshes the whole suite.
 
@@ -200,9 +203,9 @@ line) are followed exactly in every draft. Soul, strength, and rules apply
 only to draft creation and revision, and only to wording, greeting,
 cadence, and sign-off. They cannot alter any capability or security rule.
 
-## Excel and PowerPoint panes
+## Excel, PowerPoint, and Word panes
 
-The Excel and PowerPoint sidebars reuse the same chat page, models,
+The Excel, PowerPoint, and Word sidebars reuse the same chat page, models,
 streaming, context tray, and settings as Outlook. Their tool surface is
 document-shaped and read-only:
 
@@ -210,24 +213,29 @@ document-shaped and read-only:
   per read, 500 characters per cell, tab-separated, truncation flagged).
 - PowerPoint: `list_slides` and `read_slide` (bounded slide text including
   speaker notes).
+- Word: `read_document` (bounded plain-text slices of the active document).
 - **+ > Add current selection / Add current slide** snapshots what you have
   selected into the bounded context tray; files and pictures work exactly as
   in Outlook.
 
 Writes exist only as clearly marked drafts, and only when your own latest
 message contains an explicit request ("put this in a draft sheet", "add
-slides about ...", "email this to ..."). One draft attempt per request, as
-in Outlook:
+slides about ...", "fix the formula in column B", "email this to ...").
+Asking to edit or fix document content also counts - the revision lands in
+the marked draft surface, never in your original file. One draft attempt
+per request, as in Outlook:
 
 - `write_draft_sheet` fills the dedicated **AI365 Draft** worksheet
   (created at the end of the workbook; other sheets are never touched).
 - `add_draft_slides` appends slides whose titles carry the
   **[AI365 draft]** marker; existing slides are never modified.
+- `write_draft_document` opens a brand-new, unsaved Word document headed
+  **[AI365 draft]**; the open document is never modified.
 - `create_email_draft` opens an unsent Outlook draft for review - Outlook
   starts if needed, the draft can attach the current file when it is saved
   on disk, and sending stays impossible.
-- `send_to_powerpoint` / `send_to_excel` draft into the sibling app the same
-  way.
+- `send_to_powerpoint` / `send_to_excel` / `send_to_word` draft into the
+  sibling app the same way.
 
 The add-in never calls Save, SaveAs, Delete, Print, Protect, Close, or Quit
 on your documents - saving stays a human action, so even a discarded draft
@@ -515,7 +523,7 @@ above always points at the newest build.
 
 ## Compatibility
 
-- Classic Outlook, Excel, and PowerPoint for Windows
+- Classic Outlook, Excel, PowerPoint, and Word for Windows
 - Microsoft Office Professional Plus 2021
 - 32-bit or 64-bit Office on Windows
 - .NET Framework 4.8

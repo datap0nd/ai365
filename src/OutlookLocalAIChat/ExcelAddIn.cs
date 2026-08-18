@@ -62,10 +62,10 @@ namespace OutlookLocalAIChat
 
         public string GetCustomUI(string ribbonId)
         {
-            if (!string.Equals(
-                ribbonId,
-                "Microsoft.Excel.Workbook",
-                StringComparison.Ordinal))
+            // This add-in is registered only under Excel, so any
+            // ribbon id it receives is Excel's; exact-id matching
+            // would silently hide the button on a casing change.
+            if (string.IsNullOrEmpty(ribbonId))
             {
                 return null;
             }

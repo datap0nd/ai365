@@ -101,8 +101,8 @@ namespace OutlookLocalAIChat.Utilities
 
         // The script receives the installer path as %1 so the file itself
         // stays pure ASCII regardless of the user's profile path. One
-        // installer carries all three add-ins (Outlook, Excel, and
-        // PowerPoint share a single assembly), so the script waits for
+        // installer carries all four add-ins (Outlook, Excel,
+        // PowerPoint, and Word share a single assembly), so the script waits for
         // every Office host to close before installing and the whole
         // suite updates together.
         public static string BuildUpdateScript()
@@ -125,6 +125,10 @@ namespace OutlookLocalAIChat.Utilities
             builder.AppendLine(
                 "tasklist /FI \"IMAGENAME eq POWERPNT.EXE\" | " +
                 "find /I \"POWERPNT.EXE\" >nul");
+            builder.AppendLine("if not errorlevel 1 set running=1");
+            builder.AppendLine(
+                "tasklist /FI \"IMAGENAME eq WINWORD.EXE\" | " +
+                "find /I \"WINWORD.EXE\" >nul");
             builder.AppendLine("if not errorlevel 1 set running=1");
             builder.AppendLine("if %running%==0 goto install");
             builder.AppendLine("set /a tries+=1");

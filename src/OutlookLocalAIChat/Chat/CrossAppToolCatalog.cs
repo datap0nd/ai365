@@ -16,6 +16,7 @@ namespace OutlookLocalAIChat.Chat
         public const string CreateEmailDraft = "create_email_draft";
         public const string SendToPowerPoint = "send_to_powerpoint";
         public const string SendToExcel = "send_to_excel";
+        public const string SendToWord = "send_to_word";
 
         public static List<ChatToolDefinition> CreateDefinitions(
             string hostKind)
@@ -82,9 +83,9 @@ namespace OutlookLocalAIChat.Chat
                 }
             };
 
-            if (string.Equals(
+            if (!string.Equals(
                 hostKind,
-                "excel",
+                "powerpoint",
                 StringComparison.Ordinal))
             {
                 definitions.Add(new ChatToolDefinition
@@ -109,9 +110,9 @@ namespace OutlookLocalAIChat.Chat
                 });
             }
 
-            if (string.Equals(
+            if (!string.Equals(
                 hostKind,
-                "powerpoint",
+                "excel",
                 StringComparison.Ordinal))
             {
                 definitions.Add(new ChatToolDefinition
@@ -134,6 +135,33 @@ namespace OutlookLocalAIChat.Chat
                 });
             }
 
+            if (!string.Equals(
+                hostKind,
+                "word",
+                StringComparison.Ordinal))
+            {
+                definitions.Add(new ChatToolDefinition
+                {
+                    type = "function",
+                    function = new ChatToolFunctionDefinition
+                    {
+                        name = SendToWord,
+                        description =
+                            "Open a new, unsaved Word draft " +
+                            "document containing the given text " +
+                            "for the user to review. Word starts " +
+                            "if needed, the draft carries an " +
+                            "[AI365 draft] heading, existing " +
+                            "documents are never modified, and " +
+                            "nothing is saved.",
+                        parameters =
+                            WordToolCatalog.DraftDefinition()
+                                .function.parameters as
+                                Dictionary<string, object>
+                    }
+                });
+            }
+
             return definitions;
         }
 
@@ -150,6 +178,10 @@ namespace OutlookLocalAIChat.Chat
                    string.Equals(
                        name,
                        SendToExcel,
+                       StringComparison.Ordinal) ||
+                   string.Equals(
+                       name,
+                       SendToWord,
                        StringComparison.Ordinal);
         }
     }
