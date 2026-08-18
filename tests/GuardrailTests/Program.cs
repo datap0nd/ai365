@@ -3291,11 +3291,15 @@ namespace GuardrailTests
                 "{\"text\":\"Here is the " +
                 "summary.\"},{\"functionCall\":{\"name\":" +
                 "\"read_messages\",\"args\":{\"handles\":" +
-                "[\"selected\"]}}}]}}]}")
+                "[\"selected\"]}},\"thoughtSignature\":" +
+                "\"sig-abc123\"}]}}]}")
                 as IDictionary<string, object>;
+            var signatures =
+                new Dictionary<string, string>();
             var message =
                 GeminiCodeAssistGateway.TranslateResponse(
-                    response);
+                    response,
+                    signatures);
             Assert(
                 message != null &&
                 message.content.Contains(
@@ -3311,6 +3315,41 @@ namespace GuardrailTests
                 "The Gemini response did not translate back to " +
                 "the OpenAI shape (thought parts must be " +
                 "filtered).");
+
+            Assert(
+                signatures.Count == 1 &&
+                signatures.ContainsKey(
+                    message.tool_calls[0].id),
+                "The thought signature was not captured by " +
+                "tool-call id.");
+            var followUp = new ChatCompletionRequest
+            {
+                model = "gemini-2.5-flash",
+                messages = new List<object>
+                {
+                    new ChatCompletionAssistantToolMessage
+                    {
+                        role = "assistant",
+                        content = string.Empty,
+                        tool_calls = message.tool_calls
+                    },
+                    new ChatCompletionToolResultMessage
+                    {
+                        role = "tool",
+                        tool_call_id = message.tool_calls[0].id,
+                        content = "{\"messages\":[]}"
+                    }
+                }
+            };
+            var followUpJson = serializer.Serialize(
+                GeminiCodeAssistGateway.TranslateRequest(
+                    followUp,
+                    signatures));
+            Assert(
+                followUpJson.Contains("thoughtSignature") &&
+                followUpJson.Contains("sig-abc123"),
+                "The thought signature was not echoed back on " +
+                "the replayed functionCall: " + followUpJson);
 
             var inline = GeminiCodeAssistGateway.TranslateDataUrl(
                 "data:image/png;base64,AAAA");

@@ -68,6 +68,15 @@ namespace OutlookLocalAIChat.Chat
         private string _cachedAccessToken = string.Empty;
         private long _cachedTokenExpiryMs;
         private string _cachedProject;
+        // Thought signatures captured from functionCall parts, keyed
+        // by the tool-call id they were issued under; echoed back
+        // when history replays those calls. Signatures only matter
+        // within a live tool loop, so the map is cleared once it
+        // outgrows any plausible loop.
+        private readonly Dictionary<string, string>
+            _thoughtSignatures =
+                new Dictionary<string, string>(
+                    StringComparer.Ordinal);
 
         public static string CredentialsPath
         {
@@ -538,7 +547,12 @@ namespace OutlookLocalAIChat.Chat
             {
                 { "model", NormalizeModel(requestModel.model) },
                 { "project", project },
-                { "request", TranslateRequest(requestModel) }
+                {
+                    "request",
+                    TranslateRequest(
+                        requestModel,
+                        _thoughtSignatures)
+                }
             };
             var root = await PostJsonAsync(
                 httpClient,
@@ -548,9 +562,15 @@ namespace OutlookLocalAIChat.Chat
                 cancellationToken).ConfigureAwait(true);
             object responseValue = null;
             root?.TryGetValue("response", out responseValue);
+            if (_thoughtSignatures.Count > 500)
+            {
+                _thoughtSignatures.Clear();
+            }
+
             var message = TranslateResponse(
                 responseValue as IDictionary<string, object> ??
-                root);
+                root,
+                _thoughtSignatures);
             if (message == null)
             {
                 throw new AiEndpointException(
@@ -580,6 +600,18 @@ namespace OutlookLocalAIChat.Chat
 
         public static Dictionary<string, object> TranslateRequest(
             ChatCompletionRequest request)
+        {
+            return TranslateRequest(request, null);
+        }
+
+        // Gemini 2.5 attaches an opaque thoughtSignature to every
+        // functionCall part it returns and rejects follow-up
+        // requests that replay the call without it, so signatures
+        // captured from responses are echoed back here by tool-call
+        // id.
+        public static Dictionary<string, object> TranslateRequest(
+            ChatCompletionRequest request,
+            IDictionary<string, string> thoughtSignatures)
         {
             var contents = new List<object>();
             var systemText = new StringBuilder();
@@ -658,22 +690,36 @@ namespace OutlookLocalAIChat.Chat
                             callNames[call.id] = name;
                         }
 
-                        parts.Add(new Dictionary<string, object>
-                        {
+                        var callPart =
+                            new Dictionary<string, object>
                             {
-                                "functionCall",
-                                new Dictionary<string, object>
                                 {
-                                    { "name", name },
+                                    "functionCall",
+                                    new Dictionary<string, object>
                                     {
-                                        "args",
-                                        ParseArguments(
-                                            call.function
-                                                .arguments)
+                                        { "name", name },
+                                        {
+                                            "args",
+                                            ParseArguments(
+                                                call.function
+                                                    .arguments)
+                                        }
                                     }
                                 }
-                            }
-                        });
+                            };
+                        string signature;
+                        if (thoughtSignatures != null &&
+                            call.id != null &&
+                            thoughtSignatures.TryGetValue(
+                                call.id,
+                                out signature) &&
+                            signature.Length > 0)
+                        {
+                            callPart["thoughtSignature"] =
+                                signature;
+                        }
+
+                        parts.Add(callPart);
                     }
 
                     if (parts.Count > 0)
@@ -1029,6 +1075,14 @@ namespace OutlookLocalAIChat.Chat
         public static ChatCompletionResponseMessage
             TranslateResponse(IDictionary<string, object> response)
         {
+            return TranslateResponse(response, null);
+        }
+
+        public static ChatCompletionResponseMessage
+            TranslateResponse(
+                IDictionary<string, object> response,
+                IDictionary<string, string> thoughtSignatureSink)
+        {
             if (response == null)
             {
                 return null;
@@ -1101,10 +1155,24 @@ namespace OutlookLocalAIChat.Chat
 
                     object argsValue;
                     call.TryGetValue("args", out argsValue);
+                    // Globally unique ids so replayed history from
+                    // earlier tool rounds never collides in the
+                    // signature map.
+                    var callId = "gemini_call_" +
+                        Guid.NewGuid().ToString("N")
+                            .Substring(0, 12);
+                    var signature = ReadString(
+                        part,
+                        "thoughtSignature");
+                    if (thoughtSignatureSink != null &&
+                        signature.Length > 0)
+                    {
+                        thoughtSignatureSink[callId] = signature;
+                    }
+
                     toolCalls.Add(new ChatToolCall
                     {
-                        id = "gemini_call_" +
-                            (toolCalls.Count + 1),
+                        id = callId,
                         type = "function",
                         function = new ChatToolCallFunction
                         {
