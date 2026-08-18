@@ -425,13 +425,15 @@ namespace OutlookLocalAIChat.UI
             var confirm = MessageBox.Show(
                 this,
                 "AI365 will download the latest version and install it " +
-                "silently once Outlook, Excel, and PowerPoint are closed. " +
+                "silently once Outlook, Excel, PowerPoint, and Word are " +
+                "closed. " +
                 (_outlookApplication != null
                     ? "Outlook closes and reopens automatically; close " +
-                      "Excel and PowerPoint yourself if they are open. "
+                      "Excel, PowerPoint, and Word yourself if they are " +
+                      "open. "
                     : "Close the Office apps yourself to let the update " +
                       "finish. ") +
-                "One update refreshes all three AI365 add-ins. Continue?",
+                "One update refreshes all four AI365 add-ins. Continue?",
                 "Update AI365",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Question);
@@ -455,8 +457,8 @@ namespace OutlookLocalAIChat.UI
                 _updateStatus.Text = _outlookApplication != null
                     ? "Update downloaded. Outlook will close and " +
                       "reopen with the new version."
-                    : "Update downloaded. Close Outlook, Excel, and " +
-                      "PowerPoint to let it install.";
+                    : "Update downloaded. Close Outlook, Excel, " +
+                      "PowerPoint, and Word to let it install.";
                 SelfUpdater.LaunchUpdateAndQuitHost(
                     _outlookApplication,
                     installerPath,

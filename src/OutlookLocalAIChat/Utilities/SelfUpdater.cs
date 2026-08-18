@@ -145,8 +145,9 @@ namespace OutlookLocalAIChat.Utilities
         }
 
         // hostApplication may be null when the update starts from the
-        // Excel/PowerPoint pane settings: nothing is quit and the
-        // script simply waits for the user to close the Office apps.
+        // Excel/PowerPoint/Word pane settings: nothing is quit and
+        // the script simply waits for the user to close the Office
+        // apps.
         public static void LaunchUpdateAndQuitHost(
             object hostApplication,
             string installerPath,
@@ -161,16 +162,54 @@ namespace OutlookLocalAIChat.Utilities
                 scriptPath,
                 BuildUpdateScript(),
                 Encoding.ASCII);
+
+            // The script runs through cmd.exe invoked by full path,
+            // never through the .cmd shell association: locked-down
+            // machines can remap or block script associations, which
+            // surfaces as "not a valid application for this OS
+            // platform". /d also skips any cmd AutoRun commands.
+            var comSpec = Environment.GetEnvironmentVariable(
+                "ComSpec");
+            if (string.IsNullOrEmpty(comSpec))
+            {
+                comSpec = Path.Combine(
+                    Environment.GetFolderPath(
+                        Environment.SpecialFolder.System),
+                    "cmd.exe");
+            }
+
             var start = new System.Diagnostics.ProcessStartInfo
             {
-                FileName = scriptPath,
-                Arguments = "\"" + installerPath + "\" \"" +
-                    (restartExecutable ?? string.Empty) + "\"",
-                UseShellExecute = true,
+                FileName = comSpec,
+                Arguments = "/d /c \"\"" + scriptPath + "\" \"" +
+                    installerPath + "\" \"" +
+                    (restartExecutable ?? string.Empty) + "\"\"",
+                UseShellExecute = false,
+                CreateNoWindow = true,
                 WindowStyle =
                     System.Diagnostics.ProcessWindowStyle.Hidden
             };
-            System.Diagnostics.Process.Start(start);
+            try
+            {
+                System.Diagnostics.Process.Start(start);
+            }
+            catch (Exception exception)
+            {
+                Log.Error("UpdateScriptLaunch", exception);
+                // Last resort on machines that block running
+                // anything from the temp folder: open the
+                // downloaded installer itself so the user can click
+                // through it after closing the Office apps. Nothing
+                // is quit on this path.
+                System.Diagnostics.Process.Start(
+                    new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = installerPath,
+                        UseShellExecute = true
+                    });
+                return;
+            }
+
             if (hostApplication != null)
             {
                 dynamic application = hostApplication;
