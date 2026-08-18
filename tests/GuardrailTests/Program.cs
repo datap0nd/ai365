@@ -3297,8 +3297,13 @@ namespace GuardrailTests
                 GeminiCodeAssistGateway.ThinkingBudgetFor(
                     "models/gemini-2.5-pro") == 128 &&
                 GeminiCodeAssistGateway.ThinkingBudgetFor(
+                    "gemini-3-flash") == -1 &&
+                GeminiCodeAssistGateway.ThinkingBudgetFor(
+                    "gemini-3.1-pro-preview") == -1 &&
+                GeminiCodeAssistGateway.ThinkingBudgetFor(
                     "qwen3-vl-30b") == -1,
-                "Thinking budgets are wrong per model family.");
+                "Thinking budgets are wrong per model family " +
+                "(thinkingBudget is a 2.5-only control).");
             Assert(
                 json.Contains("thinkingConfig") &&
                 json.Contains("\"thinkingBudget\":0"),

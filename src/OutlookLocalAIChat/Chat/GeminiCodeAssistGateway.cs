@@ -51,12 +51,23 @@ namespace OutlookLocalAIChat.Chat
         // Access tokens are refreshed this long before their expiry.
         private const long RefreshMarginMilliseconds = 120000;
 
+        // The model set the current Gemini CLI ships (the Code
+        // Assist API has no listing endpoint). Quota buckets are
+        // per model, so a model at capacity does not block the
+        // others. Preview models are tier-gated: if the account
+        // lacks access, the request fails with a permission error
+        // and another model can be picked.
         public static readonly IReadOnlyList<string> KnownModels =
             new[]
             {
-                "gemini-2.5-pro",
+                "gemini-3.5-flash",
+                "gemini-3-flash",
                 "gemini-2.5-flash",
-                "gemini-2.5-flash-lite"
+                "gemini-3.1-flash-lite",
+                "gemini-2.5-flash-lite",
+                "gemini-3.1-pro-preview",
+                "gemini-3-pro-preview",
+                "gemini-2.5-pro"
             };
 
         private readonly JavaScriptSerializer _serializer =
@@ -1407,12 +1418,14 @@ namespace OutlookLocalAIChat.Chat
         // which multiplies response time on ordinary mailbox
         // questions. Flash and Flash-Lite allow disabling thinking
         // entirely (budget 0); Pro cannot go below 128, so it gets
-        // the minimum. Unknown models are left at server defaults.
+        // the minimum. Only the 2.5 family accepts thinkingBudget -
+        // Gemini 3 models use a different thinking control and can
+        // reject it - so everything else stays at server defaults.
         public static int ThinkingBudgetFor(string model)
         {
             var name = NormalizeModel(model).ToLowerInvariant();
             if (name.IndexOf(
-                    "gemini",
+                    "gemini-2.5",
                     StringComparison.Ordinal) < 0)
             {
                 return -1;

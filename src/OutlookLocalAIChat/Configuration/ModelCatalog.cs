@@ -67,6 +67,14 @@ namespace OutlookLocalAIChat.Configuration
         private static readonly ModelGuideEntry[] MasterList =
         {
             new ModelGuideEntry(
+                "gemini-3.5-flash",
+                new[] { "gemini", "flash", "3" },
+                "Newest fast cloud Gemini",
+                "Fast",
+                "Excellent",
+                true,
+                "Latest flash generation over Google sign-in with its own quota bucket, separate from the 2.5 models. Availability depends on your organization's tier - if a request is rejected, pick another model."),
+            new ModelGuideEntry(
                 "gemini-2.5-flash",
                 new[] { "gemini", "flash" },
                 "Fast cloud Gemini - recommended",
