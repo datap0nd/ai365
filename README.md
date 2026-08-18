@@ -521,6 +521,31 @@ GitHub Actions builds, smoke-tests, and publishes the same single-file installer
 Every push to `main` updates the **Latest** GitHub release so the install link
 above always points at the newest build.
 
+### Code signing (optional)
+
+CI signs the add-in DLL and the installer when the repository has the
+`SIGNING_PFX` (base64 PFX) and `SIGNING_PFX_PASSWORD` Actions secrets. To set
+that up once, run on any Windows machine:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\New-SigningCert.ps1
+```
+
+It creates a personal self-signed code-signing certificate, prints the two
+secret values to add, and leaves you an `ai365-signing.cer` to trust on each
+machine that runs AI365:
+
+```powershell
+certutil -user -addstore Root ai365-signing.cer
+certutil -user -addstore TrustedPublisher ai365-signing.cer
+```
+
+Without the secrets the signing steps are skipped and the build stays
+unsigned, exactly as before. A self-signed certificate does not earn
+SmartScreen reputation like a paid one, but once trusted it makes every
+installer and DLL verifiable as yours, and any tampered build fails
+verification.
+
 ## Compatibility
 
 - Classic Outlook, Excel, PowerPoint, and Word for Windows

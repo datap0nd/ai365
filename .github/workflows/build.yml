@@ -16,6 +16,13 @@ jobs:
   build:
     runs-on: windows-latest
 
+    # Code signing is optional: when the SIGNING_PFX secret is absent
+    # the signing steps are skipped and the build stays unsigned.
+    # scripts/New-SigningCert.ps1 explains how to set the secrets up.
+    env:
+      SIGNING_PFX: ${{ secrets.SIGNING_PFX }}
+      SIGNING_PFX_PASSWORD: ${{ secrets.SIGNING_PFX_PASSWORD }}
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -55,6 +62,12 @@ jobs:
           if (-not $x86 -and -not (Test-Path (Join-Path $bin "WebView2Loader.dll"))) {
             throw "No x86-capable WebView2Loader.dll (Outlook is often 32-bit)."
           }
+
+      - name: Sign the add-in assembly
+        if: env.SIGNING_PFX != ''
+        shell: pwsh
+        run: |
+          ./scripts/Sign-File.ps1 -Path "src\OutlookLocalAIChat\bin\Release\OutlookLocalAIChat.dll"
 
       - name: Run guardrail tests
         run: tests\GuardrailTests\bin\Release\GuardrailTests.exe
@@ -102,6 +115,12 @@ jobs:
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" `
             "/DAppVersion=2.0.0" `
             "installer\OutlookLocalAIChat.iss"
+
+      - name: Sign the installer
+        if: env.SIGNING_PFX != ''
+        shell: pwsh
+        run: |
+          ./scripts/Sign-File.ps1 -Path "artifacts\AI365Setup.exe"
 
       - name: Smoke-test installer registration
         shell: powershell
