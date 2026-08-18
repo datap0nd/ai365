@@ -135,6 +135,15 @@
     flex-shrink: 0;
   }
   .tchip .tx:hover { color: var(--error); background: var(--card2); }
+  .tchip.warn {
+    background: rgba(245, 196, 81, 0.10);
+    border-color: rgba(245, 196, 81, 0.45);
+  }
+  .tchip.warn .glyph {
+    background: rgba(245, 196, 81, 0.18);
+    color: #f5c451;
+  }
+  .tchip.warn .t2 { color: #f5c451; }
 
   main {
     flex: 1;
@@ -583,6 +592,7 @@
 
   function buildChip(item) {
     var chip = el("div", "tchip");
+    if (item.warn) { chip.classList.add("warn"); }
     if (item.kind === "image" &&
         item.thumb &&
         item.thumb.indexOf("data:image/") === 0) {
@@ -593,10 +603,11 @@
       chip.appendChild(img);
     } else {
       var glyph = el("div", "glyph");
-      glyph.textContent =
-        item.kind === "email" || item.kind === "selected"
+      glyph.textContent = item.warn
+        ? "\u26A0"
+        : (item.kind === "email" || item.kind === "selected"
           ? "\u2709"
-          : (item.kind === "image" ? "\u25A3" : "\u25A4");
+          : (item.kind === "image" ? "\u25A3" : "\u25A4"));
       chip.appendChild(glyph);
     }
     var t = el("div", "t");

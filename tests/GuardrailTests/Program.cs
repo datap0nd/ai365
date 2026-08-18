@@ -77,6 +77,12 @@ namespace GuardrailTests
                     "Local files load as bounded context or vision input",
                     LocalFilesLoadAsContext);
                 Run(
+                    "Spreadsheets stream through shared strings",
+                    SpreadsheetsStreamThroughSharedStrings);
+                Run(
+                    "Oversized text carries a truncation notice",
+                    OversizedTextCarriesTruncationNotice);
+                Run(
                     "Small inline signature images are ignored",
                     SignatureImagesAreIgnored);
                 Run(
@@ -2707,19 +2713,159 @@ namespace GuardrailTests
             string entryName,
             string xml)
         {
+            WriteZipEntries(
+                zipPath,
+                new[] { entryName },
+                new[] { xml });
+        }
+
+        private static void WriteZipEntries(
+            string zipPath,
+            string[] entryNames,
+            string[] xmls)
+        {
             using (var archive = ZipFile.Open(
                 zipPath,
                 ZipArchiveMode.Create))
             {
-                var entry = archive.CreateEntry(entryName);
-                using (var stream = entry.Open())
-                using (var writer = new StreamWriter(
-                    stream,
-                    Encoding.UTF8))
+                for (var index = 0;
+                     index < entryNames.Length;
+                     index++)
                 {
-                    writer.Write(
-                        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
-                        xml);
+                    var entry = archive.CreateEntry(
+                        entryNames[index]);
+                    using (var stream = entry.Open())
+                    using (var writer = new StreamWriter(
+                        stream,
+                        Encoding.UTF8))
+                    {
+                        writer.Write(
+                            "<?xml version=\"1.0\" " +
+                            "encoding=\"UTF-8\"?>" +
+                            xmls[index]);
+                    }
+                }
+            }
+        }
+
+        private static void SpreadsheetsStreamThroughSharedStrings()
+        {
+            var temp = Path.Combine(
+                Path.GetTempPath(),
+                "MetoAI-xlsx-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(temp);
+            try
+            {
+                const string sheetNamespace =
+                    "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+                var xlsxPath = Path.Combine(temp, "budget.xlsx");
+                WriteZipEntries(
+                    xlsxPath,
+                    new[]
+                    {
+                        "xl/sharedStrings.xml",
+                        "xl/worksheets/sheet1.xml"
+                    },
+                    new[]
+                    {
+                        "<sst xmlns=\"" + sheetNamespace + "\">" +
+                        "<si><t>Region</t></si>" +
+                        "<si><t>Northern office</t></si>" +
+                        "</sst>",
+                        "<worksheet xmlns=\"" + sheetNamespace + "\">" +
+                        "<sheetData>" +
+                        "<row><c t=\"s\"><v>0</v></c>" +
+                        "<c><v>42</v></c></row>" +
+                        "<row><c t=\"s\"><v>1</v></c>" +
+                        "<c><v>98.5</v></c></row>" +
+                        "</sheetData></worksheet>"
+                    });
+                var content = EmailAttachmentReader.LoadLocalFile(
+                    xlsxPath);
+                Assert(
+                    content != null,
+                    "The spreadsheet did not load at all.");
+                Assert(
+                    content.Text.Contains("Region\t42"),
+                    "Shared-string and numeric cells were not " +
+                    "joined into a row: " + content.Text);
+                Assert(
+                    content.Text.Contains("Northern office\t98.5"),
+                    "The second streamed row was not extracted: " +
+                    content.Text);
+            }
+            finally
+            {
+                if (Directory.Exists(temp))
+                {
+                    Directory.Delete(temp, true);
+                }
+            }
+        }
+
+        private static void OversizedTextCarriesTruncationNotice()
+        {
+            var temp = Path.Combine(
+                Path.GetTempPath(),
+                "MetoAI-trunc-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(temp);
+            try
+            {
+                var builder = new StringBuilder();
+                var line = 0;
+                while (builder.Length <=
+                    EmailAttachmentReader.MaxCharactersPerAttachment +
+                    5000)
+                {
+                    line++;
+                    builder.AppendLine(
+                        "Ledger entry " + line +
+                        " with a running description of the " +
+                        "transaction and its approval chain.");
+                }
+
+                var textPath = Path.Combine(temp, "ledger.txt");
+                File.WriteAllText(
+                    textPath,
+                    builder.ToString(),
+                    Encoding.UTF8);
+                var content = EmailAttachmentReader.LoadLocalFile(
+                    textPath);
+                Assert(
+                    content != null && content.Truncated,
+                    "An oversized text file was not flagged as " +
+                    "truncated.");
+                Assert(
+                    content.Text.Contains("[Truncated:"),
+                    "The truncation notice was not appended to " +
+                    "the bounded text.");
+                Assert(
+                    content.Text.Length <=
+                    EmailAttachmentReader.MaxCharactersPerAttachment +
+                    200,
+                    "Truncated text exceeded the per-attachment " +
+                    "character budget: " +
+                    content.Text.Length + " characters.");
+
+                var smallPath = Path.Combine(temp, "note.txt");
+                File.WriteAllText(
+                    smallPath,
+                    "A short note that fits comfortably.",
+                    Encoding.UTF8);
+                var small = EmailAttachmentReader.LoadLocalFile(
+                    smallPath);
+                Assert(
+                    small != null &&
+                    !small.Truncated &&
+                    !small.Text.Contains("[Truncated:"),
+                    "A small text file was wrongly marked as " +
+                    "truncated.");
+            }
+            finally
+            {
+                if (Directory.Exists(temp))
+                {
+                    Directory.Delete(temp, true);
                 }
             }
         }

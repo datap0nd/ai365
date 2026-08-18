@@ -10,8 +10,8 @@ namespace OutlookLocalAIChat.Chat
     public sealed class ExternalContextDocument
     {
         public const int MaxDocuments = 3;
-        public const int MaxCharactersPerDocument = 12000;
-        public const int MaxTotalCharacters = 24000;
+        public const int MaxCharactersPerDocument = 20000;
+        public const int MaxTotalCharacters = 48000;
 
         public ExternalContextDocument(
             string name,

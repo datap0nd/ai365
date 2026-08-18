@@ -24,9 +24,18 @@ namespace OutlookLocalAIChat.Outlook
             Kind = TextBoundary.SingleLine(
                 kind ?? string.Empty,
                 32);
-            Text = TextBoundary.PlainText(
-                text ?? string.Empty,
+            var raw = text ?? string.Empty;
+            var bounded = TextBoundary.PlainText(
+                raw,
                 EmailAttachmentReader.MaxCharactersPerAttachment);
+            Truncated = raw.Length >
+                EmailAttachmentReader.MaxCharactersPerAttachment;
+            Text = Truncated
+                ? bounded +
+                  "\n[Truncated: more content follows beyond the " +
+                  "first " + bounded.Length.ToString() +
+                  " extracted characters.]"
+                : bounded;
             // A truncated data URL is corrupt base64, so an oversized
             // image is dropped rather than bounded.
             var boundedDataUrl = (imageDataUrl ?? string.Empty).Trim();
@@ -42,18 +51,20 @@ namespace OutlookLocalAIChat.Outlook
 
         public string Text { get; }
 
+        public bool Truncated { get; }
+
         public string ImageDataUrl { get; }
     }
 
     public static class EmailAttachmentReader
     {
         public const int MaxAttachments = 10;
-        public const int MaxBytesPerAttachment = 2 * 1024 * 1024;
-        // Images get a higher intake ceiling because oversized ones are
-        // downscaled locally before being sent as vision input.
-        public const int MaxImageBytesPerAttachment = 10 * 1024 * 1024;
-        public const int MaxCharactersPerAttachment = 8000;
-        public const int MaxTotalCharacters = 16000;
+        // Uniform 25 MB intake: extraction output stays bounded in
+        // characters, so large files cost read time, not context.
+        public const int MaxBytesPerAttachment = 25 * 1024 * 1024;
+        public const int MaxImageBytesPerAttachment = 25 * 1024 * 1024;
+        public const int MaxCharactersPerAttachment = 20000;
+        public const int MaxTotalCharacters = 48000;
         // 1.5 MB of image bytes is ~2.1M base64 characters plus the
         // data URL prefix; the two limits must move together.
         public const int MaxImageDataUrlCharacters = 2200000;
@@ -238,23 +249,39 @@ namespace OutlookLocalAIChat.Outlook
 
                         var remaining = MaxTotalCharacters -
                             totalCharacters;
-                        var boundedText = TextBoundary.PlainText(
-                            extracted.Text,
-                            Math.Min(
-                                MaxCharactersPerAttachment,
-                                remaining));
-                        if (boundedText.Length == 0)
+                        if (remaining <= 0)
                         {
                             break;
                         }
 
-                        results.Add(
-                            new EmailAttachmentContent(
+                        // ExtractContent already bounded the text to
+                        // the per-attachment cap and appended a
+                        // truncation notice when it overflowed; only
+                        // the shared per-message budget is applied
+                        // here so that notice survives intact.
+                        var entry = extracted;
+                        if (entry.Text.Length > remaining)
+                        {
+                            var clipped = TextBoundary.PlainText(
+                                entry.Text,
+                                remaining);
+                            if (clipped.Length == 0)
+                            {
+                                break;
+                            }
+
+                            entry = new EmailAttachmentContent(
                                 fileName,
-                                extracted.Kind,
-                                boundedText,
-                                extracted.ImageDataUrl));
-                        totalCharacters += boundedText.Length;
+                                entry.Kind,
+                                clipped +
+                                "\n[Truncated: the shared " +
+                                "attachment budget for this " +
+                                "message was reached.]",
+                                entry.ImageDataUrl);
+                        }
+
+                        results.Add(entry);
+                        totalCharacters += entry.Text.Length;
                     }
                     catch
                     {
@@ -855,6 +882,8 @@ namespace OutlookLocalAIChat.Outlook
                 : 0;
         }
 
+        // Streamed with XmlReader so a large document part never
+        // loads as a whole DOM.
         private static string ExtractDocxText(string path)
         {
             using (var zip = ZipFile.OpenRead(path))
@@ -865,35 +894,74 @@ namespace OutlookLocalAIChat.Outlook
                     return string.Empty;
                 }
 
-                XDocument document;
-                using (var stream = entry.Open())
-                {
-                    document = XDocument.Load(stream);
-                }
-
-                XNamespace wordNamespace =
-                    "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
                 var builder = new StringBuilder();
-                foreach (var paragraph in document.Descendants(
-                    wordNamespace + "p"))
+                using (var stream = entry.Open())
+                using (var reader = System.Xml.XmlReader.Create(
+                    stream,
+                    StreamingXmlSettings()))
                 {
-                    var text = string.Concat(
-                        paragraph
-                            .Descendants(wordNamespace + "t")
-                            .Select(node => node.Value));
-                    if (text.Trim().Length > 0)
+                    if (!reader.Read())
                     {
-                        builder.AppendLine(text);
+                        return string.Empty;
                     }
 
-                    if (builder.Length >= MaxCharactersPerAttachment)
+                    var lineHasText = false;
+                    while (!reader.EOF)
                     {
-                        break;
+                        if (reader.NodeType ==
+                                System.Xml.XmlNodeType.Element &&
+                            reader.LocalName == "t")
+                        {
+                            var content =
+                                reader.ReadElementContentAsString();
+                            if (content.Length > 0)
+                            {
+                                builder.Append(content);
+                                lineHasText = true;
+                            }
+
+                            continue;
+                        }
+
+                        if (reader.NodeType ==
+                                System.Xml.XmlNodeType.EndElement &&
+                            reader.LocalName == "p")
+                        {
+                            if (lineHasText)
+                            {
+                                builder.AppendLine();
+                                lineHasText = false;
+                            }
+
+                            if (builder.Length >
+                                MaxCharactersPerAttachment)
+                            {
+                                break;
+                            }
+                        }
+
+                        if (!reader.Read())
+                        {
+                            break;
+                        }
                     }
                 }
 
                 return builder.ToString();
             }
+        }
+
+        private static System.Xml.XmlReaderSettings
+            StreamingXmlSettings()
+        {
+            return new System.Xml.XmlReaderSettings
+            {
+                IgnoreWhitespace = false,
+                IgnoreComments = true,
+                DtdProcessing =
+                    System.Xml.DtdProcessing.Prohibit,
+                XmlResolver = null
+            };
         }
 
         private static string ExtractPdfText(string path)
@@ -1184,6 +1252,9 @@ namespace OutlookLocalAIChat.Outlook
                 text);
         }
 
+        // Streamed with XmlReader: shared strings and rows are read
+        // sequentially and extraction stops at the character budget, so
+        // a 25 MB workbook never materializes a full XML DOM.
         private static string ExtractXlsxText(string path)
         {
             using (var zip = ZipFile.OpenRead(path))
@@ -1198,35 +1269,84 @@ namespace OutlookLocalAIChat.Outlook
                     return string.Empty;
                 }
 
-                XDocument document;
-                using (var stream = sheetEntry.Open())
-                {
-                    document = XDocument.Load(stream);
-                }
-
-                XNamespace spreadsheetNamespace =
-                    "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
                 var builder = new StringBuilder();
-                foreach (var row in document
-                    .Descendants(spreadsheetNamespace + "row"))
+                using (var stream = sheetEntry.Open())
+                using (var reader = System.Xml.XmlReader.Create(
+                    stream,
+                    StreamingXmlSettings()))
                 {
-                    var values = row
-                        .Elements(spreadsheetNamespace + "c")
-                        .Select(cell => ReadCellValue(
-                            cell,
-                            sharedStrings,
-                            spreadsheetNamespace))
-                        .Where(value => value.Length > 0)
-                        .ToArray();
-                    if (values.Length == 0)
+                    if (!reader.Read())
                     {
-                        continue;
+                        return string.Empty;
                     }
 
-                    builder.AppendLine(string.Join("\t", values));
-                    if (builder.Length >= MaxCharactersPerAttachment)
+                    string cellType = null;
+                    var rowValues = new List<string>();
+                    while (!reader.EOF)
                     {
-                        break;
+                        if (reader.NodeType ==
+                                System.Xml.XmlNodeType.Element &&
+                            (reader.LocalName == "v" ||
+                             reader.LocalName == "t"))
+                        {
+                            var lookupShared =
+                                reader.LocalName == "v" &&
+                                cellType == "s";
+                            var content =
+                                reader.ReadElementContentAsString();
+                            if (lookupShared)
+                            {
+                                int sharedIndex;
+                                content =
+                                    int.TryParse(
+                                        content,
+                                        out sharedIndex) &&
+                                    sharedIndex >= 0 &&
+                                    sharedIndex <
+                                    sharedStrings.Count
+                                        ? sharedStrings[sharedIndex]
+                                        : string.Empty;
+                            }
+
+                            if (content.Length > 0)
+                            {
+                                rowValues.Add(content);
+                            }
+
+                            continue;
+                        }
+
+                        if (reader.NodeType ==
+                                System.Xml.XmlNodeType.Element &&
+                            reader.LocalName == "c")
+                        {
+                            cellType = reader.GetAttribute("t");
+                        }
+                        else if (reader.NodeType ==
+                                     System.Xml.XmlNodeType
+                                         .EndElement &&
+                                 reader.LocalName == "row")
+                        {
+                            if (rowValues.Count > 0)
+                            {
+                                builder.AppendLine(
+                                    string.Join(
+                                        "\t",
+                                        rowValues));
+                                rowValues.Clear();
+                            }
+
+                            if (builder.Length >
+                                MaxCharactersPerAttachment)
+                            {
+                                break;
+                            }
+                        }
+
+                        if (!reader.Read())
+                        {
+                            break;
+                        }
                     }
                 }
 
@@ -1242,50 +1362,63 @@ namespace OutlookLocalAIChat.Outlook
                 return new string[0];
             }
 
-            XDocument document;
+            var strings = new List<string>();
+            var totalCharacters = 0L;
             using (var stream = entry.Open())
+            using (var reader = System.Xml.XmlReader.Create(
+                stream,
+                StreamingXmlSettings()))
             {
-                document = XDocument.Load(stream);
-            }
-
-            XNamespace spreadsheetNamespace =
-                "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            return document
-                .Descendants(spreadsheetNamespace + "si")
-                .Select(item => string.Concat(
-                    item.Descendants(spreadsheetNamespace + "t")
-                        .Select(text => text.Value)))
-                .ToList();
-        }
-
-        private static string ReadCellValue(
-            XElement cell,
-            IList<string> sharedStrings,
-            XNamespace spreadsheetNamespace)
-        {
-            var type = cell.Attribute("t")?.Value ?? string.Empty;
-            var valueElement = cell.Element(spreadsheetNamespace + "v");
-            if (valueElement == null)
-            {
-                var inlineText = cell
-                    .Descendants(spreadsheetNamespace + "t")
-                    .Select(text => text.Value);
-                return string.Concat(inlineText);
-            }
-
-            var raw = valueElement.Value ?? string.Empty;
-            if (type == "s")
-            {
-                int index;
-                if (int.TryParse(raw, out index) &&
-                    index >= 0 &&
-                    index < sharedStrings.Count)
+                if (!reader.Read())
                 {
-                    return sharedStrings[index];
+                    return strings;
+                }
+
+                StringBuilder current = null;
+                while (!reader.EOF &&
+                       strings.Count < 500000 &&
+                       totalCharacters < 16 * 1024 * 1024)
+                {
+                    if (reader.NodeType ==
+                            System.Xml.XmlNodeType.Element &&
+                        reader.LocalName == "t")
+                    {
+                        var content =
+                            reader.ReadElementContentAsString();
+                        if (current != null)
+                        {
+                            current.Append(content);
+                        }
+
+                        continue;
+                    }
+
+                    if (reader.NodeType ==
+                            System.Xml.XmlNodeType.Element &&
+                        reader.LocalName == "si")
+                    {
+                        current = new StringBuilder();
+                    }
+                    else if (reader.NodeType ==
+                                 System.Xml.XmlNodeType
+                                     .EndElement &&
+                             reader.LocalName == "si")
+                    {
+                        var value = current?.ToString() ??
+                            string.Empty;
+                        strings.Add(value);
+                        totalCharacters += value.Length;
+                        current = null;
+                    }
+
+                    if (!reader.Read())
+                    {
+                        break;
+                    }
                 }
             }
 
-            return raw;
+            return strings;
         }
 
         private static string ReadTextFile(string path)
@@ -1295,12 +1428,27 @@ namespace OutlookLocalAIChat.Outlook
                 Encoding.UTF8,
                 true))
             {
-                var buffer = new char[MaxCharactersPerAttachment];
-                var read = reader.Read(
-                    buffer,
-                    0,
-                    buffer.Length);
-                return new string(buffer, 0, read);
+                // One character beyond the cap so truncation is
+                // detectable and disclosed; the content boundary
+                // trims the text back to the cap.
+                var buffer = new char[
+                    MaxCharactersPerAttachment + 1];
+                var total = 0;
+                while (total < buffer.Length)
+                {
+                    var read = reader.Read(
+                        buffer,
+                        total,
+                        buffer.Length - total);
+                    if (read <= 0)
+                    {
+                        break;
+                    }
+
+                    total += read;
+                }
+
+                return new string(buffer, 0, total);
             }
         }
 

@@ -428,6 +428,10 @@ namespace OutlookLocalAIChat.Outlook
                         { "kind", attachment.Kind },
                         { "content", attachment.Text }
                     };
+                    if (attachment.Truncated)
+                    {
+                        entry["truncated"] = true;
+                    }
                     if (attachment.ImageDataUrl.Length > 0)
                     {
                         entry["vision_available"] = true;

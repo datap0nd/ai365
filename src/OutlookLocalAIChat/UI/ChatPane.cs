@@ -52,6 +52,29 @@ namespace OutlookLocalAIChat.UI
             public string Thumbnail { get; }
         }
 
+        // Wraps an external document with the tray-chip state so files
+        // that hit a cap (too large, unsupported, truncated) render as
+        // amber warning chips while the bounded text still reaches the
+        // model.
+        private sealed class ExternalDocumentContext
+        {
+            public ExternalDocumentContext(
+                ExternalContextDocument document,
+                bool warn,
+                string subtitle)
+            {
+                Document = document;
+                Warn = warn;
+                Subtitle = subtitle ?? string.Empty;
+            }
+
+            public ExternalContextDocument Document { get; }
+
+            public bool Warn { get; }
+
+            public string Subtitle { get; }
+        }
+
         private readonly SettingsStore _settingsStore =
             new SettingsStore();
         private readonly OpenAiCompatibleClient _client =
@@ -62,8 +85,8 @@ namespace OutlookLocalAIChat.UI
             new List<ChatTurn>();
         private readonly List<MessageSnapshot> _workingMessages =
             new List<MessageSnapshot>();
-        private readonly List<ExternalContextDocument> _externalContext =
-            new List<ExternalContextDocument>();
+        private readonly List<ExternalDocumentContext> _externalContext =
+            new List<ExternalDocumentContext>();
         private readonly List<ExternalImageContext> _externalImages =
             new List<ExternalImageContext>();
         private readonly List<string> _transcriptEvents =
@@ -723,20 +746,26 @@ namespace OutlookLocalAIChat.UI
         }
 
         private object BuildExternalContextCard(
-            ExternalContextDocument document)
+            ExternalDocumentContext entry)
         {
-            return new Dictionary<string, object>
+            var subtitle = entry.Subtitle.Length > 0
+                ? entry.Subtitle
+                : entry.Document.Content.Length + " text characters";
+            var card = new Dictionary<string, object>
             {
-                { "badge", "F" },
+                { "badge", entry.Warn ? "!" : "F" },
                 {
                     "title",
-                    TextBoundary.SingleLine(document.Name, 180)
+                    TextBoundary.SingleLine(entry.Document.Name, 180)
                 },
-                {
-                    "subtitle",
-                    document.Content.Length + " text characters"
-                }
+                { "subtitle", subtitle }
             };
+            if (entry.Warn)
+            {
+                card["warn"] = true;
+            }
+
+            return card;
         }
 
         private void RefreshContextLayer(string source)
@@ -1019,15 +1048,8 @@ namespace OutlookLocalAIChat.UI
                         continue;
                     }
 
-                    var combined =
-                        new List<ExternalContextDocument>(
-                            _externalContext);
-                    combined.Add(new ExternalContextDocument(
-                        content.FileName,
-                        content.Text));
-                    var normalized =
-                        ExternalContextDocument.Normalize(combined);
-                    if (normalized.Count <= _externalContext.Count)
+                    if (_externalContext.Count >=
+                        ExternalContextDocument.MaxDocuments)
                     {
                         SetStatus(
                             "Document limit reached (" +
@@ -1037,13 +1059,116 @@ namespace OutlookLocalAIChat.UI
                         continue;
                     }
 
-                    _externalContext.Clear();
-                    foreach (var document in normalized)
+                    var usedCharacters = 0;
+                    foreach (var existing in _externalContext)
                     {
-                        _externalContext.Add(document);
+                        usedCharacters +=
+                            existing.Document.Content.Length;
                     }
 
-                    AppendContext("Added " + content.FileName);
+                    var remaining =
+                        ExternalContextDocument.MaxTotalCharacters -
+                        usedCharacters;
+                    if (remaining <= 0)
+                    {
+                        SetStatus(
+                            "Context text budget reached (" +
+                            ExternalContextDocument
+                                .MaxTotalCharacters +
+                            " characters across files)",
+                            true);
+                        continue;
+                    }
+
+                    var warn = false;
+                    var subtitle = string.Empty;
+                    if (content.Kind == "unreadable")
+                    {
+                        warn = true;
+                        subtitle = content.Text.IndexOf(
+                            "Too large",
+                            StringComparison.Ordinal) >= 0
+                            ? "Over " +
+                              (EmailAttachmentReader
+                                  .MaxBytesPerAttachment /
+                                  (1024 * 1024)) +
+                              " MB cap - content not read"
+                            : "Unsupported type - noted for the model";
+                    }
+                    else if (content.Truncated)
+                    {
+                        warn = true;
+                        subtitle = "Over the text cap - first " +
+                            ExternalContextDocument
+                                .MaxCharactersPerDocument +
+                            " characters kept";
+                    }
+
+                    // Re-bounding to the document cap would clip the
+                    // reader's trailing truncation notice, so rebuild
+                    // the text with the notice inside the cap.
+                    var documentText = content.Text;
+                    if (content.Truncated)
+                    {
+                        var marker = "\n[Truncated: more content " +
+                            "follows in the original file.]";
+                        documentText = TextBoundary.PlainText(
+                            content.Text,
+                            ExternalContextDocument
+                                .MaxCharactersPerDocument -
+                            marker.Length) + marker;
+                    }
+
+                    var document = new ExternalContextDocument(
+                        content.FileName,
+                        documentText);
+                    if (document.Content.Length > remaining)
+                    {
+                        document = new ExternalContextDocument(
+                            content.FileName,
+                            document.Content.Substring(0, remaining));
+                        warn = true;
+                        if (subtitle.Length == 0)
+                        {
+                            subtitle = "Clipped to the shared " +
+                                "context budget";
+                        }
+                    }
+
+                    if (document.Content.Length == 0)
+                    {
+                        continue;
+                    }
+
+                    var duplicate = false;
+                    foreach (var existing in _externalContext)
+                    {
+                        if (string.Equals(
+                                existing.Document.Name,
+                                document.Name,
+                                StringComparison.OrdinalIgnoreCase) &&
+                            string.Equals(
+                                existing.Document.Content,
+                                document.Content,
+                                StringComparison.Ordinal))
+                        {
+                            duplicate = true;
+                            break;
+                        }
+                    }
+
+                    if (duplicate)
+                    {
+                        continue;
+                    }
+
+                    _externalContext.Add(new ExternalDocumentContext(
+                        document,
+                        warn,
+                        subtitle));
+                    AppendContext(
+                        "Added " + content.FileName +
+                        (warn ? " (" + subtitle + ")" : string.Empty));
                     added++;
                 }
 
@@ -1287,7 +1412,11 @@ namespace OutlookLocalAIChat.UI
             var requestWorkingMessages =
                 new List<MessageSnapshot>(_workingMessages);
             var requestExternalContext =
-                new List<ExternalContextDocument>(_externalContext);
+                new List<ExternalContextDocument>();
+            foreach (var entry in _externalContext)
+            {
+                requestExternalContext.Add(entry.Document);
+            }
             var requestExternalImages =
                 new List<VisionImagePayload>();
             foreach (var image in _externalImages)
