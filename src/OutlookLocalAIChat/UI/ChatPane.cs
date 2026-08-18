@@ -106,6 +106,7 @@ namespace OutlookLocalAIChat.UI
         private MessageSnapshot _selectedMessage;
         private DraftToolHost _draftTools;
         private CancellationTokenSource _requestCancellation;
+        private string _lastAssistantText = string.Empty;
         // Incremented when a request starts and when the user stops:
         // an in-flight continuation compares its captured value and
         // discards itself when stale, so Stop always releases the UI
@@ -371,6 +372,12 @@ namespace OutlookLocalAIChat.UI
                             "answers",
                             out answersValue);
                         HandleSuggestAnswers(answersValue);
+                        break;
+                    case "shareAnswer":
+                        HandleShareAnswer();
+                        break;
+                    case "addShared":
+                        HandleAddShared();
                         break;
                 }
             }
@@ -1241,6 +1248,109 @@ namespace OutlookLocalAIChat.UI
             SetStatus("Context cleared", false);
         }
 
+        // ------------------------------------------------------------------
+        // Suite exchange: deliberate, bounded hand-off between the
+        // AI365 panes in Outlook, Excel, and PowerPoint.
+        // ------------------------------------------------------------------
+
+        private void HandleShareAnswer()
+        {
+            if (_lastAssistantText.Length == 0)
+            {
+                SetStatus(
+                    "Nothing to share yet - ask something first",
+                    true);
+                return;
+            }
+
+            SuiteExchange.Save(
+                "Outlook",
+                "Answer from Outlook",
+                _lastAssistantText);
+            SetStatus(
+                "Shared - open the AI365 pane in another app " +
+                "and choose Add shared AI365 context",
+                false);
+        }
+
+        private void HandleAddShared()
+        {
+            if (_busy)
+            {
+                return;
+            }
+
+            var entry = SuiteExchange.TryLoad();
+            if (entry == null)
+            {
+                SetStatus(
+                    "No shared AI365 context found",
+                    true);
+                return;
+            }
+
+            if (_externalContext.Count >=
+                ExternalContextDocument.MaxDocuments)
+            {
+                SetStatus(
+                    "Document limit reached (" +
+                    ExternalContextDocument.MaxDocuments +
+                    " files, bounded text)",
+                    true);
+                return;
+            }
+
+            var usedCharacters = 0;
+            foreach (var existing in _externalContext)
+            {
+                usedCharacters +=
+                    existing.Document.Content.Length;
+            }
+
+            var remaining =
+                ContextScale.Scaled(
+                    ExternalContextDocument.MaxTotalCharacters) -
+                usedCharacters;
+            if (remaining <= 0)
+            {
+                SetStatus(
+                    "Context text budget reached",
+                    true);
+                return;
+            }
+
+            var name = "Shared from " + entry.Source +
+                (entry.Title.Length > 0
+                    ? ": " + entry.Title
+                    : string.Empty);
+            var document = new ExternalContextDocument(
+                name,
+                entry.Content);
+            var warn = false;
+            if (document.Content.Length > remaining)
+            {
+                document = new ExternalContextDocument(
+                    name,
+                    document.Content.Substring(0, remaining));
+                warn = true;
+            }
+
+            if (document.Content.Length == 0)
+            {
+                return;
+            }
+
+            _externalContext.Add(new ExternalDocumentContext(
+                document,
+                warn,
+                warn
+                    ? "shared - clipped to the budget"
+                    : "shared " + entry.SavedAt));
+            AppendContext("Added " + name);
+            RefreshContextLayer("External files");
+            SetStatus("Shared context added", false);
+        }
+
         private void HandleWebFileDrop(
             CoreWebView2WebMessageReceivedEventArgs eventArgs)
         {
@@ -1787,6 +1897,7 @@ namespace OutlookLocalAIChat.UI
                 _history.Add(new ChatTurn("user", prompt));
                 _history.Add(
                     new ChatTurn("assistant", response));
+                _lastAssistantText = response;
                 AppendFormattedAssistantText(response);
                 if (draftAuthorization.IsCreated)
                 {

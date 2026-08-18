@@ -79,6 +79,15 @@ jobs:
           if (-not $registration.Contains("OutlookLocalAIChat.UI.ChatPane")) {
             throw "The Outlook sidebar control was not exported to COM."
           }
+          if (-not $registration.Contains("OutlookLocalAIChat.ExcelAddIn")) {
+            throw "RegAsm did not export the Excel add-in COM class."
+          }
+          if (-not $registration.Contains("OutlookLocalAIChat.PowerPointAddIn")) {
+            throw "RegAsm did not export the PowerPoint add-in COM class."
+          }
+          if (-not $registration.Contains("OutlookLocalAIChat.UI.OfficeChatPane")) {
+            throw "The Excel/PowerPoint sidebar control was not exported to COM."
+          }
 
       - name: Install Inno Setup
         shell: pwsh
@@ -152,6 +161,36 @@ jobs:
                   "OutlookLocalAIChat.UI.ChatPane") {
                 throw "Sidebar COM class is wrong in $view."
               }
+              foreach ($suite in @(
+                @("Software\Microsoft\Office\Excel\Addins\AI365.ExcelAddIn",
+                  "{C0ABFA36-9854-434D-A542-DD834938737F}",
+                  "OutlookLocalAIChat.ExcelAddIn"),
+                @("Software\Microsoft\Office\PowerPoint\Addins\AI365.PowerPointAddIn",
+                  "{69FAE812-274F-43F8-8F45-1B4EB22B5248}",
+                  "OutlookLocalAIChat.PowerPointAddIn")
+              )) {
+                $suiteAddin = $root.OpenSubKey($suite[0])
+                if ($null -eq $suiteAddin -or
+                    $suiteAddin.GetValue("LoadBehavior") -ne 3) {
+                  throw "Suite add-in registration $($suite[0]) is missing in $view."
+                }
+                $suiteAddin.Dispose()
+                $suiteServer = $root.OpenSubKey(
+                  "Software\Classes\CLSID\$($suite[1])\InprocServer32")
+                if ($null -eq $suiteServer -or
+                    [string]$suiteServer.GetValue("Class") -ne $suite[2]) {
+                  throw "Suite COM class $($suite[2]) is missing in $view."
+                }
+                $suiteServer.Dispose()
+              }
+              $officePane = $root.OpenSubKey(
+                "Software\Classes\CLSID\{BC9047E7-9AFE-4F75-BBBC-27241B1DE2FA}\InprocServer32")
+              if ($null -eq $officePane -or
+                  [string]$officePane.GetValue("Class") -ne
+                  "OutlookLocalAIChat.UI.OfficeChatPane") {
+                throw "The Excel/PowerPoint sidebar registration is missing in $view."
+              }
+              $officePane.Dispose()
             }
             finally {
               if ($null -ne $addin) { $addin.Dispose() }

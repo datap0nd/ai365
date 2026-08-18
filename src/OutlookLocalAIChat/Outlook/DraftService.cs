@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Runtime.InteropServices;
 using OutlookLocalAIChat.Security;
 
@@ -194,6 +195,23 @@ namespace OutlookLocalAIChat.Outlook
             mail.Save();
             mail.Display(false);
             _body = content.PlainText;
+        }
+
+        // Attaches an existing file the user already has on disk to
+        // the unsent draft. Reading the file for attachment never
+        // modifies it; the draft still only opens for review.
+        internal void AttachFile(string path)
+        {
+            EnsureAvailable();
+            if (string.IsNullOrWhiteSpace(path) ||
+                !File.Exists(path))
+            {
+                return;
+            }
+
+            dynamic mail = _mailItem;
+            mail.Attachments.Add(path);
+            mail.Save();
         }
 
         public void Dispose()

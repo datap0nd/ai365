@@ -548,6 +548,8 @@
   <div id="plusMenu" hidden>
     <button id="menuAddEmail">&#9993;&#xFE0E;&nbsp; Add selected emails</button>
     <button id="menuAddFiles">&#128206;&#xFE0E;&nbsp; Add files or pictures</button>
+    <button id="menuShare">&#8644;&#xFE0E;&nbsp; Share last answer to AI365 apps</button>
+    <button id="menuAddShared">&#8645;&#xFE0E;&nbsp; Add shared AI365 context</button>
   </div>
   <div id="composerCard">
     <button id="btnPlus" title="Add emails, files, or pictures to the context">+</button>
@@ -576,6 +578,7 @@
   var typing = null;
   var busy = false;
   var modelVision = {};
+  var hostMode = "outlook";
 
   function post(type, data) {
     if (!api) { return; }
@@ -977,18 +980,52 @@
       body.appendChild(b);
       body.appendChild(document.createTextNode(rest + "\n"));
     }
-    body.appendChild(document.createTextNode(
-      "Chat with your mailbox - local models, nothing is ever sent.\n\n"));
-    line("/search", " a person or topic to build a working set");
-    line("+", " adds selected emails, files, or pictures to the context");
-    body.appendChild(document.createTextNode(
-      "Or drag emails, attachments, or files straight in.\n"));
-    body.appendChild(document.createTextNode(
-      "Ask about emails, attachments, images, or invites.\n"));
-    line("\"create a draft\"", " writes one - it always opens unsent");
+    if (hostMode === "excel") {
+      body.appendChild(document.createTextNode(
+        "Chat with your workbook - AI365 never saves, deletes, or sends anything.\n\n"));
+      line("+", " adds the current selection, files, or pictures");
+      body.appendChild(document.createTextNode(
+        "Ask about sheets, ranges, formulas, or data.\n"));
+      line("\"put this in a draft sheet\"", " writes the AI365 Draft sheet - never saved");
+      line("\"email this to ...\"", " opens an unsent Outlook draft");
+      line("\"put this in powerpoint\"", " appends marked draft slides");
+    } else if (hostMode === "powerpoint") {
+      body.appendChild(document.createTextNode(
+        "Chat with your presentation - AI365 never saves, deletes, or sends anything.\n\n"));
+      line("+", " adds the current slide, files, or pictures");
+      body.appendChild(document.createTextNode(
+        "Ask about slides, structure, or speaker notes.\n"));
+      line("\"add slides about ...\"", " appends marked draft slides - never saved");
+      line("\"email these slides to ...\"", " opens an unsent Outlook draft");
+      line("\"put this in excel\"", " writes the AI365 Draft sheet");
+    } else {
+      body.appendChild(document.createTextNode(
+        "Chat with your mailbox - local models, nothing is ever sent.\n\n"));
+      line("/search", " a person or topic to build a working set");
+      line("+", " adds selected emails, files, or pictures to the context");
+      body.appendChild(document.createTextNode(
+        "Or drag emails, attachments, or files straight in.\n"));
+      body.appendChild(document.createTextNode(
+        "Ask about emails, attachments, images, or invites.\n"));
+      line("\"create a draft\"", " writes one - it always opens unsent");
+    }
     msg.appendChild(body);
     chat.appendChild(msg);
     scrollDown();
+  }
+
+  function applyMode(host) {
+    hostMode = host === "excel" || host === "powerpoint"
+      ? host
+      : "outlook";
+    var addLabel = document.getElementById("menuAddEmail");
+    if (hostMode === "excel") {
+      addLabel.textContent = "▦︎  Add current selection";
+    } else if (hostMode === "powerpoint") {
+      addLabel.textContent = "▤︎  Add current slide";
+    } else {
+      addLabel.textContent = "✉︎  Add selected emails";
+    }
   }
 
   function setBusy(value) {
@@ -1259,6 +1296,7 @@
         break;
       case "clear": clearChat(); addWelcome(); break;
       case "welcome": addWelcome(); break;
+      case "mode": applyMode(m.host); break;
     }
   }
 
@@ -1313,6 +1351,16 @@
     .addEventListener("click", function () {
       closePlusMenu();
       post("addFiles");
+    });
+  document.getElementById("menuShare")
+    .addEventListener("click", function () {
+      closePlusMenu();
+      post("shareAnswer");
+    });
+  document.getElementById("menuAddShared")
+    .addEventListener("click", function () {
+      closePlusMenu();
+      post("addShared");
     });
 
   // Drag-and-drop: the drop gesture is forwarded to the host. Outlook
