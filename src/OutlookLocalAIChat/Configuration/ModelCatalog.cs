@@ -57,6 +57,7 @@ namespace OutlookLocalAIChat.Configuration
             "moondream",
             "smolvlm",
             "multimodal",
+            "gemini",
             "gemma-3",
             "gemma3",
             "gemma-4",

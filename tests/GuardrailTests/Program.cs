@@ -225,6 +225,14 @@ namespace GuardrailTests
                 endpoint.AbsoluteUri ==
                 "https://ai.example.test/v1/chat/completions",
                 "The chat completions path was not normalized.");
+            Assert(
+                AppSettings.TryGetChatCompletionsUri(
+                    "https://generativelanguage.googleapis.com/v1beta/openai",
+                    out endpoint) &&
+                endpoint.AbsoluteUri ==
+                "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+                "An /openai compatibility base was not " +
+                "normalized: " + endpoint);
         }
 
         private static void LoopbackHttpIsAccepted()
@@ -286,6 +294,15 @@ namespace GuardrailTests
                 endpoint.AbsoluteUri ==
                 "https://ai.example.test/v1/models",
                 "The models path was not normalized.");
+            Assert(
+                AppSettings.TryGetModelsUri(
+                    "https://generativelanguage.googleapis.com/v1beta/openai",
+                    false,
+                    out endpoint) &&
+                endpoint.AbsoluteUri ==
+                "https://generativelanguage.googleapis.com/v1beta/openai/models",
+                "The /openai models path was not normalized: " +
+                endpoint);
         }
 
         private static void DefaultModelIsEmptyOnInstall()
@@ -3397,6 +3414,8 @@ namespace GuardrailTests
             Assert(
                 ModelCatalog.SupportsVision("qwen3-vl-30b") &&
                 ModelCatalog.SupportsVision("gemma-4-31b-it") &&
+                ModelCatalog.SupportsVision(
+                    "models/gemini-2.5-flash") &&
                 !ModelCatalog.SupportsVision("qwen3.6-35b-a3b") &&
                 ModelCatalog.GuideEntries.Count >= 7,
                 "The model catalog vision flags are incomplete.");

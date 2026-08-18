@@ -95,6 +95,16 @@ namespace OutlookLocalAIChat.Configuration
             {
                 completedPath = path + "/chat/completions";
             }
+            else if (path.EndsWith(
+                "/openai",
+                StringComparison.OrdinalIgnoreCase))
+            {
+                // OpenAI-compatibility layers hosted under an
+                // /openai base, such as Google's
+                // generativelanguage.googleapis.com/v1beta/openai,
+                // expose chat/completions directly under that base.
+                completedPath = path + "/chat/completions";
+            }
             else
             {
                 completedPath = path + "/v1/chat/completions";
