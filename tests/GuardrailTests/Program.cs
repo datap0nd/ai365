@@ -3058,12 +3058,26 @@ namespace GuardrailTests
 
                 const string msgBody =
                     "Please review the renewal terms before Friday.";
+                // BuildCompoundFile stores payloads in regular
+                // sectors without a mini-FAT, so the stream must be
+                // at least 4096 bytes to take the regular-FAT read
+                // path (real .msg files with small bodies use the
+                // mini stream, which the production reader supports).
+                var msgText = new StringBuilder(msgBody);
+                while (msgText.Length < 2100)
+                {
+                    msgText.Append(
+                        " The full contract text follows with " +
+                        "additional terms and appendices.");
+                }
+
                 var msgPath = Path.Combine(temp, "forwarded.msg");
                 File.WriteAllBytes(
                     msgPath,
                     BuildCompoundFile(
                         "__substg1.0_1000001F",
-                        Encoding.Unicode.GetBytes(msgBody)));
+                        Encoding.Unicode.GetBytes(
+                            msgText.ToString())));
                 var msg = EmailAttachmentReader.LoadLocalFile(
                     msgPath);
                 Assert(
