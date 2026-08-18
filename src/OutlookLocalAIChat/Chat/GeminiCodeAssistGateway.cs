@@ -1787,78 +1787,69 @@ namespace OutlookLocalAIChat.Chat
                 CancellationToken cancellationToken)
         {
             var json = _serializer.Serialize(payload);
-            for (var attempt = 0; ; attempt++)
+            var token = await GetAccessTokenAsync(
+                httpClient,
+                settings,
+                cancellationToken).ConfigureAwait(true);
+            using (var request = new HttpRequestMessage(
+                HttpMethod.Post,
+                ApiBase + method))
             {
-                var token = await GetAccessTokenAsync(
-                    httpClient,
-                    settings,
-                    cancellationToken).ConfigureAwait(true);
-                using (var request = new HttpRequestMessage(
-                    HttpMethod.Post,
-                    ApiBase + method))
+                request.Headers.Authorization =
+                    new AuthenticationHeaderValue(
+                        "Bearer",
+                        token);
+                request.Headers.Accept.Add(
+                    new MediaTypeWithQualityHeaderValue(
+                        "application/json"));
+                request.Content = new StringContent(
+                    json,
+                    Encoding.UTF8,
+                    "application/json");
+                using (var response = await httpClient
+                    .SendAsync(request, cancellationToken)
+                    .ConfigureAwait(true))
                 {
-                    request.Headers.Authorization =
-                        new AuthenticationHeaderValue(
-                            "Bearer",
-                            token);
-                    request.Headers.Accept.Add(
-                        new MediaTypeWithQualityHeaderValue(
-                            "application/json"));
-                    request.Content = new StringContent(
-                        json,
-                        Encoding.UTF8,
-                        "application/json");
-                    using (var response = await httpClient
-                        .SendAsync(request, cancellationToken)
-                        .ConfigureAwait(true))
+                    var body = await ReadBodyAsync(
+                        response,
+                        cancellationToken)
+                        .ConfigureAwait(true);
+                    if (response.IsSuccessStatusCode)
                     {
-                        var body = await ReadBodyAsync(
-                            response,
-                            cancellationToken)
-                            .ConfigureAwait(true);
-                        if (response.IsSuccessStatusCode)
-                        {
-                            return _serializer
-                                .DeserializeObject(body)
-                                as IDictionary<string, object>;
-                        }
+                        return _serializer
+                            .DeserializeObject(body)
+                            as IDictionary<string, object>;
+                    }
 
-                        var status = (int)response.StatusCode;
-                        // Per-minute quota: Google says how long
-                        // until it resets. One cancellable wait
-                        // and retry absorbs short limits instead
-                        // of failing the request.
-                        // Capacity handling lives in the callers'
-                        // retry loops (fast probes, backoff, and
-                        // model fallback); this layer only reports.
-                        if (status == 429)
-                        {
-                            throw new AiEndpointException(
-                                "GEMINI_RATE_LIMITED",
-                                "The Gemini quota for this model " +
-                                "is exhausted right now. Wait a " +
-                                "minute and try again, or switch " +
-                                "to gemini-2.5-flash, which has " +
-                                "higher limits than the pro " +
-                                "model.",
-                                httpStatus: status,
-                                responseSnippet: body);
-                        }
-
-                        var hint = status == 401 || status == 403
-                            ? " The Google sign-in may have " +
-                              "expired - open MetoAI Settings " +
-                              "and click Sign in with Google " +
-                              "again."
-                            : string.Empty;
+                    var status = (int)response.StatusCode;
+                    // Capacity handling lives in the callers'
+                    // retry loops (fast probes, backoff, and
+                    // model fallback); this layer only reports.
+                    if (status == 429)
+                    {
                         throw new AiEndpointException(
-                            "GEMINI_HTTP_" + status,
-                            "The Gemini endpoint rejected " +
-                            method.TrimStart(':') + ": " + status +
-                            "." + hint,
+                            "GEMINI_RATE_LIMITED",
+                            "The Gemini quota for this model is " +
+                            "exhausted right now. Wait a minute " +
+                            "and try again, or switch to " +
+                            "gemini-2.5-flash.",
                             httpStatus: status,
                             responseSnippet: body);
                     }
+
+                    var hint = status == 401 || status == 403
+                        ? " The Google sign-in may have " +
+                          "expired - open MetoAI Settings " +
+                          "and click Sign in with Google " +
+                          "again."
+                        : string.Empty;
+                    throw new AiEndpointException(
+                        "GEMINI_HTTP_" + status,
+                        "The Gemini endpoint rejected " +
+                        method.TrimStart(':') + ": " + status +
+                        "." + hint,
+                        httpStatus: status,
+                        responseSnippet: body);
                 }
             }
         }
