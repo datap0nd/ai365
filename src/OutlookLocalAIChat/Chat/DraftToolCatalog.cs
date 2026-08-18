@@ -52,31 +52,33 @@ namespace OutlookLocalAIChat.Chat
             string description,
             bool includeKind)
         {
+            // No maxLength/uniqueItems in these schemas: llama.cpp
+            // compiles tool schemas into a sampling grammar, and
+            // large bounded repetitions make sampler initialization
+            // fail with HTTP 400. All limits are enforced locally by
+            // DraftToolHost via TextBoundary, so the schema caps were
+            // advisory only.
             var properties = new Dictionary<string, object>
             {
                 {
                     "body",
                     BoundedString(
-                        "Complete draft body. Use # heading, ## subheading, - list item, 1. numbered item, and --- divider when a visual layout is requested. Never return raw HTML. Do not include commentary outside the draft.",
-                        12000)
+                        "Complete draft body. Use # heading, ## subheading, - list item, 1. numbered item, and --- divider when a visual layout is requested. Never return raw HTML. Do not include commentary outside the draft.")
                 },
                 {
                     "subject",
                     BoundedString(
-                        "Optional subject. Omit it to preserve the current subject during an update.",
-                        255)
+                        "Optional subject. Omit it to preserve the current subject during an update.")
                 },
                 {
                     "to",
                     BoundedString(
-                        "Optional semicolon-separated recipients. Omit it to preserve current recipients during an update.",
-                        2000)
+                        "Optional semicolon-separated recipients. Omit it to preserve current recipients during an update.")
                 },
                 {
                     "cc",
                     BoundedString(
-                        "Optional semicolon-separated CC recipients. Omit it to preserve current recipients during an update.",
-                        2000)
+                        "Optional semicolon-separated CC recipients. Omit it to preserve current recipients during an update.")
                 },
                 {
                     "bold_phrases",
@@ -85,15 +87,13 @@ namespace OutlookLocalAIChat.Chat
                         { "type", "array" },
                         {
                             "description",
-                            "Optional exact phrases from body to bold. Formatting is applied by the local host."
+                            "Optional exact phrases from body to bold, at most twelve. Formatting is applied by the local host."
                         },
                         { "maxItems", 12 },
-                        { "uniqueItems", true },
                         {
                             "items",
                             BoundedString(
-                                "Exact body phrase to bold.",
-                                200)
+                                "Exact body phrase to bold.")
                         }
                     }
                 }
@@ -104,8 +104,7 @@ namespace OutlookLocalAIChat.Chat
                 properties.Add(
                     "reply_handle",
                     BoundedString(
-                        "Required when kind is reply. Use the exact opaque handle returned by search_mailbox, read_messages, read_thread, or selected. Omit for a new message. Never invent a handle.",
-                        64));
+                        "Required when kind is reply. Use the exact opaque handle returned by search_mailbox, read_messages, read_thread, or selected. Omit for a new message. Never invent a handle."));
                 properties.Add(
                     "kind",
                     new Dictionary<string, object>
@@ -144,14 +143,12 @@ namespace OutlookLocalAIChat.Chat
         }
 
         private static Dictionary<string, object> BoundedString(
-            string description,
-            int maximumLength)
+            string description)
         {
             return new Dictionary<string, object>
             {
                 { "type", "string" },
-                { "description", description },
-                { "maxLength", maximumLength }
+                { "description", description }
             };
         }
     }

@@ -661,6 +661,11 @@
   function buildChip(item) {
     var chip = el("div", "tchip");
     if (item.warn) { chip.classList.add("warn"); }
+    var tip = (item.title || "") +
+      (item.subtitle ? "\n" + item.subtitle : "");
+    if (tip) {
+      chip.title = item.warn ? "Warning\n" + tip : tip;
+    }
     if (item.kind === "image" &&
         item.thumb &&
         item.thumb.indexOf("data:image/") === 0) {
