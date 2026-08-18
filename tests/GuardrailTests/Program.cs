@@ -3343,6 +3343,18 @@ namespace GuardrailTests
                     "{\"access_token\":\"at\"}") == null,
                 "Credentials without a refresh token must be " +
                 "rejected.");
+
+            Assert(
+                GeminiCodeAssistGateway.ParseRetryDelaySeconds(
+                    "{\"error\":{\"details\":[{\"@type\":" +
+                    "\"type.googleapis.com/google.rpc." +
+                    "RetryInfo\",\"retryDelay\":\"56s\"}]}}") ==
+                56 &&
+                GeminiCodeAssistGateway.ParseRetryDelaySeconds(
+                    "your quota will reset after 42s") == 42 &&
+                GeminiCodeAssistGateway.ParseRetryDelaySeconds(
+                    "no hint here") == 0,
+                "Retry delay parsing failed.");
         }
 
         private static void GeminiSignInSettingsAreModeAware()

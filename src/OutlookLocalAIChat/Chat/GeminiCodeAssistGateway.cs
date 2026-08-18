@@ -1147,39 +1147,83 @@ namespace OutlookLocalAIChat.Chat
                 Dictionary<string, object> payload,
                 CancellationToken cancellationToken)
         {
-            var token = await GetAccessTokenAsync(
-                httpClient,
-                settings,
-                cancellationToken).ConfigureAwait(true);
-            using (var request = new HttpRequestMessage(
-                HttpMethod.Post,
-                ApiBase + method))
+            var json = _serializer.Serialize(payload);
+            for (var attempt = 0; ; attempt++)
             {
-                request.Headers.Authorization =
-                    new AuthenticationHeaderValue(
-                        "Bearer",
-                        token);
-                request.Headers.Accept.Add(
-                    new MediaTypeWithQualityHeaderValue(
-                        "application/json"));
-                request.Content = new StringContent(
-                    _serializer.Serialize(payload),
-                    Encoding.UTF8,
-                    "application/json");
-                using (var response = await httpClient
-                    .SendAsync(request, cancellationToken)
-                    .ConfigureAwait(true))
+                var token = await GetAccessTokenAsync(
+                    httpClient,
+                    settings,
+                    cancellationToken).ConfigureAwait(true);
+                using (var request = new HttpRequestMessage(
+                    HttpMethod.Post,
+                    ApiBase + method))
                 {
-                    var body = await ReadBodyAsync(
-                        response,
-                        cancellationToken).ConfigureAwait(true);
-                    if (!response.IsSuccessStatusCode)
+                    request.Headers.Authorization =
+                        new AuthenticationHeaderValue(
+                            "Bearer",
+                            token);
+                    request.Headers.Accept.Add(
+                        new MediaTypeWithQualityHeaderValue(
+                            "application/json"));
+                    request.Content = new StringContent(
+                        json,
+                        Encoding.UTF8,
+                        "application/json");
+                    using (var response = await httpClient
+                        .SendAsync(request, cancellationToken)
+                        .ConfigureAwait(true))
                     {
+                        var body = await ReadBodyAsync(
+                            response,
+                            cancellationToken)
+                            .ConfigureAwait(true);
+                        if (response.IsSuccessStatusCode)
+                        {
+                            return _serializer
+                                .DeserializeObject(body)
+                                as IDictionary<string, object>;
+                        }
+
                         var status = (int)response.StatusCode;
+                        // Per-minute quota: Google says how long
+                        // until it resets. One cancellable wait
+                        // and retry absorbs short limits instead
+                        // of failing the request.
+                        if (status == 429 && attempt == 0)
+                        {
+                            var delaySeconds =
+                                ParseRetryDelaySeconds(body);
+                            if (delaySeconds > 0 &&
+                                delaySeconds <= 90)
+                            {
+                                await Task.Delay(
+                                    TimeSpan.FromSeconds(
+                                        delaySeconds + 1),
+                                    cancellationToken)
+                                    .ConfigureAwait(true);
+                                continue;
+                            }
+                        }
+
+                        if (status == 429)
+                        {
+                            throw new AiEndpointException(
+                                "GEMINI_RATE_LIMITED",
+                                "The Gemini quota for this model " +
+                                "is exhausted right now. Wait a " +
+                                "minute and try again, or switch " +
+                                "to gemini-2.5-flash, which has " +
+                                "higher limits than the pro " +
+                                "model.",
+                                httpStatus: status,
+                                responseSnippet: body);
+                        }
+
                         var hint = status == 401 || status == 403
                             ? " The Google sign-in may have " +
-                              "expired - run \"gemini\" in a " +
-                              "terminal to sign in again."
+                              "expired - open MetoAI Settings " +
+                              "and click Sign in with Google " +
+                              "again."
                             : string.Empty;
                         throw new AiEndpointException(
                             "GEMINI_HTTP_" + status,
@@ -1189,11 +1233,31 @@ namespace OutlookLocalAIChat.Chat
                             httpStatus: status,
                             responseSnippet: body);
                     }
-
-                    return _serializer.DeserializeObject(body)
-                        as IDictionary<string, object>;
                 }
             }
+        }
+
+        // Reads the retry hint from a 429 body: either RetryInfo's
+        // "retryDelay": "56s" or message text like "after 56s".
+        public static int ParseRetryDelaySeconds(string body)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(
+                body ?? string.Empty,
+                "\"retryDelay\"\\s*:\\s*\"(\\d+)");
+            if (!match.Success)
+            {
+                match = System.Text.RegularExpressions.Regex.Match(
+                    body ?? string.Empty,
+                    "after\\s+(\\d+)\\s*s");
+            }
+
+            int seconds;
+            return match.Success &&
+                   int.TryParse(
+                       match.Groups[1].Value,
+                       out seconds)
+                ? seconds
+                : 0;
         }
 
         // GET against the API base; used to poll the onboarding
