@@ -777,6 +777,15 @@ namespace OutlookLocalAIChat.Chat
                 ChatCompletionRequest requestModel,
                 CancellationToken cancellationToken)
         {
+            if (AdminPolicy.GeminiDisabled)
+            {
+                throw new AiEndpointException(
+                    "GEMINI_DISABLED_BY_POLICY",
+                    "Google Gemini is disabled by administrator " +
+                    "policy on this computer. Use a local or " +
+                    "OpenAI-compatible endpoint in Settings.");
+            }
+
             var project = await GetProjectAsync(
                 httpClient,
                 settings,

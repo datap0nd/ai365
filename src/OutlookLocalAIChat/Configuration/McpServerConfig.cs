@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 using OutlookLocalAIChat.Security;
 
@@ -22,6 +23,11 @@ namespace OutlookLocalAIChat.Configuration
 
         // Raw command-line arguments for stdio servers.
         public string Arguments { get; set; } = string.Empty;
+
+        // Optional HTTP headers for HTTP servers, one per line as
+        // "Name: value" - typically an Authorization header. Sent
+        // only to this server's own endpoint and never logged.
+        public string Headers { get; set; } = string.Empty;
 
         public bool Enabled { get; set; } = true;
 
@@ -47,8 +53,96 @@ namespace OutlookLocalAIChat.Configuration
                 Arguments = TextBoundary.SingleLine(
                     Arguments,
                     1000),
+                Headers = TextBoundary.PlainText(Headers, 2000),
                 Enabled = Enabled
             };
+        }
+
+        // Parses the Headers text into at most 8 well-formed
+        // name/value pairs. Names are restricted to header tokens
+        // and reserved protocol headers are dropped so a configured
+        // header can never break the MCP transport itself.
+        public IReadOnlyList<KeyValuePair<string, string>>
+            ParsedHeaders()
+        {
+            var headers =
+                new List<KeyValuePair<string, string>>();
+            foreach (var raw in (Headers ?? string.Empty)
+                .Replace("\r\n", "\n")
+                .Split('\n'))
+            {
+                if (headers.Count == 8)
+                {
+                    break;
+                }
+
+                var separator = raw.IndexOf(':');
+                if (separator <= 0)
+                {
+                    continue;
+                }
+
+                var name = raw.Substring(0, separator).Trim();
+                var value = TextBoundary.SingleLine(
+                    raw.Substring(separator + 1),
+                    500);
+                if (name.Length == 0 ||
+                    value.Length == 0 ||
+                    !IsHeaderToken(name) ||
+                    IsReservedHeader(name))
+                {
+                    continue;
+                }
+
+                headers.Add(
+                    new KeyValuePair<string, string>(
+                        name,
+                        value));
+            }
+
+            return headers;
+        }
+
+        private static bool IsHeaderToken(string name)
+        {
+            foreach (var character in name)
+            {
+                if (!(character >= 'a' && character <= 'z') &&
+                    !(character >= 'A' && character <= 'Z') &&
+                    !(character >= '0' && character <= '9') &&
+                    character != '-' &&
+                    character != '_')
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool IsReservedHeader(string name)
+        {
+            return
+                string.Equals(
+                    name,
+                    "Accept",
+                    StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(
+                    name,
+                    "Content-Type",
+                    StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(
+                    name,
+                    "Content-Length",
+                    StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(
+                    name,
+                    "Host",
+                    StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(
+                    name,
+                    "Mcp-Session-Id",
+                    StringComparison.OrdinalIgnoreCase);
         }
 
         // Server names become part of tool names, so they are

@@ -49,7 +49,8 @@ namespace OutlookLocalAIChat.Configuration
                     Model = stored.Model ?? string.Empty,
                     ApiKey = Unprotect(stored.ProtectedApiKey),
                     AllowInsecureHttp = stored.AllowInsecureHttp,
-                    UseGeminiSignIn = stored.UseGeminiSignIn,
+                    UseGeminiSignIn = stored.UseGeminiSignIn &&
+                        !AdminPolicy.GeminiDisabled,
                     GeminiRefreshToken = Unprotect(
                         stored.ProtectedGeminiRefreshToken),
                     GeminiProject = TextBoundary.SingleLine(
@@ -201,6 +202,8 @@ namespace OutlookLocalAIChat.Configuration
                     Name = server.Name,
                     Target = server.Target,
                     Arguments = server.Arguments,
+                    Headers = TryUnprotect(
+                        server.ProtectedHeaders),
                     Enabled = server.Enabled
                 }.Sanitized();
                 if (config.Target.Length == 0)
@@ -241,6 +244,12 @@ namespace OutlookLocalAIChat.Configuration
                     Name = config.Name,
                     Target = config.Target,
                     Arguments = config.Arguments,
+                    // Headers can carry an Authorization value, so
+                    // they get the same DPAPI protection as keys.
+                    ProtectedHeaders =
+                        config.Headers.Trim().Length > 0
+                            ? Protect(config.Headers.Trim())
+                            : string.Empty,
                     Enabled = config.Enabled
                 });
                 if (result.Count == McpServerConfig.MaxServers)
@@ -302,7 +311,24 @@ namespace OutlookLocalAIChat.Configuration
 
             public string Arguments { get; set; }
 
+            public string ProtectedHeaders { get; set; }
+
             public bool Enabled { get; set; }
+        }
+
+        // A headers value that fails to unprotect (copied profile,
+        // reset DPAPI key) degrades to no headers instead of
+        // blocking settings load.
+        private static string TryUnprotect(string value)
+        {
+            try
+            {
+                return Unprotect(value);
+            }
+            catch
+            {
+                return string.Empty;
+            }
         }
     }
 }

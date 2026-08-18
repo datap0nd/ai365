@@ -55,6 +55,7 @@ namespace OutlookLocalAIChat.Office
         private readonly JavaScriptSerializer _serializer =
             new JavaScriptSerializer();
         private DraftSession _emailDraft;
+        private string _latestUserPrompt = string.Empty;
 
         public DocumentDraftHost(
             string hostKind,
@@ -123,8 +124,10 @@ namespace OutlookLocalAIChat.Office
         public MailboxToolResult Execute(
             ChatToolCall call,
             OneShotDraftAuthorization authorization,
-            bool isOnlyToolCall)
+            bool isOnlyToolCall,
+            string userPrompt = null)
         {
+            _latestUserPrompt = userPrompt ?? string.Empty;
             var name = call?.function?.name;
             if (call?.function == null ||
                 string.IsNullOrWhiteSpace(call.id) ||
@@ -351,6 +354,14 @@ namespace OutlookLocalAIChat.Office
             var outlook = GetSiblingApplication(
                 "Outlook.Application");
             var drafts = new DraftService(outlook);
+            var to = ToolArguments.GetString(
+                arguments,
+                "to",
+                string.Empty);
+            var cc = ToolArguments.GetString(
+                arguments,
+                "cc",
+                string.Empty);
             _emailDraft?.Dispose();
             _emailDraft = drafts.CreateNewDraft(
                 body,
@@ -359,14 +370,8 @@ namespace OutlookLocalAIChat.Office
                     arguments,
                     "subject",
                     string.Empty),
-                ToolArguments.GetString(
-                    arguments,
-                    "to",
-                    string.Empty),
-                ToolArguments.GetString(
-                    arguments,
-                    "cc",
-                    string.Empty));
+                to,
+                cc);
             var attached = false;
             if (ToolArguments.GetBoolean(
                 arguments,
@@ -385,7 +390,11 @@ namespace OutlookLocalAIChat.Office
                 (attached
                     ? " with the current file attached"
                     : string.Empty) +
-                ". AI365 cannot send it.";
+                ". AI365 cannot send it." +
+                RecipientIntentCheck.Warn(
+                    to,
+                    cc,
+                    _latestUserPrompt);
         }
 
         // Full path of the host document when it exists on disk;

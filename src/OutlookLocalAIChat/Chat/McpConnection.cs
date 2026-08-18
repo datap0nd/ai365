@@ -594,6 +594,13 @@ namespace OutlookLocalAIChat.Chat
             request.Headers.TryAddWithoutValidation(
                 "Accept",
                 "application/json, text/event-stream");
+            foreach (var header in _config.ParsedHeaders())
+            {
+                request.Headers.TryAddWithoutValidation(
+                    header.Key,
+                    header.Value);
+            }
+
             if (_httpSessionId.Length > 0)
             {
                 request.Headers.TryAddWithoutValidation(

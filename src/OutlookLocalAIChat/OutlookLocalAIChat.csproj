@@ -91,6 +91,7 @@
     <Compile Include="Configuration\McpServerConfig.cs" />
     <Compile Include="Configuration\GoogleSignInFlow.cs" />
     <Compile Include="Configuration\AppSettings.cs" />
+    <Compile Include="Configuration\AdminPolicy.cs" />
     <Compile Include="Chat\VisionImagePrefetch.cs" />
     <Compile Include="Chat\VisionAttachmentExchange.cs" />
     <Compile Include="Configuration\ModelCatalog.cs" />
@@ -116,6 +117,7 @@
     <Compile Include="Security\DraftIntentPolicy.cs" />
     <Compile Include="Security\DocumentDraftIntentPolicy.cs" />
     <Compile Include="Security\DraftFormulaPolicy.cs" />
+    <Compile Include="Security\RecipientIntentCheck.cs" />
     <Compile Include="Security\TextBoundary.cs" />
     <Compile Include="Security\OneShotDraftAuthorization.cs" />
     <Compile Include="Security\SafeModelText.cs" />
@@ -126,6 +128,7 @@
     <Compile Include="Utilities\DiagnosticDetails.cs" />
     <Compile Include="Utilities\DiagnosticsRecorder.cs" />
     <Compile Include="Utilities\Log.cs" />
+    <Compile Include="Utilities\PaneMemory.cs" />
     <Compile Include="Utilities\SelfUpdater.cs" />
     <Compile Include="Utilities\SuiteExchange.cs" />
   </ItemGroup>

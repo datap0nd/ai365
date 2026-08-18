@@ -76,14 +76,15 @@ namespace OutlookLocalAIChat.UI
             new OpenAiCompatibleClient();
         private readonly JavaScriptSerializer _serializer =
             new JavaScriptSerializer();
-        private readonly List<ChatTurn> _history =
+        private List<ChatTurn> _history =
             new List<ChatTurn>();
         private readonly List<ExternalDocumentContext> _externalContext =
             new List<ExternalDocumentContext>();
         private readonly List<ExternalImageContext> _externalImages =
             new List<ExternalImageContext>();
-        private readonly List<string> _transcriptEvents =
+        private List<string> _transcriptEvents =
             new List<string>();
+        private PaneMemory.Slot _memory;
         private readonly DiagnosticsRecorder _diagnostics =
             new DiagnosticsRecorder();
         private readonly System.Windows.Forms.Timer _elapsedTimer =
@@ -158,7 +159,17 @@ namespace OutlookLocalAIChat.UI
             _draftHost = new DocumentDraftHost(
                 _hostKind,
                 _hostApplication);
+            // Reopening the pane in the same Office session picks
+            // the conversation back up from process memory.
+            _memory = PaneMemory.For(_hostKind);
+            _history = _memory.History;
+            _transcriptEvents = _memory.Transcript;
+            _lastAssistantText = _memory.LastAnswer;
             PostMode();
+            if (_webReady)
+            {
+                ReplayTranscript();
+            }
         }
 
         private string HostName
@@ -382,6 +393,11 @@ namespace OutlookLocalAIChat.UI
             PostMode();
             RefreshModelPicker();
             PushContextToWeb();
+            ReplayTranscript();
+        }
+
+        private void ReplayTranscript()
+        {
             PostToWeb(new Dictionary<string, object>
             {
                 { "type", "clear" }
@@ -1202,6 +1218,11 @@ namespace OutlookLocalAIChat.UI
                 _history.Add(
                     new ChatTurn("assistant", response));
                 _lastAssistantText = response;
+                if (_memory != null)
+                {
+                    _memory.LastAnswer = response;
+                }
+
                 AppendFormattedAssistantText(response);
                 if (draftAuthorization.IsCreated)
                 {
@@ -1414,7 +1435,8 @@ namespace OutlookLocalAIChat.UI
                         result = _draftHost.Execute(
                             toolCall,
                             draftAuthorization,
-                            toolCalls.Count == 1);
+                            toolCalls.Count == 1,
+                            prompt);
                     }
                     else if (McpToolHost.IsMcpTool(name) &&
                              mcpHost != null)
@@ -1484,6 +1506,10 @@ namespace OutlookLocalAIChat.UI
             _externalImages.Clear();
             _transcriptEvents.Clear();
             _lastAssistantText = string.Empty;
+            if (_memory != null)
+            {
+                _memory.LastAnswer = string.Empty;
+            }
             _draftHost?.Dispose();
             _draftHost = _hostApplication == null
                 ? null

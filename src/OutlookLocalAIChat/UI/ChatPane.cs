@@ -81,8 +81,7 @@ namespace OutlookLocalAIChat.UI
             new OpenAiCompatibleClient();
         private readonly JavaScriptSerializer _serializer =
             new JavaScriptSerializer();
-        private readonly List<ChatTurn> _history =
-            new List<ChatTurn>();
+        private readonly List<ChatTurn> _history;
         private readonly List<MessageSnapshot> _workingMessages =
             new List<MessageSnapshot>();
         private readonly List<ExternalDocumentContext> _externalContext =
@@ -97,8 +96,8 @@ namespace OutlookLocalAIChat.UI
             };
         private DateTime _requestStartedAt = DateTime.UtcNow;
         private DateTime _statusChangedAt = DateTime.UtcNow;
-        private readonly List<string> _transcriptEvents =
-            new List<string>();
+        private readonly List<string> _transcriptEvents;
+        private readonly PaneMemory.Slot _memory;
         private readonly DiagnosticsRecorder _diagnostics =
             new DiagnosticsRecorder();
         private readonly WebView2 _webView = new WebView2();
@@ -126,6 +125,12 @@ namespace OutlookLocalAIChat.UI
         public ChatPane()
         {
             LastCreated = this;
+            // Reopening the pane in the same Outlook session picks
+            // the conversation back up from process memory.
+            _memory = PaneMemory.For("outlook");
+            _history = _memory.History;
+            _transcriptEvents = _memory.Transcript;
+            _lastAssistantText = _memory.LastAnswer;
             _settings = _settingsStore.Load();
             ContextScale.Apply(_settings.UseGeminiSignIn);
             _mcpTools = new McpToolHost(_settings.McpServers);
@@ -1910,6 +1915,7 @@ namespace OutlookLocalAIChat.UI
                 _history.Add(
                     new ChatTurn("assistant", response));
                 _lastAssistantText = response;
+                _memory.LastAnswer = response;
                 AppendFormattedAssistantText(response);
                 if (draftAuthorization.IsCreated)
                 {
@@ -2243,6 +2249,8 @@ namespace OutlookLocalAIChat.UI
             _externalContext.Clear();
             _externalImages.Clear();
             _transcriptEvents.Clear();
+            _lastAssistantText = string.Empty;
+            _memory.LastAnswer = string.Empty;
             _draftTools?.Dispose();
             _draftTools = _outlookApplication == null
                 ? null

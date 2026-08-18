@@ -56,6 +56,7 @@ namespace OutlookLocalAIChat.UI
         private readonly TextBox _mcpName = new TextBox();
         private readonly TextBox _mcpTarget = new TextBox();
         private readonly TextBox _mcpArguments = new TextBox();
+        private readonly TextBox _mcpHeaders = new TextBox();
         private readonly CheckBox _mcpEnabled = new CheckBox();
         private readonly Button _mcpSave =
             MakeButton("Add / update server", false, 150);
@@ -653,13 +654,13 @@ namespace OutlookLocalAIChat.UI
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 1,
-                RowCount = 11,
+                RowCount = 13,
                 Padding = new Padding(18, 16, 18, 12)
             };
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(
                 new RowStyle(SizeType.Percent, 100));
-            for (var row = 2; row < 11; row++)
+            for (var row = 2; row < 13; row++)
             {
                 layout.RowStyles.Add(
                     new RowStyle(SizeType.AutoSize));
@@ -716,12 +717,27 @@ namespace OutlookLocalAIChat.UI
                 "MCP server arguments";
             layout.Controls.Add(_mcpArguments, 0, 7);
 
+            layout.Controls.Add(
+                FieldLabel(
+                    "HTTP headers, one per line as Name: value " +
+                    "(HTTP servers only, e.g. Authorization)"),
+                0,
+                8);
+            _mcpHeaders.Dock = DockStyle.Fill;
+            _mcpHeaders.Multiline = true;
+            _mcpHeaders.ScrollBars = ScrollBars.Vertical;
+            _mcpHeaders.MinimumSize = new Size(0, 48);
+            _mcpHeaders.MaxLength = 2000;
+            _mcpHeaders.AccessibleName =
+                "MCP server HTTP headers";
+            layout.Controls.Add(_mcpHeaders, 0, 9);
+
             _mcpEnabled.AutoSize = true;
             _mcpEnabled.Checked = true;
             _mcpEnabled.Text = "Enabled";
             _mcpEnabled.AccessibleName =
                 "MCP server enabled";
-            layout.Controls.Add(_mcpEnabled, 0, 8);
+            layout.Controls.Add(_mcpEnabled, 0, 10);
 
             var buttons = new FlowLayoutPanel
             {
@@ -735,7 +751,7 @@ namespace OutlookLocalAIChat.UI
             _mcpRemove.Click += McpRemoveClick;
             buttons.Controls.Add(_mcpSave);
             buttons.Controls.Add(_mcpRemove);
-            layout.Controls.Add(buttons, 0, 9);
+            layout.Controls.Add(buttons, 0, 11);
 
             ConfigureSupportingLabel(_mcpStatus);
             _mcpStatus.Text =
@@ -743,7 +759,7 @@ namespace OutlookLocalAIChat.UI
                 McpServerConfig.MaxServers +
                 " servers; their tools appear to the model as " +
                 "mcp_<server>_<tool>.";
-            layout.Controls.Add(_mcpStatus, 0, 10);
+            layout.Controls.Add(_mcpStatus, 0, 12);
             page.Controls.Add(layout);
             return page;
         }
@@ -775,6 +791,7 @@ namespace OutlookLocalAIChat.UI
             _mcpName.Text = server.Name;
             _mcpTarget.Text = server.Target;
             _mcpArguments.Text = server.Arguments;
+            _mcpHeaders.Text = server.Headers;
             _mcpEnabled.Checked = server.Enabled;
         }
 
@@ -787,6 +804,7 @@ namespace OutlookLocalAIChat.UI
                 Name = _mcpName.Text,
                 Target = _mcpTarget.Text,
                 Arguments = _mcpArguments.Text,
+                Headers = _mcpHeaders.Text,
                 Enabled = _mcpEnabled.Checked
             }.Sanitized();
             if (server.Target.Length == 0)
@@ -1783,6 +1801,22 @@ namespace OutlookLocalAIChat.UI
 
         private void UpdateGeminiModeUi()
         {
+            if (AdminPolicy.GeminiDisabled)
+            {
+                _useGeminiSignIn.Checked = false;
+                _useGeminiSignIn.Enabled = false;
+                _googleSignIn.Enabled = false;
+                _geminiProject.Enabled = false;
+                _endpoint.Enabled = _commonControlsEnabled;
+                _apiKey.Enabled = _commonControlsEnabled;
+                _allowInsecureHttp.Enabled =
+                    _commonControlsEnabled;
+                _googleStatus.Text =
+                    "Disabled by administrator policy " +
+                    "(Software\\Policies\\AI365, DisableGemini).";
+                return;
+            }
+
             var gemini = _useGeminiSignIn.Checked;
             var baseline = _commonControlsEnabled;
             _endpoint.Enabled = baseline && !gemini;
