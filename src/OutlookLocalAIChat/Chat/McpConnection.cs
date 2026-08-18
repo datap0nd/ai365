@@ -47,6 +47,11 @@ namespace OutlookLocalAIChat.Chat
         private readonly JavaScriptSerializer _serializer =
             new JavaScriptSerializer();
         private readonly object _gate = new object();
+        // Bounded tail of the server's stderr, surfaced in error
+        // messages so a crashing or misconfigured server is
+        // diagnosable instead of just silent.
+        private readonly StringBuilder _stderrTail =
+            new StringBuilder();
         private Process _process;
         private StreamWriter _stdin;
         private StreamReader _stdout;
@@ -321,9 +326,27 @@ namespace OutlookLocalAIChat.Chat
                 AutoFlush = true
             };
             _stdout = _process.StandardOutput;
-            // Drain stderr so a chatty server can never block.
+            // Drain stderr so a chatty server can never block,
+            // keeping a bounded tail for diagnostics.
             _process.ErrorDataReceived +=
-                (sender, eventArgs) => { };
+                (sender, eventArgs) =>
+                {
+                    var data = eventArgs.Data;
+                    if (string.IsNullOrEmpty(data))
+                    {
+                        return;
+                    }
+
+                    lock (_stderrTail)
+                    {
+                        if (_stderrTail.Length > 2000)
+                        {
+                            _stderrTail.Length = 0;
+                        }
+
+                        _stderrTail.AppendLine(data);
+                    }
+                };
             _process.BeginErrorReadLine();
         }
 
@@ -463,7 +486,8 @@ namespace OutlookLocalAIChat.Chat
                 throw new TimeoutException(
                     "The MCP server " + _config.Name +
                     " did not answer within " +
-                    (timeoutMs / 1000) + " seconds.");
+                    (timeoutMs / 1000) + " seconds." +
+                    StderrTailSuffix());
             }
 
             if (task.Result == null)
@@ -471,10 +495,24 @@ namespace OutlookLocalAIChat.Chat
                 _failed = true;
                 throw new InvalidOperationException(
                     "The MCP server " + _config.Name +
-                    " closed its output stream.");
+                    " closed its output stream." +
+                    StderrTailSuffix());
             }
 
             return task.Result;
+        }
+
+        private string StderrTailSuffix()
+        {
+            lock (_stderrTail)
+            {
+                var tail = TextBoundary.SingleLine(
+                    _stderrTail.ToString(),
+                    600);
+                return tail.Length > 0
+                    ? " Server stderr: " + tail
+                    : string.Empty;
+            }
         }
 
         // Unrelated server notifications and requests are skipped;

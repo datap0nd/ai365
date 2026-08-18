@@ -32,9 +32,14 @@ namespace GuardrailTests
         {
             // The MCP round-trip test relaunches this same exe as a
             // scripted stdio MCP server, so the test needs no
-            // external interpreter and stays deterministic.
-            if (args.Length > 0 &&
-                args[0] == "--mcp-fake-server")
+            // external interpreter and stays deterministic. The
+            // command line is checked directly as well so the server
+            // mode can never fall through into the test suite.
+            if ((args.Length > 0 &&
+                 args[0] == "--mcp-fake-server") ||
+                Environment.CommandLine.IndexOf(
+                    "--mcp-fake-server",
+                    StringComparison.Ordinal) >= 0)
             {
                 return RunFakeMcpServer();
             }
@@ -4371,17 +4376,47 @@ namespace GuardrailTests
 
         private static void McpStdioRoundTripWorks()
         {
+            var serverConfig = new McpServerConfig
+            {
+                Name = "fake",
+                Target = Assembly
+                    .GetExecutingAssembly().Location,
+                Arguments = "--mcp-fake-server",
+                Enabled = true
+            };
+
+            // Direct probe first: any handshake failure surfaces
+            // with its full exception text (including the server's
+            // stderr tail) instead of an empty tool list.
+            var probe = new McpConnection(
+                serverConfig.Sanitized(),
+                null);
+            try
+            {
+                var probedTools = probe.ListTools();
+                Assert(
+                    probedTools.Count == 1 &&
+                    probedTools[0].Name == "echo",
+                    "The scripted MCP server listed unexpected tools: " +
+                    string.Join(
+                        ", ",
+                        probedTools.Select(tool => tool.Name)));
+            }
+            catch (Exception exception)
+            {
+                Assert(
+                    false,
+                    "The MCP stdio handshake failed: " + exception);
+            }
+            finally
+            {
+                probe.Dispose();
+            }
+
             var host = new McpToolHost(
                 new List<McpServerConfig>
                 {
-                    new McpServerConfig
-                    {
-                        Name = "fake",
-                        Target = Assembly
-                            .GetExecutingAssembly().Location,
-                        Arguments = "--mcp-fake-server",
-                        Enabled = true
-                    }
+                    serverConfig
                 });
             try
             {
