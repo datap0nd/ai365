@@ -114,7 +114,9 @@ namespace OutlookLocalAIChat.Chat
                                                             "description",
                                                             "Body bullet lines, at most " +
                                                             PresentationDraftWriter
-                                                                .MaxBulletsPerSlide + "."
+                                                                .MaxBulletsPerSlide +
+                                                            ". Indent sub-bullets with two " +
+                                                            "leading spaces per level."
                                                         },
                                                         {
                                                             "items",

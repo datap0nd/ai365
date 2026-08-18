@@ -22,15 +22,30 @@ namespace OutlookLocalAIChat.Office
         {
             internal DraftSlide(
                 string title,
-                IReadOnlyList<string> bullets)
+                IReadOnlyList<DraftBullet> bullets)
             {
                 Title = title ?? string.Empty;
-                Bullets = bullets ?? new string[0];
+                Bullets = bullets ?? new DraftBullet[0];
             }
 
             internal string Title { get; }
 
-            internal IReadOnlyList<string> Bullets { get; }
+            internal IReadOnlyList<DraftBullet> Bullets { get; }
+        }
+
+        // A bullet line with its outline level (1-5). Sub-bullets
+        // are written with two leading spaces per extra level.
+        internal sealed class DraftBullet
+        {
+            internal DraftBullet(string text, int level)
+            {
+                Text = text ?? string.Empty;
+                Level = level < 1 ? 1 : (level > 5 ? 5 : level);
+            }
+
+            internal string Text { get; }
+
+            internal int Level { get; }
         }
 
         internal static string AddDraftSlides(
@@ -87,7 +102,7 @@ namespace OutlookLocalAIChat.Office
 
                 if (slide.Bullets.Count > 0)
                 {
-                    var lines = new List<string>();
+                    var lines = new List<DraftBullet>();
                     foreach (var bullet in slide.Bullets)
                     {
                         if (lines.Count == MaxBulletsPerSlide)
@@ -95,12 +110,9 @@ namespace OutlookLocalAIChat.Office
                             break;
                         }
 
-                        var bounded = TextBoundary.SingleLine(
-                            bullet,
-                            MaxBulletCharacters);
-                        if (bounded.Length > 0)
+                        if (bullet.Text.Length > 0)
                         {
-                            lines.Add(bounded);
+                            lines.Add(bullet);
                         }
                     }
 
@@ -108,9 +120,35 @@ namespace OutlookLocalAIChat.Office
                     {
                         try
                         {
-                            created.Shapes.Placeholders[2]
-                                .TextFrame.TextRange.Text =
-                                string.Join("\r", lines);
+                            var texts = new List<string>();
+                            foreach (var line in lines)
+                            {
+                                texts.Add(line.Text);
+                            }
+
+                            dynamic textRange = created.Shapes
+                                .Placeholders[2]
+                                .TextFrame.TextRange;
+                            textRange.Text =
+                                string.Join("\r", texts);
+                            for (var line = 0;
+                                 line < lines.Count;
+                                 line++)
+                            {
+                                if (lines[line].Level > 1)
+                                {
+                                    try
+                                    {
+                                        textRange
+                                            .Paragraphs(line + 1)
+                                            .IndentLevel =
+                                            lines[line].Level;
+                                    }
+                                    catch
+                                    {
+                                    }
+                                }
+                            }
                         }
                         catch
                         {
@@ -165,7 +203,7 @@ namespace OutlookLocalAIChat.Office
                         "Each slide needs a non-empty title.");
                 }
 
-                var bullets = new List<string>();
+                var bullets = new List<DraftBullet>();
                 object bulletsValue;
                 if (map.TryGetValue("bullets", out bulletsValue))
                 {
@@ -180,9 +218,20 @@ namespace OutlookLocalAIChat.Office
                                 break;
                             }
 
-                            bullets.Add(TextBoundary.SingleLine(
-                                Convert.ToString(bullet),
-                                MaxBulletCharacters));
+                            var raw = Convert.ToString(bullet) ??
+                                string.Empty;
+                            var leading = 0;
+                            while (leading < raw.Length &&
+                                   raw[leading] == ' ')
+                            {
+                                leading++;
+                            }
+
+                            bullets.Add(new DraftBullet(
+                                TextBoundary.SingleLine(
+                                    raw,
+                                    MaxBulletCharacters),
+                                1 + leading / 2));
                         }
                     }
                 }

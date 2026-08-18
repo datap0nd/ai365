@@ -9,7 +9,10 @@ namespace OutlookLocalAIChat.Office
     // on the dedicated "AI365 Draft" worksheet: it is created at the
     // end of the workbook when missing, its previous draft content
     // is replaced, no other sheet is ever touched, and the workbook
-    // is never saved - saving stays a human action.
+    // is never saved - saving stays a human action. Cells starting
+    // with '=' become live formulas only when DraftFormulaPolicy
+    // allows them (no network, native-code, or external-workbook
+    // functions); everything else lands as text.
     internal static class WorkbookDraftWriter
     {
         internal const string DraftSheetName = "AI365 Draft";
@@ -84,6 +87,11 @@ namespace OutlookLocalAIChat.Office
                 }
             }
 
+            // Formula cells stay out of the bulk write: they are
+            // set one by one below so a rejected or broken formula
+            // degrades to text without failing the whole draft.
+            var formulas =
+                new List<KeyValuePair<int[], string>>();
             var grid = new object[rowCount, columnCount];
             for (var row = 0; row < rowCount; row++)
             {
@@ -92,12 +100,31 @@ namespace OutlookLocalAIChat.Office
                      column < columnCount;
                      column++)
                 {
-                    grid[row, column] =
+                    var cell =
                         source != null && column < source.Count
                             ? TextBoundary.SingleLine(
                                 source[column],
                                 MaxCellCharacters)
                             : string.Empty;
+                    if (cell.Length > 0 && cell[0] == '=')
+                    {
+                        if (DraftFormulaPolicy.IsAllowedFormula(
+                            cell))
+                        {
+                            grid[row, column] = string.Empty;
+                            formulas.Add(
+                                new KeyValuePair<int[], string>(
+                                    new[] { row, column },
+                                    cell));
+                            continue;
+                        }
+
+                        // The apostrophe keeps blocked formula
+                        // text visible as plain text.
+                        cell = "'" + cell;
+                    }
+
+                    grid[row, column] = cell;
                 }
             }
 
@@ -107,6 +134,38 @@ namespace OutlookLocalAIChat.Office
                     startRow + rowCount - 1,
                     columnCount]);
             target.Value2 = grid;
+            var formulaCount = 0;
+            foreach (var formula in formulas)
+            {
+                try
+                {
+                    sheet.Cells[
+                        startRow + formula.Key[0],
+                        formula.Key[1] + 1].Formula =
+                        formula.Value;
+                    formulaCount++;
+                }
+                catch
+                {
+                    try
+                    {
+                        sheet.Cells[
+                            startRow + formula.Key[0],
+                            formula.Key[1] + 1].Value2 =
+                            "'" + formula.Value;
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+
+            ApplyDraftFormatting(
+                sheet,
+                boundedTitle,
+                startRow,
+                rowCount,
+                target);
             try
             {
                 sheet.Activate();
@@ -116,9 +175,48 @@ namespace OutlookLocalAIChat.Office
             }
 
             return "Wrote " + rowCount + " rows x " +
-                columnCount + " columns to the '" +
+                columnCount + " columns" +
+                (formulaCount > 0
+                    ? " including " + formulaCount +
+                      " live formulas"
+                    : string.Empty) +
+                " to the '" +
                 DraftSheetName +
                 "' sheet. Nothing was saved.";
+        }
+
+        // Cosmetic polish for the draft sheet: bold title, bold
+        // header row with a divider, and autofitted columns. Any
+        // failure here must never fail the draft itself.
+        private static void ApplyDraftFormatting(
+            dynamic sheet,
+            string boundedTitle,
+            int startRow,
+            int rowCount,
+            dynamic target)
+        {
+            try
+            {
+                if (boundedTitle.Length > 0)
+                {
+                    dynamic titleCell = sheet.Cells[1, 1];
+                    titleCell.Font.Bold = true;
+                    titleCell.Font.Size = 12;
+                }
+
+                if (rowCount > 1)
+                {
+                    dynamic header = target.Rows[1];
+                    header.Font.Bold = true;
+                    // 9 = xlEdgeBottom, 1 = xlContinuous.
+                    header.Borders[9].LineStyle = 1;
+                }
+
+                target.EntireColumn.AutoFit();
+            }
+            catch
+            {
+            }
         }
 
         // Converts the model-supplied JSON rows value into bounded

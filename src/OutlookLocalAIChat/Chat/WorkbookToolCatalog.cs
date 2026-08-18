@@ -109,7 +109,12 @@ namespace OutlookLocalAIChat.Chat
                                         WorkbookDraftWriter.MaxDraftRows +
                                         " rows of " +
                                         WorkbookDraftWriter.MaxDraftColumns +
-                                        " cells."
+                                        " cells. A cell starting with = becomes a " +
+                                        "live Excel formula and may reference other " +
+                                        "sheets of this workbook (e.g. =SUM(Data!B2:B9)); " +
+                                        "functions that reach the network or other " +
+                                        "files are rejected and land as text. Plain " +
+                                        "numbers and dates are typed automatically."
                                     },
                                     {
                                         "items",

@@ -84,7 +84,13 @@ namespace OutlookLocalAIChat.Chat
                                 "body",
                                 ToolSchema.String(
                                     "The complete draft text. Blank " +
-                                    "lines separate paragraphs.")
+                                    "lines separate paragraphs. For " +
+                                    "structure use only these layout " +
+                                    "lines: # heading, ## subheading, " +
+                                    "### minor heading, - bullet item, " +
+                                    "1. numbered item, and **bold** " +
+                                    "for inline emphasis - they render " +
+                                    "as real Word styles.")
                             }
                         },
                         "body")
