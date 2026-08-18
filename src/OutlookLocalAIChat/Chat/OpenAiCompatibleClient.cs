@@ -349,6 +349,11 @@ namespace OutlookLocalAIChat.Chat
 
             using (var stream = await content.ReadAsStreamAsync()
                 .ConfigureAwait(true))
+            // On .NET Framework ReadAsync takes no token, so a read
+            // blocked on a stalled connection would ignore Stop.
+            // Closing the stream on cancellation faults the pending
+            // read, which is rethrown below as a cancellation.
+            using (cancellationToken.Register(stream.Close))
             using (var reader = new StreamReader(
                 stream,
                 Encoding.UTF8,
@@ -361,10 +366,24 @@ namespace OutlookLocalAIChat.Chat
                 while (true)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    var read = await reader.ReadAsync(
-                        buffer,
-                        0,
-                        buffer.Length).ConfigureAwait(true);
+                    int read;
+                    try
+                    {
+                        read = await reader.ReadAsync(
+                            buffer,
+                            0,
+                            buffer.Length).ConfigureAwait(true);
+                    }
+                    catch (Exception exception)
+                        when (cancellationToken
+                            .IsCancellationRequested)
+                    {
+                        throw new OperationCanceledException(
+                            "The response read was cancelled.",
+                            exception,
+                            cancellationToken);
+                    }
+
                     if (read == 0)
                     {
                         break;

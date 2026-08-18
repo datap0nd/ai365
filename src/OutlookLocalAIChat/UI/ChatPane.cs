@@ -99,6 +99,11 @@ namespace OutlookLocalAIChat.UI
         private MessageSnapshot _selectedMessage;
         private DraftToolHost _draftTools;
         private CancellationTokenSource _requestCancellation;
+        // Incremented when a request starts and when the user stops:
+        // an in-flight continuation compares its captured value and
+        // discards itself when stale, so Stop always releases the UI
+        // immediately even if the underlying HTTP call never returns.
+        private int _requestGeneration;
         private bool _busy;
         private bool _shutdown;
         private bool _webReady;
@@ -298,7 +303,7 @@ namespace OutlookLocalAIChat.UI
                             string.Empty);
                         break;
                     case "stop":
-                        _requestCancellation?.Cancel();
+                        HandleStop();
                         break;
                     case "newChat":
                         HandleNewChat();
@@ -825,6 +830,13 @@ namespace OutlookLocalAIChat.UI
         {
             SetBusy(true);
             SetStatus("Preparing reply questions...", false);
+            var generation = ++_requestGeneration;
+            var cancellation = new CancellationTokenSource();
+            _requestCancellation = cancellation;
+            // The generated questions are a nicety, so this call is
+            // both stoppable and time-capped: a stalled endpoint
+            // falls back to the tone question instead of wedging.
+            cancellation.CancelAfter(TimeSpan.FromSeconds(45));
             var questions = new List<object>
             {
                 new Dictionary<string, object>
@@ -859,7 +871,7 @@ namespace OutlookLocalAIChat.UI
                     var response = await _client.CompleteAsync(
                         _settings,
                         request,
-                        CancellationToken.None);
+                        cancellation.Token);
                     var parsed =
                         SuggestQuestionsRequestFactory.Parse(
                             response?.content ?? string.Empty);
@@ -878,10 +890,33 @@ namespace OutlookLocalAIChat.UI
                     }
                 }
             }
+            catch (OperationCanceledException)
+            {
+                // User stop is handled below via the generation
+                // check; a timeout continues with the tone question.
+            }
             catch (Exception exception)
             {
                 // The tone question alone still gives a useful flow.
                 Log.Error("SuggestQuestions", exception);
+            }
+            finally
+            {
+                if (ReferenceEquals(
+                    _requestCancellation,
+                    cancellation))
+                {
+                    _requestCancellation = null;
+                }
+
+                cancellation.Dispose();
+            }
+
+            if (generation != _requestGeneration)
+            {
+                // The user pressed stop; HandleStop already reset
+                // the UI, so the question card is not shown.
+                return;
             }
 
             SetBusy(false);
@@ -1550,6 +1585,25 @@ namespace OutlookLocalAIChat.UI
         // Chat request flow.
         // ------------------------------------------------------------------
 
+        // Stop must be 100% responsive: bump the generation so every
+        // in-flight continuation becomes stale and discards itself,
+        // cancel the HTTP call, and release the UI right now rather
+        // than waiting for the network stack to notice.
+        private void HandleStop()
+        {
+            _requestGeneration++;
+            try
+            {
+                _requestCancellation?.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+
+            SetBusy(false);
+            SetStatus("Stopped", false);
+        }
+
         private async void HandleSendMessage(string rawText)
         {
             if (_busy)
@@ -1622,8 +1676,9 @@ namespace OutlookLocalAIChat.UI
                     DraftIntentPolicy.AllowsUpdate(prompt));
             AppendUserTurn(prompt);
             SetBusy(true);
-            _requestCancellation =
-                new CancellationTokenSource();
+            var generation = ++_requestGeneration;
+            var cancellation = new CancellationTokenSource();
+            _requestCancellation = cancellation;
 
             try
             {
@@ -1634,7 +1689,13 @@ namespace OutlookLocalAIChat.UI
                     requestExternalImages,
                     prompt,
                     draftAuthorization,
-                    _requestCancellation.Token);
+                    cancellation.Token);
+                if (generation != _requestGeneration)
+                {
+                    // The user stopped this request; the reply
+                    // arrived anyway and is discarded.
+                    return;
+                }
 
                 _history.Add(new ChatTurn("user", prompt));
                 _history.Add(
@@ -1678,27 +1739,43 @@ namespace OutlookLocalAIChat.UI
                     { "type", "restorePrompt" },
                     { "text", prompt }
                 });
-                SetStatus("Stopped - prompt restored", false);
+                if (generation == _requestGeneration)
+                {
+                    SetStatus("Stopped - prompt restored", false);
+                }
             }
             catch (Exception exception)
             {
-                var details = DiagnosticDetails.ForException(
-                    exception,
-                    "AI_REQUEST_FAILED");
-                AppendError(details);
-                PostToWeb(new Dictionary<string, object>
-                {
-                    { "type", "restorePrompt" },
-                    { "text", prompt }
-                });
-                SetStatus(FirstLine(details), true);
                 Log.Error("CompleteMailboxChat", exception);
+                if (generation == _requestGeneration)
+                {
+                    var details = DiagnosticDetails.ForException(
+                        exception,
+                        "AI_REQUEST_FAILED");
+                    AppendError(details);
+                    PostToWeb(new Dictionary<string, object>
+                    {
+                        { "type", "restorePrompt" },
+                        { "text", prompt }
+                    });
+                    SetStatus(FirstLine(details), true);
+                }
             }
             finally
             {
-                _requestCancellation?.Dispose();
-                _requestCancellation = null;
-                SetBusy(false);
+                if (ReferenceEquals(
+                    _requestCancellation,
+                    cancellation))
+                {
+                    _requestCancellation = null;
+                }
+
+                cancellation.Dispose();
+                if (generation == _requestGeneration)
+                {
+                    SetBusy(false);
+                }
+
                 UpdateDraftState();
             }
         }
