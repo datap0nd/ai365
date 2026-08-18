@@ -28,8 +28,17 @@ namespace GuardrailTests
     {
         private static int _passed;
 
-        private static int Main()
+        private static int Main(string[] args)
         {
+            // The MCP round-trip test relaunches this same exe as a
+            // scripted stdio MCP server, so the test needs no
+            // external interpreter and stays deterministic.
+            if (args.Length > 0 &&
+                args[0] == "--mcp-fake-server")
+            {
+                return RunFakeMcpServer();
+            }
+
             try
             {
                 Run(
@@ -4258,41 +4267,119 @@ namespace GuardrailTests
                 "MCP server configuration sanitization failed.");
         }
 
+        // Answers JSON-RPC over stdio like a minimal MCP server:
+        // initialize, tools/list with one echo tool, and tools/call
+        // echoing the value argument back.
+        private static int RunFakeMcpServer()
+        {
+            var serializer = new JavaScriptSerializer();
+            while (true)
+            {
+                var line = Console.In.ReadLine();
+                if (line == null)
+                {
+                    return 0;
+                }
+
+                IDictionary<string, object> message;
+                try
+                {
+                    message = serializer.DeserializeObject(line) as
+                        IDictionary<string, object>;
+                }
+                catch
+                {
+                    continue;
+                }
+
+                object methodValue;
+                object idValue;
+                if (message == null ||
+                    !message.TryGetValue("method", out methodValue) ||
+                    !message.TryGetValue("id", out idValue))
+                {
+                    continue;
+                }
+
+                var method = Convert.ToString(methodValue);
+                var id = Convert.ToString(idValue);
+                string result;
+                if (method == "initialize")
+                {
+                    result =
+                        "{\"protocolVersion\":\"2025-03-26\"," +
+                        "\"capabilities\":{}," +
+                        "\"serverInfo\":{\"name\":\"fake\"," +
+                        "\"version\":\"1.0\"}}";
+                }
+                else if (method == "tools/list")
+                {
+                    result =
+                        "{\"tools\":[{\"name\":\"echo\"," +
+                        "\"description\":\"Echoes the value back\"," +
+                        "\"inputSchema\":{\"type\":\"object\"," +
+                        "\"properties\":{\"value\":" +
+                        "{\"type\":\"string\"}}}}]}";
+                }
+                else if (method == "tools/call")
+                {
+                    var value = string.Empty;
+                    object parametersValue;
+                    if (message.TryGetValue(
+                        "params",
+                        out parametersValue))
+                    {
+                        var parameters = parametersValue as
+                            IDictionary<string, object>;
+                        object argumentsValue;
+                        if (parameters != null &&
+                            parameters.TryGetValue(
+                                "arguments",
+                                out argumentsValue))
+                        {
+                            var arguments = argumentsValue as
+                                IDictionary<string, object>;
+                            object rawValue;
+                            if (arguments != null &&
+                                arguments.TryGetValue(
+                                    "value",
+                                    out rawValue))
+                            {
+                                value = Convert.ToString(rawValue) ??
+                                    string.Empty;
+                            }
+                        }
+                    }
+
+                    result =
+                        "{\"content\":[{\"type\":\"text\"," +
+                        "\"text\":" +
+                        serializer.Serialize("echo:" + value) +
+                        "}],\"isError\":false}";
+                }
+                else
+                {
+                    continue;
+                }
+
+                Console.Out.WriteLine(
+                    "{\"jsonrpc\":\"2.0\",\"id\":" + id +
+                    ",\"result\":" + result + "}");
+                Console.Out.Flush();
+            }
+        }
+
         private static void McpStdioRoundTripWorks()
         {
-            var script =
-                "while ($true) {\n" +
-                "  $line = [Console]::In.ReadLine()\n" +
-                "  if ($null -eq $line) { break }\n" +
-                "  try { $msg = $line | ConvertFrom-Json } catch { continue }\n" +
-                "  if ($null -eq $msg.method) { continue }\n" +
-                "  if ($msg.method -eq 'initialize') {\n" +
-                "    [Console]::Out.WriteLine('{\"jsonrpc\":\"2.0\",\"id\":' + $msg.id + ',\"result\":{\"protocolVersion\":\"2025-03-26\",\"capabilities\":{},\"serverInfo\":{\"name\":\"fake\",\"version\":\"1.0\"}}}')\n" +
-                "  } elseif ($msg.method -eq 'tools/list') {\n" +
-                "    [Console]::Out.WriteLine('{\"jsonrpc\":\"2.0\",\"id\":' + $msg.id + ',\"result\":{\"tools\":[{\"name\":\"echo\",\"description\":\"Echoes the value back\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"string\"}}}}]}}')\n" +
-                "  } elseif ($msg.method -eq 'tools/call') {\n" +
-                "    [Console]::Out.WriteLine('{\"jsonrpc\":\"2.0\",\"id\":' + $msg.id + ',\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"echo:' + $msg.params.arguments.value + '\"}],\"isError\":false}}')\n" +
-                "  }\n" +
-                "  [Console]::Out.Flush()\n" +
-                "}\n";
-            var scriptPath = Path.Combine(
-                Path.GetTempPath(),
-                "AI365-mcp-" + Guid.NewGuid().ToString("N") +
-                ".ps1");
-            File.WriteAllText(
-                scriptPath,
-                script,
-                Encoding.ASCII);
             var host = new McpToolHost(
                 new List<McpServerConfig>
                 {
                     new McpServerConfig
                     {
                         Name = "fake",
-                        Target = "powershell.exe",
-                        Arguments =
-                            "-NoProfile -ExecutionPolicy Bypass " +
-                            "-File \"" + scriptPath + "\"",
+                        Target = Assembly
+                            .GetExecutingAssembly().Location,
+                        Arguments = "--mcp-fake-server",
                         Enabled = true
                     }
                 });
@@ -4348,7 +4435,6 @@ namespace GuardrailTests
             finally
             {
                 host.Dispose();
-                File.Delete(scriptPath);
             }
         }
 
