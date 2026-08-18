@@ -241,6 +241,7 @@ if (-not $safeHtmlSource.Contains("WebUtility.HtmlEncode") -or
     -not $safeHtmlSource.Contains('"<h2 style=') -or
     -not $safeHtmlSource.Contains('"<ul style=') -or
     -not $safeHtmlSource.Contains('"<hr style=') -or
+    -not $safeHtmlSource.Contains('"<table style=') -or
     $draftCatalogSource.Contains('"html"')) {
     throw "Draft formatting must remain locally encoded and structurally bounded."
 }
@@ -269,6 +270,7 @@ $officeGuardedFiles = @(
     (Join-Path $sourceRoot "Office\PresentationDraftWriter.cs"),
     (Join-Path $sourceRoot "Office\WordToolHost.cs"),
     (Join-Path $sourceRoot "Office\WordDraftWriter.cs"),
+    (Join-Path $sourceRoot "Office\DraftTextLayout.cs"),
     (Join-Path $sourceRoot "Office\DocumentDraftHost.cs"),
     (Join-Path $sourceRoot "ExcelAddIn.cs"),
     (Join-Path $sourceRoot "PowerPointAddIn.cs"),
@@ -363,6 +365,23 @@ if (-not $workbookWriterSource.Contains(
         'DraftSheetName = "AI365 Draft"')) {
     throw "The Excel write surface must stay pinned to the AI365 Draft sheet."
 }
+if (-not $workbookWriterSource.Contains(
+        "DraftFormulaPolicy.IsAllowedFormula")) {
+    throw "Draft formulas must pass the formula safety policy."
+}
+
+$formulaPolicySource = Get-Content (
+    Join-Path $sourceRoot "Security\DraftFormulaPolicy.cs") -Raw
+foreach ($blockedFunction in @(
+    '"WEBSERVICE"',
+    '"RTD"',
+    '"CALL"',
+    '"HYPERLINK"'
+)) {
+    if (-not $formulaPolicySource.Contains($blockedFunction)) {
+        throw "The formula policy no longer blocks $blockedFunction."
+    }
+}
 
 $presentationWriterSource = Get-Content (
     Join-Path $sourceRoot "Office\PresentationDraftWriter.cs") -Raw
@@ -424,6 +443,21 @@ foreach ($mcpForbidden in @(
 if (-not $settingsWindowSource.Contains(
         "outside this add-in's guardrails")) {
     throw "The MCP settings page is missing its trust notice."
+}
+
+# Administrator policy can only remove capabilities: settings load
+# forces Gemini off and the gateway refuses to run under policy.
+$settingsStoreSource = Get-Content (
+    Join-Path $sourceRoot "Configuration\SettingsStore.cs") -Raw
+if (-not $settingsStoreSource.Contains(
+        "AdminPolicy.GeminiDisabled")) {
+    throw "Settings load must honor the Gemini disable policy."
+}
+$geminiGatewaySource = Get-Content (
+    Join-Path $sourceRoot "Chat\GeminiCodeAssistGateway.cs") -Raw
+if (-not $geminiGatewaySource.Contains(
+        "GEMINI_DISABLED_BY_POLICY")) {
+    throw "The Gemini gateway must refuse to run under policy."
 }
 
 # The document-side model-facing sources carry the same capability

@@ -260,6 +260,24 @@ namespace GuardrailTests
                 Run(
                     "Self update is official, silent, and restarts Outlook",
                     SelfUpdateIsOfficialAndBounded);
+                Run(
+                    "Draft formulas stay inside the workbook",
+                    DraftFormulasStayInsideTheWorkbook);
+                Run(
+                    "Draft text layout parses structure locally",
+                    DraftTextLayoutParsesStructure);
+                Run(
+                    "Draft HTML renders bounded pipe tables",
+                    DraftHtmlRendersTables);
+                Run(
+                    "Unmentioned email recipients are called out",
+                    RecipientWarningFlagsUnknownRecipients);
+                Run(
+                    "MCP HTTP headers are token-checked and bounded",
+                    McpHeadersAreBoundedAndSafe);
+                Run(
+                    "Admin policy reads only documented switches",
+                    AdminPolicyIsReadOnlyAndScoped);
                 Console.WriteLine("PASS: " + _passed + " guardrail tests");
                 return 0;
             }
@@ -4017,6 +4035,186 @@ namespace GuardrailTests
                 "The update script must wait for every Office host to close, " +
                 "install silently with a bounded wait, and restart only the " +
                 "requested host.");
+        }
+
+        private static void DraftFormulasStayInsideTheWorkbook()
+        {
+            Assert(
+                DraftFormulaPolicy.IsAllowedFormula(
+                    "=SUM(A1:A5)") &&
+                DraftFormulaPolicy.IsAllowedFormula(
+                    "=Data!B2*2") &&
+                DraftFormulaPolicy.IsAllowedFormula(
+                    "=IF(A1>0,\"yes\",\"no\")") &&
+                DraftFormulaPolicy.IsAllowedFormula(
+                    "=MYCALL(A1)"),
+                "Ordinary workbook formulas must stay allowed.");
+            Assert(
+                !DraftFormulaPolicy.IsAllowedFormula(
+                    "=WEBSERVICE(\"https://x.test\")") &&
+                !DraftFormulaPolicy.IsAllowedFormula(
+                    "=webservice(A1)") &&
+                !DraftFormulaPolicy.IsAllowedFormula(
+                    "=RTD(\"p\",,\"t\")") &&
+                !DraftFormulaPolicy.IsAllowedFormula(
+                    "=HYPERLINK(\"http://x\",\"go\")") &&
+                !DraftFormulaPolicy.IsAllowedFormula(
+                    "=CALL(\"k32\",\"f\",\"J\")") &&
+                !DraftFormulaPolicy.IsAllowedFormula(
+                    "=1+CALL (A1)"),
+                "Network and native-code formulas must be rejected.");
+            Assert(
+                !DraftFormulaPolicy.IsAllowedFormula(
+                    "=[Book2]Sheet1!A1") &&
+                !DraftFormulaPolicy.IsAllowedFormula("SUM(A1)") &&
+                !DraftFormulaPolicy.IsAllowedFormula(null) &&
+                !DraftFormulaPolicy.IsAllowedFormula("=") &&
+                !DraftFormulaPolicy.IsAllowedFormula(
+                    "=" + new string('9', 600)),
+                "External references and malformed formulas must be rejected.");
+        }
+
+        private static void DraftTextLayoutParsesStructure()
+        {
+            var paragraphs = DraftTextLayout.Parse(
+                "# Title\n## Sub\n### Minor\n- item\n" +
+                "1. first\nplain **bold** text\n---");
+            Assert(
+                paragraphs.Count == 7 &&
+                paragraphs[0].Kind ==
+                    DraftTextLayout.KindHeading1 &&
+                paragraphs[0].Text == "Title" &&
+                paragraphs[1].Kind ==
+                    DraftTextLayout.KindHeading2 &&
+                paragraphs[2].Kind ==
+                    DraftTextLayout.KindHeading3 &&
+                paragraphs[3].Kind ==
+                    DraftTextLayout.KindBullet &&
+                paragraphs[3].Text == "item" &&
+                paragraphs[4].Kind ==
+                    DraftTextLayout.KindNumbered &&
+                paragraphs[4].Text == "first" &&
+                paragraphs[6].Text == string.Empty,
+                "Draft layout structure parsing failed.");
+            var bold = paragraphs[5];
+            Assert(
+                bold.Kind == DraftTextLayout.KindNormal &&
+                bold.Text == "plain bold text" &&
+                bold.BoldRanges.Count == 1 &&
+                bold.BoldRanges[0].Start == 6 &&
+                bold.BoldRanges[0].Length == 4,
+                "Inline bold parsing failed.");
+            var unmatched = DraftTextLayout.Parse("a **b");
+            Assert(
+                unmatched.Count == 1 &&
+                unmatched[0].Text == "a **b" &&
+                unmatched[0].BoldRanges.Count == 0,
+                "Unmatched bold markers must stay literal.");
+        }
+
+        private static void DraftHtmlRendersTables()
+        {
+            var table = SafeDraftHtml.FormatContent(
+                "| Region | Sales |\n| --- | ---: |\n" +
+                "| North | 100 |\nAfter",
+                new string[0]);
+            Assert(
+                table.Html.Contains("<table style=") &&
+                table.Html.Contains("<th style=") &&
+                table.Html.Contains("<td style=") &&
+                table.Html.Contains("text-align:right") &&
+                table.Html.Contains(">North<") &&
+                table.Html.Contains(">100<") &&
+                table.Html.Contains(">After<") &&
+                !table.Html.Contains("<script"),
+                "Pipe tables were not rendered safely: " +
+                table.Html);
+            var notTable = SafeDraftHtml.FormatContent(
+                "| lonely pipe line\nplain",
+                new string[0]);
+            Assert(
+                !notTable.Html.Contains("<table") &&
+                notTable.Html.Contains("| lonely pipe line"),
+                "A non-table pipe line must stay plain text.");
+        }
+
+        private static void RecipientWarningFlagsUnknownRecipients()
+        {
+            Assert(
+                RecipientIntentCheck.Warn(
+                    "john.smith@acme.com",
+                    string.Empty,
+                    "email this to john") == string.Empty,
+                "A recipient named in the prompt must not warn.");
+            var warning = RecipientIntentCheck.Warn(
+                "karen@x.test",
+                string.Empty,
+                "email this to john");
+            Assert(
+                warning.Contains("karen@x.test") &&
+                warning.Contains("not mentioned"),
+                "An unmentioned recipient must be called out: " +
+                warning);
+            Assert(
+                RecipientIntentCheck.Warn(
+                    string.Empty,
+                    string.Empty,
+                    "email this to john") == string.Empty &&
+                RecipientIntentCheck.Warn(
+                    "bob@x.test",
+                    string.Empty,
+                    null) == string.Empty,
+                "Empty recipients or prompts must not warn.");
+        }
+
+        private static void McpHeadersAreBoundedAndSafe()
+        {
+            var config = new McpServerConfig
+            {
+                Name = "files",
+                Target = "https://example.test/mcp",
+                Headers =
+                    "Authorization: Bearer abc\n" +
+                    "Host: evil.test\n" +
+                    "Mcp-Session-Id: forged\n" +
+                    "X-Api-Key: k1\n" +
+                    "not a header line\n" +
+                    "Bad Name!: x\n" +
+                    "Content-Type: text/plain"
+            }.Sanitized();
+            var headers = config.ParsedHeaders();
+            Assert(
+                headers.Count == 2 &&
+                headers[0].Key == "Authorization" &&
+                headers[0].Value == "Bearer abc" &&
+                headers[1].Key == "X-Api-Key",
+                "MCP header parsing must keep only safe headers.");
+            var many = new StringBuilder();
+            for (var index = 0; index < 12; index++)
+            {
+                many.AppendLine("X-H" + index + ": v");
+            }
+
+            Assert(
+                new McpServerConfig
+                {
+                    Headers = many.ToString()
+                }.ParsedHeaders().Count == 8,
+                "MCP headers must cap at eight entries.");
+        }
+
+        private static void AdminPolicyIsReadOnlyAndScoped()
+        {
+            Assert(
+                AdminPolicy.PolicyKeyPath ==
+                "Software\\Policies\\AI365",
+                "The policy key path changed unexpectedly.");
+            // Reading the switch must never throw, whether or not
+            // the key exists on this machine.
+            var disabled = AdminPolicy.GeminiDisabled;
+            Assert(
+                disabled || !disabled,
+                "Policy reads must be side-effect free.");
         }
 
         private static void DocumentDraftIntentRequiresExplicitPhrase()

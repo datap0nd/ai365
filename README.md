@@ -227,19 +227,36 @@ per request, as in Outlook:
 
 - `write_draft_sheet` fills the dedicated **AI365 Draft** worksheet
   (created at the end of the workbook; other sheets are never touched).
+  Cells starting with `=` become **live Excel formulas** that may reference
+  other sheets of the same workbook (`=SUM(Data!B2:B9)`); numbers and dates
+  are typed automatically, the title and header row are styled, and columns
+  autofit. Formulas that could reach the network, native code, or other
+  files (`WEBSERVICE`, `RTD`, `CALL`, `HYPERLINK`, external `[Book]`
+  references) are rejected and land as visible text instead.
 - `add_draft_slides` appends slides whose titles carry the
-  **[AI365 draft]** marker; existing slides are never modified.
+  **[AI365 draft]** marker; existing slides are never modified. Sub-bullets
+  indent with two leading spaces per level.
 - `write_draft_document` opens a brand-new, unsaved Word document headed
-  **[AI365 draft]**; the open document is never modified.
+  **[AI365 draft]**; the open document is never modified. `#`/`##`/`###`
+  headings, `-`/`1.` lists, and `**bold**` render as real Word styles.
 - `create_email_draft` opens an unsent Outlook draft for review - Outlook
   starts if needed, the draft can attach the current file when it is saved
-  on disk, and sending stays impossible.
+  on disk, and sending stays impossible. When the model picks a recipient
+  you never mentioned in your request, the pane calls it out so you can
+  check the address before sending. Email bodies support headings, lists,
+  dividers, and `| cell | cell |` **tables** rendered as real bordered
+  HTML tables.
 - `send_to_powerpoint` / `send_to_excel` / `send_to_word` draft into the
-  sibling app the same way.
+  sibling app the same way, with the same formatting.
 
 The add-in never calls Save, SaveAs, Delete, Print, Protect, Close, or Quit
 on your documents - saving stays a human action, so even a discarded draft
 sheet or slide costs nothing.
+
+Closing and reopening a pane keeps the conversation for as long as that
+Office application stays open; the chat lives only in process memory and is
+forgotten when the app closes (nothing is written to disk). **New chat**
+clears it immediately.
 
 ## Rich answers and the pixel pal
 
@@ -262,6 +279,26 @@ register one. A server runs with your Windows account's own permissions,
 outside AI365's guardrails - AI365 itself still cannot send email or save or
 delete documents, but a server you add acts with whatever powers it has.
 Only add servers you trust, and prefer read-only ones.
+
+HTTP(S) servers can carry per-server request headers (one per line as
+`Name: value`, typically `Authorization: Bearer ...`). Headers are sent only
+to that server's own endpoint, never logged, and stored DPAPI-encrypted like
+the API key.
+
+## Diagnostics and administration
+
+**+ > Copy diagnostics** in any pane copies a bounded report of the last
+five requests to the clipboard: whether the local intent gate unlocked
+drafting, which tools were exposed to the model, every tool call with its
+status, and how the request ended. It contains no API keys, settings, or
+message bodies - paste it into a bug report to show exactly what happened.
+
+To disable Google Gemini across a whole machine (for example on a work
+computer), set the registry value `DisableGemini` = `1` (DWORD) under
+`HKLM\Software\Policies\AI365` or `HKCU\Software\Policies\AI365`. Gemini
+sign-in is then forced off at load, greyed out in Settings with a policy
+notice, and refused by the request gateway. Policies can only remove
+capabilities, never add any.
 
 ## Hard security boundary
 
