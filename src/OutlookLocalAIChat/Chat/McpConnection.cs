@@ -38,7 +38,9 @@ namespace OutlookLocalAIChat.Chat
     public sealed class McpConnection : IDisposable
     {
         private const string ProtocolVersion = "2025-03-26";
-        private const int InitializeTimeoutMs = 20000;
+        // Real stdio servers (npm- or pip-launched) can take a long
+        // time to cold-start before they answer initialize.
+        private const int InitializeTimeoutMs = 60000;
         private const int ListTimeoutMs = 30000;
         private const int CallTimeoutMs = 60000;
 
@@ -455,6 +457,10 @@ namespace OutlookLocalAIChat.Chat
         {
             _stdin.WriteLine(requestJson);
             var reader = _stdout;
+            // Lines the server wrote that are not our response are
+            // skipped, but a bounded sample is kept so a protocol
+            // mismatch is diagnosable from the error message.
+            var skippedLines = new List<string>();
             var task = Task.Run(() =>
             {
                 while (true)
@@ -476,6 +482,17 @@ namespace OutlookLocalAIChat.Chat
                     {
                         return line;
                     }
+
+                    lock (skippedLines)
+                    {
+                        if (skippedLines.Count < 5)
+                        {
+                            skippedLines.Add(
+                                TextBoundary.SingleLine(
+                                    line,
+                                    200));
+                        }
+                    }
                 }
             });
             if (!task.Wait(timeoutMs))
@@ -487,6 +504,7 @@ namespace OutlookLocalAIChat.Chat
                     "The MCP server " + _config.Name +
                     " did not answer within " +
                     (timeoutMs / 1000) + " seconds." +
+                    SkippedSuffix(skippedLines) +
                     StderrTailSuffix());
             }
 
@@ -496,10 +514,23 @@ namespace OutlookLocalAIChat.Chat
                 throw new InvalidOperationException(
                     "The MCP server " + _config.Name +
                     " closed its output stream." +
+                    SkippedSuffix(skippedLines) +
                     StderrTailSuffix());
             }
 
             return task.Result;
+        }
+
+        private static string SkippedSuffix(
+            List<string> skippedLines)
+        {
+            lock (skippedLines)
+            {
+                return skippedLines.Count > 0
+                    ? " Unmatched server output: " +
+                      string.Join(" | ", skippedLines)
+                    : " The server wrote no output.";
+            }
         }
 
         private string StderrTailSuffix()
