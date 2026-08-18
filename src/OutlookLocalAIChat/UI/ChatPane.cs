@@ -427,6 +427,31 @@ namespace OutlookLocalAIChat.UI
             }
         }
 
+        // Live token streaming: deltas render in a transient bubble
+        // on the page and are never recorded in the transcript; the
+        // final formatted assistant message replaces the bubble.
+        private void PostStreamDelta(string text)
+        {
+            if (string.IsNullOrEmpty(text) || !_busy)
+            {
+                return;
+            }
+
+            PostToWeb(new Dictionary<string, object>
+            {
+                { "type", "delta" },
+                { "text", text }
+            });
+        }
+
+        private void PostStreamEnd()
+        {
+            PostToWeb(new Dictionary<string, object>
+            {
+                { "type", "deltaEnd" }
+            });
+        }
+
         private void PostTranscript(
             IDictionary<string, object> payload)
         {
@@ -1600,6 +1625,7 @@ namespace OutlookLocalAIChat.UI
             {
             }
 
+            PostStreamEnd();
             SetBusy(false);
             SetStatus("Stopped", false);
         }
@@ -1763,6 +1789,7 @@ namespace OutlookLocalAIChat.UI
             }
             finally
             {
+                PostStreamEnd();
                 if (ReferenceEquals(
                     _requestCancellation,
                     cancellation))
@@ -1862,10 +1889,12 @@ namespace OutlookLocalAIChat.UI
                  round <= TextBoundary.MaxToolRounds;
                  round++)
             {
-                var response = await _client.CompleteAsync(
-                    _settings,
-                    request,
-                    cancellationToken);
+                var response =
+                    await _client.CompleteStreamingAsync(
+                        _settings,
+                        request,
+                        PostStreamDelta,
+                        cancellationToken);
                 var toolCalls = response.tool_calls;
                 if (toolCalls == null || toolCalls.Count == 0)
                 {
@@ -1878,6 +1907,10 @@ namespace OutlookLocalAIChat.UI
 
                     return response.content;
                 }
+
+                // A round that continues into tool calls clears any
+                // preamble text that streamed to the page.
+                PostStreamEnd();
 
                 if (round == TextBoundary.MaxToolRounds)
                 {

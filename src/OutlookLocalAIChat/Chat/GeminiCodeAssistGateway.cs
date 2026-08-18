@@ -582,6 +582,363 @@ namespace OutlookLocalAIChat.Chat
             return message;
         }
 
+        // Streams a generateContent call over SSE so text reaches
+        // the chat as it is produced instead of after the full
+        // response. Function calls and thought signatures are
+        // collected across chunks; thought parts are never streamed.
+        public async Task<ChatCompletionResponseMessage>
+            GenerateStreamAsync(
+                HttpClient httpClient,
+                AppSettings settings,
+                ChatCompletionRequest requestModel,
+                Action<string> onTextDelta,
+                CancellationToken cancellationToken)
+        {
+            var project = await GetProjectAsync(
+                httpClient,
+                settings,
+                cancellationToken).ConfigureAwait(true);
+            var envelope = new Dictionary<string, object>
+            {
+                { "model", NormalizeModel(requestModel.model) },
+                { "project", project },
+                {
+                    "request",
+                    TranslateRequest(
+                        requestModel,
+                        _thoughtSignatures)
+                }
+            };
+            var json = _serializer.Serialize(envelope);
+            for (var attempt = 0; ; attempt++)
+            {
+                var token = await GetAccessTokenAsync(
+                    httpClient,
+                    settings,
+                    cancellationToken).ConfigureAwait(true);
+                using (var request = new HttpRequestMessage(
+                    HttpMethod.Post,
+                    ApiBase + ":streamGenerateContent?alt=sse"))
+                {
+                    request.Headers.Authorization =
+                        new AuthenticationHeaderValue(
+                            "Bearer",
+                            token);
+                    request.Headers.Accept.Add(
+                        new MediaTypeWithQualityHeaderValue(
+                            "text/event-stream"));
+                    request.Content = new StringContent(
+                        json,
+                        Encoding.UTF8,
+                        "application/json");
+                    using (var response = await httpClient
+                        .SendAsync(
+                            request,
+                            HttpCompletionOption
+                                .ResponseHeadersRead,
+                            cancellationToken)
+                        .ConfigureAwait(true))
+                    {
+                        if (!response.IsSuccessStatusCode)
+                        {
+                            var body = await ReadBodyAsync(
+                                response,
+                                cancellationToken)
+                                .ConfigureAwait(true);
+                            var status =
+                                (int)response.StatusCode;
+                            if (status == 429 && attempt == 0)
+                            {
+                                var delaySeconds =
+                                    ParseRetryDelaySeconds(body);
+                                if (delaySeconds > 0 &&
+                                    delaySeconds <= 90)
+                                {
+                                    await Task.Delay(
+                                        TimeSpan.FromSeconds(
+                                            delaySeconds + 1),
+                                        cancellationToken)
+                                        .ConfigureAwait(true);
+                                    continue;
+                                }
+                            }
+
+                            if (status == 429)
+                            {
+                                throw new AiEndpointException(
+                                    "GEMINI_RATE_LIMITED",
+                                    "The Gemini quota for this " +
+                                    "model is exhausted right " +
+                                    "now. Wait a minute and try " +
+                                    "again, or switch to " +
+                                    "gemini-2.5-flash.",
+                                    httpStatus: status,
+                                    responseSnippet: body);
+                            }
+
+                            var hint =
+                                status == 401 || status == 403
+                                    ? " The Google sign-in may " +
+                                      "have expired - open " +
+                                      "MetoAI Settings and click " +
+                                      "Sign in with Google again."
+                                    : string.Empty;
+                            throw new AiEndpointException(
+                                "GEMINI_HTTP_" + status,
+                                "The Gemini endpoint rejected " +
+                                "streamGenerateContent: " +
+                                status + "." + hint,
+                                httpStatus: status,
+                                responseSnippet: body);
+                        }
+
+                        if (_thoughtSignatures.Count > 500)
+                        {
+                            _thoughtSignatures.Clear();
+                        }
+
+                        var message = await ReadSseAsync(
+                            response,
+                            onTextDelta,
+                            cancellationToken)
+                            .ConfigureAwait(true);
+                        if (message == null)
+                        {
+                            throw new AiEndpointException(
+                                "RESPONSE_MISSING_CONTENT",
+                                "The Gemini endpoint returned " +
+                                "neither message text nor tool " +
+                                "calls.");
+                        }
+
+                        return message;
+                    }
+                }
+            }
+        }
+
+        private async Task<ChatCompletionResponseMessage>
+            ReadSseAsync(
+                HttpResponseMessage response,
+                Action<string> onTextDelta,
+                CancellationToken cancellationToken)
+        {
+            var text = new StringBuilder();
+            var toolCalls = new List<ChatToolCall>();
+            var rawCap =
+                TextBoundary.MaxAssistantCharacters * 4;
+            using (var stream = await response.Content
+                .ReadAsStreamAsync().ConfigureAwait(true))
+            // A stalled connection would block ReadLineAsync past
+            // the between-chunk cancellation checks; closing the
+            // stream on cancel faults the pending read.
+            using (cancellationToken.Register(stream.Close))
+            using (var reader = new StreamReader(
+                stream,
+                Encoding.UTF8))
+            {
+                var dataLines = new List<string>();
+                while (true)
+                {
+                    cancellationToken
+                        .ThrowIfCancellationRequested();
+                    string line;
+                    try
+                    {
+                        line = await reader.ReadLineAsync()
+                            .ConfigureAwait(true);
+                    }
+                    catch (Exception exception)
+                        when (cancellationToken
+                            .IsCancellationRequested)
+                    {
+                        throw new OperationCanceledException(
+                            "The stream read was cancelled.",
+                            exception,
+                            cancellationToken);
+                    }
+
+                    if (line == null)
+                    {
+                        ConsumeSseChunk(
+                            dataLines,
+                            text,
+                            toolCalls,
+                            onTextDelta,
+                            rawCap);
+                        break;
+                    }
+
+                    if (line.StartsWith(
+                        "data:",
+                        StringComparison.Ordinal))
+                    {
+                        dataLines.Add(
+                            line.Substring(5).Trim());
+                        continue;
+                    }
+
+                    if (line.Length == 0)
+                    {
+                        ConsumeSseChunk(
+                            dataLines,
+                            text,
+                            toolCalls,
+                            onTextDelta,
+                            rawCap);
+                    }
+                }
+            }
+
+            var boundedText = TextBoundary.PlainText(
+                text.ToString(),
+                TextBoundary.MaxAssistantCharacters);
+            if (boundedText.Length == 0 && toolCalls.Count == 0)
+            {
+                return null;
+            }
+
+            return new ChatCompletionResponseMessage
+            {
+                role = "assistant",
+                content = boundedText,
+                tool_calls = toolCalls.Count > 0
+                    ? toolCalls
+                    : null
+            };
+        }
+
+        private void ConsumeSseChunk(
+            List<string> dataLines,
+            StringBuilder text,
+            List<ChatToolCall> toolCalls,
+            Action<string> onTextDelta,
+            int rawCap)
+        {
+            if (dataLines.Count == 0)
+            {
+                return;
+            }
+
+            var payload = string.Join("\n", dataLines);
+            dataLines.Clear();
+            IDictionary<string, object> root;
+            try
+            {
+                root = _serializer.DeserializeObject(payload)
+                    as IDictionary<string, object>;
+            }
+            catch
+            {
+                return;
+            }
+
+            if (root == null)
+            {
+                return;
+            }
+
+            object responseValue;
+            var inner = root.TryGetValue(
+                "response",
+                out responseValue)
+                ? responseValue as IDictionary<string, object>
+                : root;
+            object candidatesValue = null;
+            inner?.TryGetValue(
+                "candidates",
+                out candidatesValue);
+            var candidates = candidatesValue as object[];
+            var candidate = candidates != null &&
+                candidates.Length > 0
+                ? candidates[0] as IDictionary<string, object>
+                : null;
+            object contentValue = null;
+            candidate?.TryGetValue("content", out contentValue);
+            var content = contentValue
+                as IDictionary<string, object>;
+            object partsValue = null;
+            content?.TryGetValue("parts", out partsValue);
+            var parts = partsValue as object[];
+            if (parts == null)
+            {
+                return;
+            }
+
+            foreach (var entry in parts)
+            {
+                var part = entry as IDictionary<string, object>;
+                if (part == null)
+                {
+                    continue;
+                }
+
+                object thoughtValue;
+                if (part.TryGetValue(
+                        "thought",
+                        out thoughtValue) &&
+                    thoughtValue is bool &&
+                    (bool)thoughtValue)
+                {
+                    continue;
+                }
+
+                object textValue;
+                if (part.TryGetValue("text", out textValue) &&
+                    textValue is string)
+                {
+                    var chunkText = (string)textValue;
+                    if (chunkText.Length > 0 &&
+                        text.Length < rawCap)
+                    {
+                        text.Append(chunkText);
+                        onTextDelta?.Invoke(chunkText);
+                    }
+
+                    continue;
+                }
+
+                object callValue;
+                if (part.TryGetValue(
+                        "functionCall",
+                        out callValue))
+                {
+                    var call = callValue
+                        as IDictionary<string, object>;
+                    if (call == null)
+                    {
+                        continue;
+                    }
+
+                    object argsValue;
+                    call.TryGetValue("args", out argsValue);
+                    var callId = "gemini_call_" +
+                        Guid.NewGuid().ToString("N")
+                            .Substring(0, 12);
+                    var signature = ReadString(
+                        part,
+                        "thoughtSignature");
+                    if (signature.Length > 0)
+                    {
+                        _thoughtSignatures[callId] = signature;
+                    }
+
+                    toolCalls.Add(new ChatToolCall
+                    {
+                        id = callId,
+                        type = "function",
+                        function = new ChatToolCallFunction
+                        {
+                            name = ReadString(call, "name"),
+                            arguments = _serializer.Serialize(
+                                argsValue ??
+                                new Dictionary<string, object>())
+                        }
+                    });
+                }
+            }
+        }
+
         // ------------------------------------------------------------------
         // Request translation (OpenAI chat shape to Gemini native).
         // Public and pure so the guardrail tests can cover it.
@@ -867,24 +1224,57 @@ namespace OutlookLocalAIChat.Chat
                 }
             }
 
-            if (request.max_tokens.HasValue)
+            var generationConfig =
+                new Dictionary<string, object>();
+            var thinkingBudget = ThinkingBudgetFor(request.model);
+            if (thinkingBudget >= 0)
             {
-                // Gemini 2.5 models spend internal thinking tokens
-                // from the same output budget, so a tight cap (the
-                // endpoint probe, question generation) would return
-                // no visible text at all. Headroom keeps the caps
-                // meaningful while leaving room for thinking.
-                translated["generationConfig"] =
+                generationConfig["thinkingConfig"] =
                     new Dictionary<string, object>
                     {
-                        {
-                            "maxOutputTokens",
-                            request.max_tokens.Value + 4096
-                        }
+                        { "thinkingBudget", thinkingBudget }
                     };
             }
 
+            if (request.max_tokens.HasValue)
+            {
+                // Gemini models spend internal thinking tokens from
+                // the same output budget, so a tight cap (the
+                // endpoint probe, question generation) would return
+                // no visible text at all. Headroom keeps the caps
+                // meaningful while leaving room for thinking.
+                generationConfig["maxOutputTokens"] =
+                    request.max_tokens.Value + 4096;
+            }
+
+            if (generationConfig.Count > 0)
+            {
+                translated["generationConfig"] = generationConfig;
+            }
+
             return translated;
+        }
+
+        // Latency: Gemini 2.5 Flash defaults to dynamic thinking,
+        // which multiplies response time on ordinary mailbox
+        // questions. Flash and Flash-Lite allow disabling thinking
+        // entirely (budget 0); Pro cannot go below 128, so it gets
+        // the minimum. Unknown models are left at server defaults.
+        public static int ThinkingBudgetFor(string model)
+        {
+            var name = NormalizeModel(model).ToLowerInvariant();
+            if (name.IndexOf(
+                    "gemini",
+                    StringComparison.Ordinal) < 0)
+            {
+                return -1;
+            }
+
+            return name.IndexOf(
+                       "pro",
+                       StringComparison.Ordinal) >= 0
+                ? 128
+                : 0;
         }
 
         private static string ReadForcedToolName(object toolChoice)

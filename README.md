@@ -314,6 +314,16 @@ variable to that project id (the same variable Gemini CLI uses) before
 starting Outlook. Note that with any cloud provider, email content leaves
 your machine — the local-endpoint setup keeps everything on-device.
 
+Gemini responses are speed-tuned: internal "thinking" is disabled on
+`gemini-2.5-flash` and `flash-lite` and floored at the model minimum on
+`pro` (thinking is the dominant latency cost on ordinary mailbox
+questions), responses stream into the chat token by token, the selected
+email's bounded body is inlined into the first request so common questions
+answer in a single model round instead of a tool round trip, and the
+system prompt asks for concise answers. `gemini-2.5-flash` is the
+recommended model: near-pro quality on mail tasks with far lower latency
+and higher quotas.
+
 If a request fails, the sidebar shows diagnostic identifiers such as:
 
 ```text

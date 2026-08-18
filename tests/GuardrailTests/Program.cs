@@ -1295,8 +1295,16 @@ namespace GuardrailTests
             Assert(
                 context.Contains("<selected_email_reference") &&
                 context.Contains("untrusted reference data") &&
-                !context.Contains("Message body"),
-                "Email boundary markers are missing.");
+                context.Contains("Body (untrusted data") &&
+                context.Contains("Message body") &&
+                context.IndexOf(
+                    "Message body",
+                    StringComparison.Ordinal) >
+                context.IndexOf(
+                    "<selected_email_reference",
+                    StringComparison.Ordinal),
+                "Email boundary markers are missing or the " +
+                "inlined body is outside the untrusted envelope.");
         }
 
         private static void HistoryIsBounded()
@@ -3283,6 +3291,19 @@ namespace GuardrailTests
                 json.Contains("4596"),
                 "Thinking headroom was not added to the output " +
                 "token cap: " + json);
+            Assert(
+                GeminiCodeAssistGateway.ThinkingBudgetFor(
+                    "gemini-2.5-flash") == 0 &&
+                GeminiCodeAssistGateway.ThinkingBudgetFor(
+                    "models/gemini-2.5-pro") == 128 &&
+                GeminiCodeAssistGateway.ThinkingBudgetFor(
+                    "qwen3-vl-30b") == -1,
+                "Thinking budgets are wrong per model family.");
+            Assert(
+                json.Contains("thinkingConfig") &&
+                json.Contains("\"thinkingBudget\":0"),
+                "Thinking was not disabled for the flash model: " +
+                json);
 
             var response = serializer.DeserializeObject(
                 "{\"candidates\":[{\"content\":{\"role\":" +

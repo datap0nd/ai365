@@ -46,6 +46,34 @@ namespace OutlookLocalAIChat.Chat
             get { return _gemini; }
         }
 
+        // Streaming completion: Gemini streams text deltas through
+        // onTextDelta as they arrive; the OpenAI-compatible path
+        // falls back to the buffered call (local servers vary too
+        // much in SSE support to stream them safely). The returned
+        // message is always the complete response.
+        public async Task<ChatCompletionResponseMessage>
+            CompleteStreamingAsync(
+                AppSettings settings,
+                ChatCompletionRequest requestModel,
+                Action<string> onTextDelta,
+                CancellationToken cancellationToken)
+        {
+            if (settings != null && settings.UseGeminiSignIn)
+            {
+                return await _gemini.GenerateStreamAsync(
+                    _httpClient,
+                    settings,
+                    requestModel,
+                    onTextDelta,
+                    cancellationToken).ConfigureAwait(true);
+            }
+
+            return await CompleteAsync(
+                settings,
+                requestModel,
+                cancellationToken).ConfigureAwait(true);
+        }
+
         public async Task<ChatCompletionResponseMessage> CompleteAsync(
             AppSettings settings,
             ChatCompletionRequest requestModel,

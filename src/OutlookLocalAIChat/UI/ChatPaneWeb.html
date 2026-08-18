@@ -708,6 +708,34 @@
     while (chat.firstChild) { chat.removeChild(chat.firstChild); }
     typing = null;
     suggestCard = null;
+    streamBubble = null;
+    streamBody = null;
+  }
+
+  var streamBubble = null;
+  var streamBody = null;
+
+  function streamDelta(text) {
+    if (!busy || !text) { return; }
+    if (!streamBubble) {
+      streamBubble = el("div", "msg ai");
+      var who = el("div", "who");
+      who.textContent = "MetoAI";
+      streamBody = el("div", "body");
+      streamBubble.appendChild(who);
+      streamBubble.appendChild(streamBody);
+      chat.appendChild(streamBubble);
+    }
+    streamBody.textContent += text;
+    scrollDown();
+  }
+
+  function streamEnd() {
+    if (streamBubble && streamBubble.parentNode === chat) {
+      chat.removeChild(streamBubble);
+    }
+    streamBubble = null;
+    streamBody = null;
   }
 
   var suggestCard = null;
@@ -812,6 +840,8 @@
       case "assistant": addAssistant(m.text || "", m.bold); break;
       case "activity": addActivity(m.text || "", m.kind); break;
       case "suggest": showSuggest(m.questions); break;
+      case "delta": streamDelta(m.text || ""); break;
+      case "deltaEnd": streamEnd(); break;
       case "status": setStatus(m.text, m.error); break;
       case "busy": setBusy(!!m.value); break;
       case "draft":

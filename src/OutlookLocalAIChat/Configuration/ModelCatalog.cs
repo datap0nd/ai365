@@ -67,6 +67,30 @@ namespace OutlookLocalAIChat.Configuration
         private static readonly ModelGuideEntry[] MasterList =
         {
             new ModelGuideEntry(
+                "gemini-2.5-flash",
+                new[] { "gemini", "flash" },
+                "Fast cloud Gemini - recommended",
+                "Fast",
+                "Excellent",
+                true,
+                "Best speed/quality balance over Google sign-in. MetoAI disables its internal thinking for snappy replies and streams tokens live. Higher quotas than pro."),
+            new ModelGuideEntry(
+                "gemini-2.5-pro",
+                new[] { "gemini", "pro" },
+                "Deepest cloud Gemini, slower",
+                "Slow",
+                "Excellent",
+                true,
+                "Highest quality for complex drafting and reasoning. Tighter per-minute quotas and slower responses; MetoAI keeps its thinking at the minimum the model allows."),
+            new ModelGuideEntry(
+                "gemini-2.5-flash-lite",
+                new[] { "gemini", "flash", "lite" },
+                "Fastest cloud Gemini",
+                "Fast",
+                "Good",
+                true,
+                "Lowest latency of the Gemini family. Fine for quick questions and summaries; weaker on multi-step tool use than flash."),
+            new ModelGuideEntry(
                 "qwen3-vl-30b",
                 new[] { "qwen", "vl" },
                 "Vision model for email images",
