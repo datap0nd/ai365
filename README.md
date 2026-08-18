@@ -117,9 +117,13 @@ the tool-call probe allows up to 90 seconds.
    schedule anything. When a body
    is loaded, MetoAI also reads up to ten **email attachments** per
    message: images (PNG, JPEG, GIF, BMP, WebP, TIFF), spreadsheets (XLSX,
-   XLSM, XLS, CSV), documents (PDF, PPTX, DOCX, PPT, DOC, RTF), and text
-   files (TXT, MD, LOG, JSON, XML, HTML, EML). Unknown extensions are
-   identified by content (image, Office, PDF, or plain text). PDF
+   XLSM, XLSB, XLTX, XLTM, XLS, CSV, TSV — all worksheets, including
+   binary BIFF12 workbooks), documents (PDF, PPTX, PPTM, PPSX, PPSM,
+   POTX, DOCX, DOCM, DOTX, DOTM, PPT, DOC, RTF, and OpenDocument
+   ODT/ODS/ODP), attached Outlook messages (MSG, OFT — subject, sender,
+   and body), and text files (TXT, MD, LOG, JSON, XML, YAML, INI, HTML,
+   EML). Unknown extensions are identified by content (image, OOXML or
+   binary Office, OpenDocument, MSG, PDF, or plain text). PDF
    extraction reads the text layer, including CID-font PDFs from Word and
    Chrome — scanned PDFs yield a clear "no readable text" note. Legacy
    binary Office files get best-effort extraction. Every attachment is

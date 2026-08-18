@@ -983,7 +983,7 @@ namespace OutlookLocalAIChat.UI
                 Multiselect = true,
                 CheckFileExists = true,
                 Filter =
-                    "Supported files|*.txt;*.md;*.csv;*.json;*.xml;*.html;*.htm;*.log;*.pdf;*.docx;*.pptx;*.xlsx;*.xlsm;*.xls;*.doc;*.ppt;*.rtf;*.eml;*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp;*.tif;*.tiff|" +
+                    "Supported files|*.txt;*.md;*.csv;*.tsv;*.json;*.xml;*.yaml;*.yml;*.ini;*.html;*.htm;*.log;*.pdf;*.docx;*.docm;*.dotx;*.dotm;*.pptx;*.pptm;*.ppsx;*.ppsm;*.potx;*.xlsx;*.xlsm;*.xlsb;*.xltx;*.xltm;*.xls;*.doc;*.ppt;*.rtf;*.odt;*.ods;*.odp;*.msg;*.oft;*.eml;*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp;*.tif;*.tiff|" +
                     "All files|*.*"
             })
             {

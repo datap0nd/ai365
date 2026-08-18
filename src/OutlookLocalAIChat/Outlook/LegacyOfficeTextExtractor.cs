@@ -348,6 +348,79 @@ namespace OutlookLocalAIChat.Outlook
             }
         }
 
+        // Outlook .msg / .oft items are compound files whose MAPI
+        // string properties live in named substreams: 001F suffixes
+        // are UTF-16, 001E are the ANSI code page. Subject, sender,
+        // recipients, and the plain-text body are enough to make an
+        // attached message readable; nested attachments inside the
+        // .msg are not expanded.
+        public static string ExtractMsgText(byte[] fileBytes)
+        {
+            try
+            {
+                var builder = new StringBuilder();
+                var subject = ReadMsgString(fileBytes, "0037");
+                var sender = ReadMsgString(fileBytes, "0C1A");
+                var recipients = ReadMsgString(fileBytes, "0E04");
+                var body = ReadMsgString(fileBytes, "1000");
+                if (subject.Length > 0)
+                {
+                    builder.AppendLine("Subject: " + subject);
+                }
+
+                if (sender.Length > 0)
+                {
+                    builder.AppendLine("From: " + sender);
+                }
+
+                if (recipients.Length > 0)
+                {
+                    builder.AppendLine("To: " + recipients);
+                }
+
+                if (builder.Length > 0 && body.Length > 0)
+                {
+                    builder.AppendLine();
+                }
+
+                builder.Append(body);
+                return builder.ToString().Trim();
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private static string ReadMsgString(
+            byte[] fileBytes,
+            string propertyId)
+        {
+            var unicode = ReadCompoundStream(
+                fileBytes,
+                "__substg1.0_" + propertyId + "001F");
+            if (unicode != null && unicode.Length > 1)
+            {
+                return Encoding.Unicode
+                    .GetString(unicode)
+                    .Trim('\0')
+                    .Trim();
+            }
+
+            var ansi = ReadCompoundStream(
+                fileBytes,
+                "__substg1.0_" + propertyId + "001E");
+            if (ansi != null && ansi.Length > 0)
+            {
+                return Encoding.Default
+                    .GetString(ansi)
+                    .Trim('\0')
+                    .Trim();
+            }
+
+            return string.Empty;
+        }
+
         public static bool LooksLikeCompoundFile(byte[] bytes)
         {
             return bytes != null &&

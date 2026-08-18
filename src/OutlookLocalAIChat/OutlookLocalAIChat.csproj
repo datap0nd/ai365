@@ -86,6 +86,7 @@
     <Compile Include="Outlook\MessageReader.cs" />
     <Compile Include="Outlook\PdfTextExtractor.cs" />
     <Compile Include="Outlook\LegacyOfficeTextExtractor.cs" />
+    <Compile Include="Outlook\XlsbTextExtractor.cs" />
     <Compile Include="Outlook\MessageSnapshot.cs" />
     <Compile Include="Outlook\SafeDraftHtml.cs" />
     <Compile Include="Outlook\SentMailToneSampler.cs" />

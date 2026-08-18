@@ -80,6 +80,12 @@ namespace GuardrailTests
                     "Spreadsheets stream through shared strings",
                     SpreadsheetsStreamThroughSharedStrings);
                 Run(
+                    "Binary workbooks decode BIFF12 records",
+                    BinaryWorkbooksDecodeBiff12Records);
+                Run(
+                    "Office variants, OpenDocument, and MSG extract",
+                    OfficeVariantsOpenDocumentAndMsgExtract);
+                Run(
                     "Oversized text carries a truncation notice",
                     OversizedTextCarriesTruncationNotice);
                 Run(
@@ -2764,7 +2770,8 @@ namespace GuardrailTests
                     new[]
                     {
                         "xl/sharedStrings.xml",
-                        "xl/worksheets/sheet1.xml"
+                        "xl/worksheets/sheet1.xml",
+                        "xl/worksheets/sheet2.xml"
                     },
                     new[]
                     {
@@ -2778,6 +2785,10 @@ namespace GuardrailTests
                         "<c><v>42</v></c></row>" +
                         "<row><c t=\"s\"><v>1</v></c>" +
                         "<c><v>98.5</v></c></row>" +
+                        "</sheetData></worksheet>",
+                        "<worksheet xmlns=\"" + sheetNamespace + "\">" +
+                        "<sheetData>" +
+                        "<row><c><v>777</v></c></row>" +
                         "</sheetData></worksheet>"
                     });
                 var content = EmailAttachmentReader.LoadLocalFile(
@@ -2793,6 +2804,283 @@ namespace GuardrailTests
                     content.Text.Contains("Northern office\t98.5"),
                     "The second streamed row was not extracted: " +
                     content.Text);
+                Assert(
+                    content.Text.Contains("[Sheet 2]") &&
+                    content.Text.Contains("777"),
+                    "The second worksheet was not extracted: " +
+                    content.Text);
+            }
+            finally
+            {
+                if (Directory.Exists(temp))
+                {
+                    Directory.Delete(temp, true);
+                }
+            }
+        }
+
+        private static void WriteZipBinaryEntries(
+            string zipPath,
+            string[] entryNames,
+            byte[][] payloads)
+        {
+            using (var archive = ZipFile.Open(
+                zipPath,
+                ZipArchiveMode.Create))
+            {
+                for (var index = 0;
+                     index < entryNames.Length;
+                     index++)
+                {
+                    var entry = archive.CreateEntry(
+                        entryNames[index]);
+                    using (var stream = entry.Open())
+                    {
+                        stream.Write(
+                            payloads[index],
+                            0,
+                            payloads[index].Length);
+                    }
+                }
+            }
+        }
+
+        private static void WriteBiffRecord(
+            MemoryStream stream,
+            int id,
+            byte[] payload)
+        {
+            if (id < 0x80)
+            {
+                stream.WriteByte((byte)id);
+            }
+            else
+            {
+                stream.WriteByte(
+                    (byte)((id & 0x7F) | 0x80));
+                stream.WriteByte(
+                    (byte)((id >> 7) & 0x7F));
+            }
+
+            var length = payload.Length;
+            do
+            {
+                var value = length & 0x7F;
+                length >>= 7;
+                stream.WriteByte(
+                    (byte)(length > 0 ? value | 0x80 : value));
+            }
+            while (length > 0);
+            stream.Write(payload, 0, payload.Length);
+        }
+
+        private static byte[] BiffWideString(string value)
+        {
+            var characters = Encoding.Unicode.GetBytes(value);
+            var payload = new byte[4 + characters.Length];
+            WriteUInt32At(payload, 0, (uint)value.Length);
+            Array.Copy(
+                characters,
+                0,
+                payload,
+                4,
+                characters.Length);
+            return payload;
+        }
+
+        private static byte[] BiffCell(int column, byte[] value)
+        {
+            var payload = new byte[8 + value.Length];
+            WriteUInt32At(payload, 0, (uint)column);
+            Array.Copy(value, 0, payload, 8, value.Length);
+            return payload;
+        }
+
+        private static void BinaryWorkbooksDecodeBiff12Records()
+        {
+            var temp = Path.Combine(
+                Path.GetTempPath(),
+                "MetoAI-xlsb-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(temp);
+            try
+            {
+                byte[] sharedStrings;
+                using (var stream = new MemoryStream())
+                {
+                    WriteBiffRecord(
+                        stream,
+                        19,
+                        Combine(
+                            new byte[] { 0 },
+                            BiffWideString("Region")));
+                    WriteBiffRecord(
+                        stream,
+                        19,
+                        Combine(
+                            new byte[] { 0 },
+                            BiffWideString("Northern office")));
+                    sharedStrings = stream.ToArray();
+                }
+
+                byte[] sheet;
+                using (var stream = new MemoryStream())
+                {
+                    var isstZero = new byte[4];
+                    var isstOne = new byte[4];
+                    WriteUInt32At(isstOne, 0, 1);
+                    var rk = new byte[4];
+                    WriteUInt32At(rk, 0, (42u << 2) | 2u);
+                    var real = BitConverter.GetBytes(98.5);
+                    WriteBiffRecord(stream, 0, new byte[8]);
+                    WriteBiffRecord(
+                        stream,
+                        7,
+                        BiffCell(0, isstZero));
+                    WriteBiffRecord(stream, 2, BiffCell(1, rk));
+                    WriteBiffRecord(stream, 0, new byte[8]);
+                    WriteBiffRecord(
+                        stream,
+                        7,
+                        BiffCell(0, isstOne));
+                    WriteBiffRecord(stream, 5, BiffCell(1, real));
+                    WriteBiffRecord(
+                        stream,
+                        4,
+                        BiffCell(2, new byte[] { 1 }));
+                    sheet = stream.ToArray();
+                }
+
+                var xlsbPath = Path.Combine(temp, "ledger.xlsb");
+                WriteZipBinaryEntries(
+                    xlsbPath,
+                    new[]
+                    {
+                        "xl/workbook.bin",
+                        "xl/sharedStrings.bin",
+                        "xl/worksheets/sheet1.bin"
+                    },
+                    new[]
+                    {
+                        new byte[0],
+                        sharedStrings,
+                        sheet
+                    });
+                var content = EmailAttachmentReader.LoadLocalFile(
+                    xlsbPath);
+                Assert(
+                    content != null &&
+                    content.Text.Contains("Region\t42"),
+                    "BIFF12 shared-string and RK cells were not " +
+                    "decoded: " +
+                    (content == null ? "null" : content.Text));
+                Assert(
+                    content.Text.Contains(
+                        "Northern office\t98.5\tTRUE"),
+                    "BIFF12 real and boolean cells were not " +
+                    "decoded: " + content.Text);
+
+                // The same bytes with an unknown extension must be
+                // identified by the zip sniffer.
+                var sniffPath = Path.Combine(temp, "mystery.dat");
+                File.Copy(xlsbPath, sniffPath);
+                var sniffed = EmailAttachmentReader.LoadLocalFile(
+                    sniffPath);
+                Assert(
+                    sniffed != null &&
+                    sniffed.Text.Contains("Region\t42"),
+                    "An extensionless binary workbook was not " +
+                    "sniffed.");
+            }
+            finally
+            {
+                if (Directory.Exists(temp))
+                {
+                    Directory.Delete(temp, true);
+                }
+            }
+        }
+
+        private static byte[] Combine(byte[] first, byte[] second)
+        {
+            var result = new byte[first.Length + second.Length];
+            Array.Copy(first, result, first.Length);
+            Array.Copy(
+                second,
+                0,
+                result,
+                first.Length,
+                second.Length);
+            return result;
+        }
+
+        private static void OfficeVariantsOpenDocumentAndMsgExtract()
+        {
+            var temp = Path.Combine(
+                Path.GetTempPath(),
+                "MetoAI-variants-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(temp);
+            try
+            {
+                var docmPath = Path.Combine(temp, "macro.docm");
+                WriteZipEntry(
+                    docmPath,
+                    "word/document.xml",
+                    "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">" +
+                    "<w:body><w:p><w:r><w:t>Macro document baseline</w:t></w:r></w:p>" +
+                    "</w:body></w:document>");
+                var docm = EmailAttachmentReader.LoadLocalFile(
+                    docmPath);
+                Assert(
+                    docm != null &&
+                    docm.Text.Contains("Macro document baseline"),
+                    "A .docm Word variant was not extracted.");
+
+                var odsPath = Path.Combine(temp, "plan.ods");
+                WriteZipEntry(
+                    odsPath,
+                    "content.xml",
+                    "<office:document-content " +
+                    "xmlns:office=\"urn:oasis:names:tc:opendocument:xmlns:office:1.0\" " +
+                    "xmlns:table=\"urn:oasis:names:tc:opendocument:xmlns:table:1.0\" " +
+                    "xmlns:text=\"urn:oasis:names:tc:opendocument:xmlns:text:1.0\">" +
+                    "<office:body><office:spreadsheet><table:table>" +
+                    "<table:table-row><table:table-cell>" +
+                    "<text:p>Forecast baseline figures</text:p>" +
+                    "</table:table-cell></table:table-row>" +
+                    "</table:table></office:spreadsheet></office:body>" +
+                    "</office:document-content>");
+                var ods = EmailAttachmentReader.LoadLocalFile(
+                    odsPath);
+                Assert(
+                    ods != null &&
+                    ods.Text.Contains("Forecast baseline figures"),
+                    "An OpenDocument spreadsheet was not extracted.");
+
+                const string msgBody =
+                    "Please review the renewal terms before Friday.";
+                var msgPath = Path.Combine(temp, "forwarded.msg");
+                File.WriteAllBytes(
+                    msgPath,
+                    BuildCompoundFile(
+                        "__substg1.0_1000001F",
+                        Encoding.Unicode.GetBytes(msgBody)));
+                var msg = EmailAttachmentReader.LoadLocalFile(
+                    msgPath);
+                Assert(
+                    msg != null && msg.Text.Contains(msgBody),
+                    "An Outlook .msg attachment body was not " +
+                    "extracted.");
+
+                var tsvPath = Path.Combine(temp, "export.tsv");
+                File.WriteAllText(
+                    tsvPath,
+                    "Region\tRevenue\nNorth\t125000");
+                var tsv = EmailAttachmentReader.LoadLocalFile(
+                    tsvPath);
+                Assert(
+                    tsv != null &&
+                    tsv.Text.Contains("North\t125000"),
+                    "A .tsv export was not read as text.");
             }
             finally
             {

@@ -87,7 +87,8 @@ namespace OutlookLocalAIChat.Outlook
             new HashSet<string>(
                 new[]
                 {
-                    ".xlsx", ".xlsm", ".xls", ".csv"
+                    ".xlsx", ".xlsm", ".xlsb", ".xltx", ".xltm",
+                    ".xls", ".csv", ".tsv"
                 },
                 StringComparer.OrdinalIgnoreCase);
 
@@ -95,8 +96,10 @@ namespace OutlookLocalAIChat.Outlook
             new HashSet<string>(
                 new[]
                 {
-                    ".pdf", ".pptx", ".docx", ".ppt", ".doc",
-                    ".rtf"
+                    ".pdf", ".pptx", ".pptm", ".ppsx", ".ppsm",
+                    ".potx", ".docx", ".docm", ".dotx", ".dotm",
+                    ".ppt", ".doc", ".rtf", ".odt", ".ods",
+                    ".odp", ".msg", ".oft"
                 },
                 StringComparer.OrdinalIgnoreCase);
 
@@ -105,7 +108,8 @@ namespace OutlookLocalAIChat.Outlook
                 new[]
                 {
                     ".txt", ".md", ".log", ".json",
-                    ".xml", ".html", ".htm", ".eml"
+                    ".xml", ".html", ".htm", ".eml",
+                    ".yaml", ".yml", ".ini"
                 },
                 StringComparer.OrdinalIgnoreCase);
 
@@ -587,6 +591,19 @@ namespace OutlookLocalAIChat.Outlook
                         ".xlsx");
                 }
 
+                if (ZipContainsEntry(path, "xl/workbook.bin"))
+                {
+                    return ExtractSpreadsheet(
+                        path,
+                        fileName,
+                        ".xlsb");
+                }
+
+                if (ZipContainsEntry(path, "content.xml"))
+                {
+                    return ExtractDocument(path, fileName, ".odt");
+                }
+
                 return null;
             }
 
@@ -619,6 +636,16 @@ namespace OutlookLocalAIChat.Outlook
                         path,
                         fileName,
                         ".xls");
+                }
+
+                if (LegacyOfficeTextExtractor.CompoundStreamExists(
+                        bytes,
+                        "__properties_version1.0") ||
+                    LegacyOfficeTextExtractor.CompoundStreamExists(
+                        bytes,
+                        "__substg1.0_0037001F"))
+                {
+                    return ExtractDocument(path, fileName, ".msg");
                 }
 
                 return null;
@@ -753,12 +780,39 @@ namespace OutlookLocalAIChat.Outlook
 
                         break;
                     case ".pptx":
+                    case ".pptm":
+                    case ".ppsx":
+                    case ".ppsm":
+                    case ".potx":
                         kind = "powerpoint";
                         text = ExtractPptxText(path);
                         break;
                     case ".docx":
+                    case ".docm":
+                    case ".dotx":
+                    case ".dotm":
                         kind = "word";
                         text = ExtractDocxText(path);
+                        break;
+                    case ".odt":
+                    case ".ods":
+                    case ".odp":
+                        kind = "document";
+                        text = ExtractOdfText(path);
+                        break;
+                    case ".msg":
+                    case ".oft":
+                        kind = "email";
+                        text = LegacyOfficeTextExtractor
+                            .ExtractMsgText(
+                                File.ReadAllBytes(path));
+                        if (text.Trim().Length > 0)
+                        {
+                            text =
+                                "[Attached Outlook message: " +
+                                fileName + "]\n" + text;
+                        }
+
                         break;
                     case ".ppt":
                         kind = "powerpoint";
@@ -926,6 +980,75 @@ namespace OutlookLocalAIChat.Outlook
                         if (reader.NodeType ==
                                 System.Xml.XmlNodeType.EndElement &&
                             reader.LocalName == "p")
+                        {
+                            if (lineHasText)
+                            {
+                                builder.AppendLine();
+                                lineHasText = false;
+                            }
+
+                            if (builder.Length >
+                                MaxCharactersPerAttachment)
+                            {
+                                break;
+                            }
+                        }
+
+                        if (!reader.Read())
+                        {
+                            break;
+                        }
+                    }
+                }
+
+                return builder.ToString();
+            }
+        }
+
+        // OpenDocument (.odt, .ods, .odp): all visible text lives in
+        // content.xml. Text nodes are streamed and paragraph or
+        // heading ends become line breaks, which also yields one line
+        // per spreadsheet cell.
+        private static string ExtractOdfText(string path)
+        {
+            using (var zip = ZipFile.OpenRead(path))
+            {
+                var entry = zip.GetEntry("content.xml");
+                if (entry == null)
+                {
+                    return string.Empty;
+                }
+
+                var builder = new StringBuilder();
+                using (var stream = entry.Open())
+                using (var reader = System.Xml.XmlReader.Create(
+                    stream,
+                    StreamingXmlSettings()))
+                {
+                    if (!reader.Read())
+                    {
+                        return string.Empty;
+                    }
+
+                    var lineHasText = false;
+                    while (!reader.EOF)
+                    {
+                        if (reader.NodeType ==
+                                System.Xml.XmlNodeType.Text ||
+                            reader.NodeType ==
+                                System.Xml.XmlNodeType.CDATA)
+                        {
+                            if (reader.Value.Length > 0)
+                            {
+                                builder.Append(reader.Value);
+                                lineHasText = true;
+                            }
+                        }
+                        else if (reader.NodeType ==
+                                     System.Xml.XmlNodeType
+                                         .EndElement &&
+                                 (reader.LocalName == "p" ||
+                                  reader.LocalName == "h"))
                         {
                             if (lineHasText)
                             {
@@ -1214,10 +1337,21 @@ namespace OutlookLocalAIChat.Outlook
         {
             string text;
             if (extension.Equals(
-                ".csv",
-                StringComparison.OrdinalIgnoreCase))
+                    ".csv",
+                    StringComparison.OrdinalIgnoreCase) ||
+                extension.Equals(
+                    ".tsv",
+                    StringComparison.OrdinalIgnoreCase))
             {
                 text = ReadTextFile(path);
+            }
+            else if (extension.Equals(
+                ".xlsb",
+                StringComparison.OrdinalIgnoreCase))
+            {
+                text = XlsbTextExtractor.Extract(
+                    File.ReadAllBytes(path),
+                    MaxCharactersPerAttachment);
             }
             else if (extension.Equals(
                 ".xls",
@@ -1260,97 +1394,125 @@ namespace OutlookLocalAIChat.Outlook
             using (var zip = ZipFile.OpenRead(path))
             {
                 var sharedStrings = ReadSharedStrings(zip);
-                var sheetEntry = zip.Entries.FirstOrDefault(
-                    entry => entry.FullName.Equals(
-                        "xl/worksheets/sheet1.xml",
-                        StringComparison.OrdinalIgnoreCase));
-                if (sheetEntry == null)
-                {
-                    return string.Empty;
-                }
-
+                var sheetEntries = zip.Entries
+                    .Where(entry =>
+                        entry.FullName.StartsWith(
+                            "xl/worksheets/sheet",
+                            StringComparison.OrdinalIgnoreCase) &&
+                        entry.FullName.EndsWith(
+                            ".xml",
+                            StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(entry => SlideNumber(entry.FullName))
+                    .ToList();
                 var builder = new StringBuilder();
-                using (var stream = sheetEntry.Open())
-                using (var reader = System.Xml.XmlReader.Create(
-                    stream,
-                    StreamingXmlSettings()))
+                foreach (var sheetEntry in sheetEntries)
                 {
-                    if (!reader.Read())
+                    if (sheetEntries.Count > 1)
                     {
-                        return string.Empty;
+                        builder.AppendLine(
+                            "[Sheet " +
+                            SlideNumber(
+                                sheetEntry.FullName).ToString() +
+                            "]");
                     }
 
-                    string cellType = null;
-                    var rowValues = new List<string>();
-                    while (!reader.EOF)
+                    ExtractXlsxSheet(
+                        sheetEntry,
+                        sharedStrings,
+                        builder);
+                    if (builder.Length > MaxCharactersPerAttachment)
                     {
-                        if (reader.NodeType ==
-                                System.Xml.XmlNodeType.Element &&
-                            (reader.LocalName == "v" ||
-                             reader.LocalName == "t"))
-                        {
-                            var lookupShared =
-                                reader.LocalName == "v" &&
-                                cellType == "s";
-                            var content =
-                                reader.ReadElementContentAsString();
-                            if (lookupShared)
-                            {
-                                int sharedIndex;
-                                content =
-                                    int.TryParse(
-                                        content,
-                                        out sharedIndex) &&
-                                    sharedIndex >= 0 &&
-                                    sharedIndex <
-                                    sharedStrings.Count
-                                        ? sharedStrings[sharedIndex]
-                                        : string.Empty;
-                            }
-
-                            if (content.Length > 0)
-                            {
-                                rowValues.Add(content);
-                            }
-
-                            continue;
-                        }
-
-                        if (reader.NodeType ==
-                                System.Xml.XmlNodeType.Element &&
-                            reader.LocalName == "c")
-                        {
-                            cellType = reader.GetAttribute("t");
-                        }
-                        else if (reader.NodeType ==
-                                     System.Xml.XmlNodeType
-                                         .EndElement &&
-                                 reader.LocalName == "row")
-                        {
-                            if (rowValues.Count > 0)
-                            {
-                                builder.AppendLine(
-                                    string.Join(
-                                        "\t",
-                                        rowValues));
-                                rowValues.Clear();
-                            }
-
-                            if (builder.Length >
-                                MaxCharactersPerAttachment)
-                            {
-                                break;
-                            }
-                        }
-
-                        if (!reader.Read())
-                        {
-                            break;
-                        }
+                        break;
                     }
                 }
 
                 return builder.ToString();
+            }
+        }
+
+        private static void ExtractXlsxSheet(
+            ZipArchiveEntry sheetEntry,
+            IList<string> sharedStrings,
+            StringBuilder builder)
+        {
+            using (var stream = sheetEntry.Open())
+            using (var reader = System.Xml.XmlReader.Create(
+                stream,
+                StreamingXmlSettings()))
+            {
+                if (!reader.Read())
+                {
+                    return;
+                }
+
+                string cellType = null;
+                var rowValues = new List<string>();
+                while (!reader.EOF)
+                {
+                    if (reader.NodeType ==
+                            System.Xml.XmlNodeType.Element &&
+                        (reader.LocalName == "v" ||
+                         reader.LocalName == "t"))
+                    {
+                        var lookupShared =
+                            reader.LocalName == "v" &&
+                            cellType == "s";
+                        var content =
+                            reader.ReadElementContentAsString();
+                        if (lookupShared)
+                        {
+                            int sharedIndex;
+                            content =
+                                int.TryParse(
+                                    content,
+                                    out sharedIndex) &&
+                                sharedIndex >= 0 &&
+                                sharedIndex <
+                                sharedStrings.Count
+                                    ? sharedStrings[sharedIndex]
+                                    : string.Empty;
+                        }
+
+                        if (content.Length > 0)
+                        {
+                            rowValues.Add(content);
+                        }
+
+                        continue;
+                    }
+
+                    if (reader.NodeType ==
+                            System.Xml.XmlNodeType.Element &&
+                        reader.LocalName == "c")
+                    {
+                        cellType = reader.GetAttribute("t");
+                    }
+                    else if (reader.NodeType ==
+                                 System.Xml.XmlNodeType
+                                     .EndElement &&
+                             reader.LocalName == "row")
+                    {
+                        if (rowValues.Count > 0)
+                        {
+                            builder.AppendLine(
+                                string.Join(
+                                    "\t",
+                                    rowValues));
+                            rowValues.Clear();
+                        }
+
+                        if (builder.Length >
+                            MaxCharactersPerAttachment)
+                        {
+                            break;
+                        }
+                    }
+
+                    if (!reader.Read())
+                    {
+                        break;
+                    }
+                }
             }
         }
 
