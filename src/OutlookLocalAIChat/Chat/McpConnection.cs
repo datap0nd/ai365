@@ -55,7 +55,7 @@ namespace OutlookLocalAIChat.Chat
         private readonly StringBuilder _stderrTail =
             new StringBuilder();
         private Process _process;
-        private StreamWriter _stdin;
+        private Stream _stdinStream;
         private StreamReader _stdout;
         private string _httpSessionId = string.Empty;
         private bool _initialized;
@@ -322,8 +322,12 @@ namespace OutlookLocalAIChat.Chat
                     "The MCP server process could not be started.");
             }
 
-            _stdin = _process.StandardInput;
-            _stdin.AutoFlush = true;
+            // Requests are written as raw ASCII bytes straight to
+            // the pipe: a StreamWriter would emit an encoding
+            // preamble (BOM) before the first line, which strict
+            // JSON-RPC servers reject. The wire is pure ASCII
+            // because the serializer escapes non-ASCII characters.
+            _stdinStream = _process.StandardInput.BaseStream;
             _stdout = _process.StandardOutput;
             // Drain stderr so a chatty server can never block,
             // keeping a bounded tail for diagnostics.
@@ -371,8 +375,15 @@ namespace OutlookLocalAIChat.Chat
             }
 
             _process = null;
-            _stdin = null;
+            _stdinStream = null;
             _stdout = null;
+        }
+
+        private void WriteLineAscii(string line)
+        {
+            var bytes = Encoding.ASCII.GetBytes(line + "\n");
+            _stdinStream.Write(bytes, 0, bytes.Length);
+            _stdinStream.Flush();
         }
 
         private void Notify(string method)
@@ -398,7 +409,7 @@ namespace OutlookLocalAIChat.Chat
                 return;
             }
 
-            _stdin.WriteLine(_serializer.Serialize(message));
+            WriteLineAscii(_serializer.Serialize(message));
         }
 
         private IDictionary<string, object> Request(
@@ -452,7 +463,7 @@ namespace OutlookLocalAIChat.Chat
             int id,
             int timeoutMs)
         {
-            _stdin.WriteLine(requestJson);
+            WriteLineAscii(requestJson);
             var reader = _stdout;
             // Lines the server wrote that are not our response are
             // skipped, but a bounded sample is kept so a protocol
@@ -475,6 +486,9 @@ namespace OutlookLocalAIChat.Chat
                             "The MCP server response exceeded the size cap.");
                     }
 
+                    // Some servers emit an encoding preamble before
+                    // their first line; tolerate it.
+                    line = line.TrimStart('\uFEFF');
                     if (MessageHasId(line, id))
                     {
                         return line;

@@ -4308,6 +4308,7 @@ namespace GuardrailTests
                     return 0;
                 }
 
+                line = line.TrimStart('\uFEFF');
                 IDictionary<string, object> message;
                 try
                 {
@@ -4434,7 +4435,11 @@ namespace GuardrailTests
                     (readTask.Result ?? "(closed)") +
                     "' after " +
                     stopwatch.ElapsedMilliseconds + "ms";
-                return readTask.Result == "pong:ping";
+                // A writer-side encoding preamble (BOM) may ride in
+                // the echoed payload; the spawn still works.
+                var reply = (readTask.Result ?? string.Empty)
+                    .Replace("\uFEFF", string.Empty);
+                return reply == "pong:ping";
             }
             catch (Exception exception)
             {
