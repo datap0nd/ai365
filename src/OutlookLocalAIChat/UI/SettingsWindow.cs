@@ -43,6 +43,15 @@ namespace OutlookLocalAIChat.UI
             MakeButton("Sign in with Google", false, 160);
         private readonly Label _googleStatus = new Label();
         private readonly TextBox _geminiProject = new TextBox();
+        private readonly TrackBar _toneStrength = new TrackBar();
+        private readonly Label _toneStrengthValue = new Label();
+        private readonly RichTextBox _draftRules =
+            new RichTextBox();
+        private readonly RichTextBox _supportText =
+            new RichTextBox();
+        private readonly Button _supportButton =
+            MakeButton("Create report email", false, 160);
+        private readonly Label _supportStatus = new Label();
         private readonly Button _save =
             MakeButton("Save", true, 96);
         private readonly OpenAiCompatibleClient _client =
@@ -109,7 +118,9 @@ namespace OutlookLocalAIChat.UI
                 AccessibleName = "MetoAI settings sections"
             };
             tabs.TabPages.Add(BuildConnectionPage());
+            tabs.TabPages.Add(BuildGeminiPage());
             tabs.TabPages.Add(BuildWritingStylePage());
+            tabs.TabPages.Add(BuildSupportPage());
             root.Controls.Add(tabs, 0, 0);
 
             ConfigureSupportingLabel(_error);
@@ -145,6 +156,13 @@ namespace OutlookLocalAIChat.UI
                 current?.GeminiProject ?? string.Empty;
             _useGeminiSignIn.Checked =
                 current?.UseGeminiSignIn ?? false;
+            _toneStrength.Value = Math.Max(
+                10,
+                Math.Min(100, current?.ToneStrength ?? 60));
+            _draftRules.Text = TextBoundary.PlainText(
+                current?.DraftRules,
+                2000);
+            UpdateToneStrengthLabel();
             UpdateModelGuidance();
             UpdateTransportWarning();
             UpdateGeminiModeUi();
@@ -279,14 +297,10 @@ namespace OutlookLocalAIChat.UI
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 ColumnCount = 1,
-                RowCount = 18,
+                RowCount = 14,
                 Padding = new Padding(18, 16, 18, 12),
                 Width = 640
             };
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -302,36 +316,10 @@ namespace OutlookLocalAIChat.UI
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-            _googleSignIn.Click += GoogleSignInClick;
-            var geminiRow = new FlowLayoutPanel
-            {
-                AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                FlowDirection = FlowDirection.LeftToRight,
-                WrapContents = false,
-                Padding = new Padding(0, 2, 0, 4),
-                Margin = new Padding(0)
-            };
-            geminiRow.Controls.Add(_googleSignIn);
-            ConfigureSupportingLabel(_googleStatus);
-            _googleStatus.Padding = new Padding(8, 6, 0, 0);
-            _googleStatus.AccessibleRole =
-                AccessibleRole.StatusBar;
-            geminiRow.Controls.Add(_googleStatus);
-            layout.Controls.Add(_useGeminiSignIn, 0, 0);
-            layout.Controls.Add(geminiRow, 0, 1);
-            layout.Controls.Add(
-                FieldLabel(
-                    "Google Cloud project (only if your " +
-                    "organization's Gemini license requires one)"),
-                0,
-                2);
-            layout.Controls.Add(_geminiProject, 0, 3);
-
-            layout.Controls.Add(FieldLabel("Endpoint or base URL"), 0, 4);
-            layout.Controls.Add(_endpoint, 0, 5);
-            layout.Controls.Add(FieldLabel("Model"), 0, 6);
-            layout.Controls.Add(_model, 0, 7);
+            layout.Controls.Add(FieldLabel("Endpoint or base URL"), 0, 0);
+            layout.Controls.Add(_endpoint, 0, 1);
+            layout.Controls.Add(FieldLabel("Model"), 0, 2);
+            layout.Controls.Add(_model, 0, 3);
 
             _checkEndpoint.Click += CheckEndpointClick;
             _refreshModels.Click += RefreshModelsClick;
@@ -346,24 +334,24 @@ namespace OutlookLocalAIChat.UI
             };
             checkRow.Controls.Add(_checkEndpoint);
             checkRow.Controls.Add(_refreshModels);
-            layout.Controls.Add(checkRow, 0, 8);
+            layout.Controls.Add(checkRow, 0, 4);
 
             ConfigureSupportingLabel(_testStatus);
             _testStatus.Text =
                 "Use Refresh models to load the model list from your endpoint. " +
                 "Check endpoint also verifies tool-call compatibility.";
             _testStatus.AccessibleRole = AccessibleRole.StatusBar;
-            layout.Controls.Add(_testStatus, 0, 9);
+            layout.Controls.Add(_testStatus, 0, 5);
 
             ConfigureSupportingLabel(_modelGuidance);
-            layout.Controls.Add(_modelGuidance, 0, 10);
-            layout.Controls.Add(_switchVisionForImages, 0, 11);
-            layout.Controls.Add(FieldLabel("API key"), 0, 12);
-            layout.Controls.Add(_apiKey, 0, 13);
-            layout.Controls.Add(_allowInsecureHttp, 0, 14);
+            layout.Controls.Add(_modelGuidance, 0, 6);
+            layout.Controls.Add(_switchVisionForImages, 0, 7);
+            layout.Controls.Add(FieldLabel("API key"), 0, 8);
+            layout.Controls.Add(_apiKey, 0, 9);
+            layout.Controls.Add(_allowInsecureHttp, 0, 10);
             ConfigureSupportingLabel(_transportWarning);
             _transportWarning.AccessibleRole = AccessibleRole.Alert;
-            layout.Controls.Add(_transportWarning, 0, 15);
+            layout.Controls.Add(_transportWarning, 0, 11);
 
             _updateButton.Click += UpdateClick;
             var updateRow = new FlowLayoutPanel
@@ -381,14 +369,14 @@ namespace OutlookLocalAIChat.UI
                 SelfUpdater.InstalledVersion() + ".");
             versionLabel.Padding = new Padding(8, 8, 0, 0);
             updateRow.Controls.Add(versionLabel);
-            layout.Controls.Add(updateRow, 0, 16);
+            layout.Controls.Add(updateRow, 0, 12);
 
             ConfigureSupportingLabel(_updateStatus);
             _updateStatus.Text =
                 "Update downloads the latest MetoAI release, closes Outlook, " +
                 "installs silently, and reopens Outlook.";
             _updateStatus.AccessibleRole = AccessibleRole.StatusBar;
-            layout.Controls.Add(_updateStatus, 0, 17);
+            layout.Controls.Add(_updateStatus, 0, 13);
             page.Controls.Add(layout);
             return page;
         }
@@ -470,40 +458,372 @@ namespace OutlookLocalAIChat.UI
             }
         }
 
-        private TabPage BuildWritingStylePage()
+        private TabPage BuildGeminiPage()
         {
-            var page = new TabPage("Writing style");
+            var page = new TabPage("Gemini")
+            {
+                AutoScroll = true
+            };
+            var layout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                ColumnCount = 1,
+                RowCount = 8,
+                Padding = new Padding(18, 16, 18, 12),
+                Width = 640
+            };
+            for (var index = 0; index < 8; index++)
+            {
+                layout.RowStyles.Add(
+                    new RowStyle(SizeType.AutoSize));
+            }
+
+            var logoRow = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                Margin = new Padding(0, 0, 0, 6)
+            };
+            var logo = new Panel
+            {
+                Width = 40,
+                Height = 40,
+                Margin = new Padding(0, 0, 8, 0)
+            };
+            logo.Paint += PaintGeminiLogo;
+            logoRow.Controls.Add(logo);
+            var logoText = new Label
+            {
+                Text = "Google Gemini",
+                AutoSize = true,
+                Font = new Font(
+                    SystemFonts.MessageBoxFont.FontFamily,
+                    SystemFonts.MessageBoxFont.Size + 4F,
+                    FontStyle.Bold),
+                Padding = new Padding(0, 8, 0, 0)
+            };
+            logoRow.Controls.Add(logoText);
+            layout.Controls.Add(logoRow, 0, 0);
+
+            var responsibility = SupportingText(
+                "Before you enable this: anything you send from " +
+                "this pane - email text, attachments, images, and " +
+                "prompts - leaves this machine and is processed by " +
+                "Google Gemini under your own Google account and " +
+                "your organization's Google agreement. Treat it " +
+                "like any other cloud service. Do not submit " +
+                "confidential, personal, or otherwise regulated " +
+                "information unless your organization's data " +
+                "policies allow it for this service. You are the " +
+                "operator of this tool: using it in line with " +
+                "those policies is your responsibility.");
+            responsibility.ForeColor = SystemColors.ControlText;
+            responsibility.Padding = new Padding(0, 0, 0, 8);
+            layout.Controls.Add(responsibility, 0, 1);
+
+            layout.Controls.Add(_useGeminiSignIn, 0, 2);
+
+            _googleSignIn.Click += GoogleSignInClick;
+            var geminiRow = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                Padding = new Padding(0, 4, 0, 4),
+                Margin = new Padding(0)
+            };
+            geminiRow.Controls.Add(_googleSignIn);
+            ConfigureSupportingLabel(_googleStatus);
+            _googleStatus.Padding = new Padding(8, 6, 0, 0);
+            _googleStatus.AccessibleRole =
+                AccessibleRole.StatusBar;
+            geminiRow.Controls.Add(_googleStatus);
+            layout.Controls.Add(geminiRow, 0, 3);
+
+            layout.Controls.Add(
+                FieldLabel(
+                    "Google Cloud project (only if your " +
+                    "organization's Gemini license requires one)"),
+                0,
+                4);
+            _geminiProject.Width = 360;
+            layout.Controls.Add(_geminiProject, 0, 5);
+
+            layout.Controls.Add(
+                SupportingText(
+                    "Pick a gemini model on the Connection tab " +
+                    "after signing in (gemini-2.5-flash is a good " +
+                    "default). If a model is at capacity, MetoAI " +
+                    "hops to the next available one and says so in " +
+                    "the status line."),
+                0,
+                6);
+            layout.Controls.Add(
+                SupportingText(
+                    "Sign-in uses your browser and Google's own " +
+                    "pages; MetoAI never sees your password and " +
+                    "stores only an encrypted sign-in token for " +
+                    "this Windows user."),
+                0,
+                7);
+            page.Controls.Add(layout);
+            return page;
+        }
+
+        // A simple four-point spark next to the Gemini name; drawn
+        // locally so no external asset ships with the add-in.
+        private static void PaintGeminiLogo(
+            object sender,
+            PaintEventArgs eventArgs)
+        {
+            var panel = (Panel)sender;
+            var graphics = eventArgs.Graphics;
+            graphics.SmoothingMode =
+                System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            var w = panel.Width;
+            var h = panel.Height;
+            var cx = w / 2f;
+            var cy = h / 2f;
+            var points = new[]
+            {
+                new PointF(cx, 1),
+                new PointF(cx + w * 0.14f, cy - h * 0.14f),
+                new PointF(w - 1, cy),
+                new PointF(cx + w * 0.14f, cy + h * 0.14f),
+                new PointF(cx, h - 1),
+                new PointF(cx - w * 0.14f, cy + h * 0.14f),
+                new PointF(1, cy),
+                new PointF(cx - w * 0.14f, cy - h * 0.14f)
+            };
+            using (var brush =
+                new System.Drawing.Drawing2D.LinearGradientBrush(
+                    new Point(0, 0),
+                    new Point(w, h),
+                    Color.FromArgb(66, 133, 244),
+                    Color.FromArgb(155, 114, 203)))
+            {
+                graphics.FillPolygon(brush, points);
+            }
+        }
+
+        private TabPage BuildSupportPage()
+        {
+            var page = new TabPage("Support")
+            {
+                AutoScroll = true
+            };
             var layout = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 1,
-                RowCount = 8,
+                RowCount = 5,
+                Padding = new Padding(18, 16, 18, 12)
+            };
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            layout.RowStyles.Add(
+                new RowStyle(SizeType.Percent, 100));
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+            var intro = SupportingText(
+                "Found a problem or have an idea? Describe it " +
+                "below and click Create report email. MetoAI " +
+                "opens a pre-filled email to the creator " +
+                "(r.cunha@samsung.com) with your notes and the " +
+                "recent diagnostic log so you can review " +
+                "everything and send it yourself from Outlook. " +
+                "MetoAI never sends anything on its own.");
+            intro.ForeColor = SystemColors.ControlText;
+            layout.Controls.Add(intro, 0, 0);
+            layout.Controls.Add(
+                FieldLabel("What happened, or what would help"),
+                0,
+                1);
+            _supportText.Dock = DockStyle.Fill;
+            _supportText.BorderStyle = BorderStyle.FixedSingle;
+            _supportText.Font = new Font(
+                SystemFonts.MessageBoxFont.FontFamily,
+                SystemFonts.MessageBoxFont.Size + 1F,
+                FontStyle.Regular);
+            _supportText.DetectUrls = false;
+            _supportText.AccessibleName =
+                "Problem or feedback description";
+            layout.Controls.Add(_supportText, 0, 2);
+            _supportButton.Click += SupportClick;
+            var supportRow = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.LeftToRight,
+                Padding = new Padding(0, 8, 0, 0),
+                Margin = new Padding(0)
+            };
+            supportRow.Controls.Add(_supportButton);
+            layout.Controls.Add(supportRow, 0, 3);
+            ConfigureSupportingLabel(_supportStatus);
+            _supportStatus.Text =
+                "The diagnostic log contains timestamps, " +
+                "operation names, and error codes only - never " +
+                "email content. Review the draft before sending.";
+            layout.Controls.Add(_supportStatus, 0, 4);
+            page.Controls.Add(layout);
+            return page;
+        }
+
+        private void SupportClick(
+            object sender,
+            EventArgs eventArgs)
+        {
+            _error.Text = string.Empty;
+            if (_outlookApplication == null)
+            {
+                _error.Text =
+                    "[OUTLOOK_NOT_READY] Open MetoAI from Outlook " +
+                    "before creating a report.";
+                return;
+            }
+
+            try
+            {
+                var description = TextBoundary.PlainText(
+                    _supportText.Text,
+                    4000);
+                dynamic application = _outlookApplication;
+                dynamic mail = application.CreateItem(0);
+                mail.To = "r.cunha@samsung.com";
+                mail.Subject =
+                    "MetoAI report - version " +
+                    SelfUpdater.InstalledVersion();
+                mail.Body =
+                    "What happened / feedback:\n" +
+                    (description.Length > 0
+                        ? description
+                        : "(no description entered)") +
+                    "\n\n--- Recent MetoAI diagnostic log " +
+                    "(review before sending) ---\n" +
+                    Log.Tail(120);
+                mail.Display(false);
+                _supportStatus.Text =
+                    "A report email opened in Outlook. Review it " +
+                    "and use Outlook's own controls to send it - " +
+                    "MetoAI never sends anything itself.";
+            }
+            catch (Exception exception)
+            {
+                _error.Text = DiagnosticDetails.ForException(
+                    exception,
+                    "SUPPORT_REPORT_FAILED");
+            }
+        }
+
+        private void UpdateToneStrengthLabel()
+        {
+            var value = _toneStrength.Value;
+            var flavor = value <= 25
+                ? "a light touch"
+                : (value <= 55
+                    ? "a balanced influence"
+                    : (value <= 80
+                        ? "a strong voice match"
+                        : "mirrors you closely"));
+            _toneStrengthValue.Text =
+                value + " / 100 - " + flavor;
+        }
+
+        private TabPage BuildWritingStylePage()
+        {
+            var page = new TabPage("Writing soul")
+            {
+                AutoScroll = true
+            };
+            var layout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 12,
                 Padding = new Padding(18, 16, 18, 12)
             };
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 55));
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 45));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
 
             var disclosure = SupportingText(
-                "Nothing is analyzed automatically. When you click Analyze, MetoAI " +
-                "reads up to 15 recent Sent Items messages, removes obvious quoted " +
-                "history, and sends bounded samples to your configured endpoint. " +
-                "Review and edit the result before saving.");
+                "Your writing soul is a small portrait of how you " +
+                "write - formality, warmth, sentence rhythm, how " +
+                "you open and how you sign off. Drafts are shaped " +
+                "by it so they sound like you, not like a bot. " +
+                "Nothing is analyzed automatically: click Analyze " +
+                "and MetoAI reads up to 15 recent Sent Items " +
+                "messages, removes obvious quoted history, and " +
+                "sends bounded samples to your configured model " +
+                "to distill the portrait. Review and edit the " +
+                "result before saving - it is yours.");
             disclosure.ForeColor = SystemColors.ControlText;
             layout.Controls.Add(disclosure, 0, 0);
             layout.Controls.Add(_useToneProfile, 0, 1);
-            layout.Controls.Add(FieldLabel("My drafting instructions"), 0, 2);
+            layout.Controls.Add(
+                FieldLabel("My writing soul"), 0, 2);
             layout.Controls.Add(_toneProfile, 0, 3);
 
-            var scope = SupportingText(
-                "The profile affects wording, greeting, cadence, and sign-off only. " +
-                "It cannot change MetoAI permissions or security rules.");
-            layout.Controls.Add(scope, 0, 4);
+            layout.Controls.Add(
+                FieldLabel(
+                    "Soul strength - how strongly drafts follow " +
+                    "your voice"),
+                0,
+                4);
+            _toneStrength.Minimum = 10;
+            _toneStrength.Maximum = 100;
+            _toneStrength.TickFrequency = 10;
+            _toneStrength.SmallChange = 5;
+            _toneStrength.LargeChange = 10;
+            _toneStrength.Dock = DockStyle.Fill;
+            _toneStrength.AccessibleName = "Soul strength";
+            _toneStrength.ValueChanged +=
+                (sender, args) => UpdateToneStrengthLabel();
+            layout.Controls.Add(_toneStrength, 0, 5);
+            ConfigureSupportingLabel(_toneStrengthValue);
+            layout.Controls.Add(_toneStrengthValue, 0, 6);
+
+            layout.Controls.Add(
+                FieldLabel(
+                    "Hard rules for every draft (one per line)"),
+                0,
+                7);
+            _draftRules.Dock = DockStyle.Fill;
+            _draftRules.BorderStyle = BorderStyle.FixedSingle;
+            _draftRules.Font = new Font(
+                SystemFonts.MessageBoxFont.FontFamily,
+                SystemFonts.MessageBoxFont.Size + 1F,
+                FontStyle.Regular);
+            _draftRules.MaxLength = 2000;
+            _draftRules.DetectUrls = false;
+            _draftRules.AccessibleName =
+                "Hard drafting rules";
+            layout.Controls.Add(_draftRules, 0, 8);
+            layout.Controls.Add(
+                SupportingText(
+                    "Examples: Never use exclamation marks. " +
+                    "Always sign off with 'Best regards'. Keep " +
+                    "replies under three paragraphs. Rules and " +
+                    "the soul shape wording, greeting, cadence, " +
+                    "and sign-off only - they cannot change " +
+                    "MetoAI permissions or security rules."),
+                0,
+                9);
 
             _analyzeTone.Click += AnalyzeToneClick;
             var actionRow = new FlowLayoutPanel
@@ -513,19 +833,15 @@ namespace OutlookLocalAIChat.UI
                 Padding = new Padding(0, 8, 0, 0)
             };
             actionRow.Controls.Add(_analyzeTone);
-            layout.Controls.Add(actionRow, 0, 5);
+            layout.Controls.Add(actionRow, 0, 10);
 
             ConfigureSupportingLabel(_toneStatus);
             _toneStatus.Text =
-                "Analysis requires at least five usable sent messages and never runs without this button.";
+                "Analysis requires at least five usable sent messages and never runs without this button. " +
+                "Tip: keep the soul general - remove names, client details, and project facts. " +
+                "Review and edit it before saving.";
             _toneStatus.AccessibleRole = AccessibleRole.StatusBar;
-            layout.Controls.Add(_toneStatus, 0, 6);
-            layout.Controls.Add(
-                SupportingText(
-                    "Tip: keep the profile general. Remove names, client details, " +
-                    "project facts, and anything you would not want reused."),
-                0,
-                7);
+            layout.Controls.Add(_toneStatus, 0, 11);
             page.Controls.Add(layout);
             return page;
         }
@@ -729,6 +1045,10 @@ namespace OutlookLocalAIChat.UI
                 ToneProfile = profile,
                 UseToneProfile =
                     _useToneProfile.Checked && profile.Length > 0,
+                ToneStrength = _toneStrength.Value,
+                DraftRules = TextBoundary.PlainText(
+                    _draftRules.Text,
+                    2000),
                 SwitchToVisionModelForImages =
                     _switchVisionForImages.Checked,
                 DiscoveredModels = CollectDiscoveredModels()

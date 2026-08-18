@@ -1907,7 +1907,9 @@ namespace OutlookLocalAIChat.UI
                 externalContext,
                 _settings.UseToneProfile
                     ? _settings.ToneProfile
-                    : null);
+                    : null,
+                _settings.ToneStrength,
+                _settings.DraftRules);
             var mailboxTools = new MailboxToolHost(
                 _outlookApplication,
                 selectedMessage,

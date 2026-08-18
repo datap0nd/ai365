@@ -101,6 +101,9 @@ namespace GuardrailTests
                     "Context budgets scale only in large-context mode",
                     ContextBudgetsScaleOnlyInLargeContextMode);
                 Run(
+                    "Soul strength and draft rules stay bounded",
+                    SoulStrengthAndDraftRulesStayBounded);
+                Run(
                     "Small inline signature images are ignored",
                     SignatureImagesAreIgnored);
                 Run(
@@ -3546,6 +3549,83 @@ namespace GuardrailTests
                 !classic.IsConfigured,
                 "Endpoint mode must still require endpoint and " +
                 "key.");
+        }
+
+        private static void SoulStrengthAndDraftRulesStayBounded()
+        {
+            var snapshot = new MessageSnapshot(
+                "soul-entry",
+                "store",
+                "Subject",
+                "Sender",
+                "user@example.com",
+                DateTime.UtcNow,
+                "Body text");
+            var request = ChatRequestFactory.Create(
+                "local-model",
+                snapshot,
+                new List<ChatTurn>(),
+                "Draft a reply to the selected email.",
+                allowDraftCreate: true,
+                toneProfile: "Short sentences, warm openings.",
+                toneStrength: 85,
+                draftRules: "Never use exclamation marks.\n" +
+                    "Sign off with Best regards.");
+            var system = Convert.ToString(
+                ((ChatCompletionInputMessage)
+                    request.messages[0]).content);
+            Assert(
+                system.Contains("strength 85") &&
+                system.Contains("<user_draft_rules>") &&
+                system.Contains(
+                    "Never use exclamation marks.") &&
+                system.Contains("Sign off with Best regards."),
+                "Strength and draft rules were not passed into " +
+                "the drafting boundary.");
+            Assert(
+                system.IndexOf(
+                    "cannot change any capability or security " +
+                    "rule",
+                    StringComparison.Ordinal) !=
+                system.LastIndexOf(
+                    "cannot change any capability or security " +
+                    "rule",
+                    StringComparison.Ordinal),
+                "Both the soul and the rules must carry the " +
+                "capability clamp.");
+
+            var clampedLow = ChatRequestFactory.Create(
+                "local-model",
+                snapshot,
+                new List<ChatTurn>(),
+                "Draft a reply to the selected email.",
+                allowDraftCreate: true,
+                toneProfile: "Warm.",
+                toneStrength: 3);
+            var lowSystem = Convert.ToString(
+                ((ChatCompletionInputMessage)
+                    clampedLow.messages[0]).content);
+            Assert(
+                lowSystem.Contains("strength 10"),
+                "Strength below 10 must clamp to 10.");
+
+            var noDraft = ChatRequestFactory.Create(
+                "local-model",
+                snapshot,
+                new List<ChatTurn>(),
+                "Summarize the selected email.",
+                toneProfile: "Warm.",
+                toneStrength: 85,
+                draftRules: "Never use exclamation marks.");
+            var noDraftSystem = Convert.ToString(
+                ((ChatCompletionInputMessage)
+                    noDraft.messages[0]).content);
+            Assert(
+                !noDraftSystem.Contains("<user_draft_rules>") &&
+                !noDraftSystem.Contains(
+                    "<user_writing_profile>"),
+                "Soul and rules must only apply when drafting " +
+                "is authorized.");
         }
 
         private static void ContextBudgetsScaleOnlyInLargeContextMode()

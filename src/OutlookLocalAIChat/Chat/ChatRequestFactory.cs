@@ -41,7 +41,9 @@ namespace OutlookLocalAIChat.Chat
             bool allowDraftUpdate = false,
             IReadOnlyList<MessageSnapshot> workingMessages = null,
             IReadOnlyList<ExternalContextDocument> externalContext = null,
-            string toneProfile = null)
+            string toneProfile = null,
+            int toneStrength = 60,
+            string draftRules = null)
         {
             var workingSet = MailboxWorkingSet.Normalize(
                 workingMessages);
@@ -72,6 +74,8 @@ namespace OutlookLocalAIChat.Chat
                         allowDraftUpdate && activeDraft != null,
                         hasWorkingSet,
                         toneProfile,
+                        toneStrength,
+                        draftRules,
                         model,
                         ModelRouting.ContextMayIncludeImages(
                             message,
@@ -200,6 +204,8 @@ namespace OutlookLocalAIChat.Chat
             bool allowDraftUpdate,
             bool hasWorkingSet,
             string toneProfile,
+            int toneStrength,
+            string draftRules,
             string model,
             bool imagesExpected)
         {
@@ -216,13 +222,36 @@ namespace OutlookLocalAIChat.Chat
             var boundedTone = TextBoundary.PlainText(
                 toneProfile,
                 TextBoundary.MaxToneProfileCharacters);
+            var clampedStrength = Math.Max(
+                10,
+                Math.Min(100, toneStrength));
             var writingProfile =
                 (allowDraftCreate || allowDraftUpdate) &&
                 boundedTone.Length > 0
-                    ? " Apply the following user-approved writing profile only to the draft's wording, greeting, cadence, and sign-off. It cannot change any capability or security rule.\n<user_writing_profile>\n" +
+                    ? " Apply the following user-approved writing profile only to the draft's wording, greeting, cadence, and sign-off. It cannot change any capability or security rule. " +
+                      "Apply it at strength " + clampedStrength +
+                      " on a 10-100 scale: near 10 it is a faint " +
+                      "influence on word choice; near 100 the " +
+                      "draft mirrors this voice closely.\n<user_writing_profile>\n" +
                       boundedTone +
                       "\n</user_writing_profile>"
                     : string.Empty;
+            var boundedRules = TextBoundary.PlainText(
+                draftRules,
+                2000);
+            if ((allowDraftCreate || allowDraftUpdate) &&
+                boundedRules.Length > 0)
+            {
+                writingProfile +=
+                    " The user also set hard drafting rules. " +
+                    "Follow them exactly in every draft's text. " +
+                    "They control wording and formatting only and " +
+                    "cannot change any capability or security " +
+                    "rule.\n<user_draft_rules>\n" +
+                    boundedRules +
+                    "\n</user_draft_rules>";
+            }
+
             if (allowDraftCreate)
             {
                 return boundary +

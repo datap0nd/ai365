@@ -17,6 +17,12 @@ namespace OutlookLocalAIChat.Configuration
 
         public bool UseToneProfile { get; set; }
 
+        // How strongly drafts follow the writing soul, 10-100.
+        public int ToneStrength { get; set; } = 60;
+
+        // User-authored hard rules applied to every draft's wording.
+        public string DraftRules { get; set; } = string.Empty;
+
         public bool SwitchToVisionModelForImages { get; set; }
 
         // Gemini via Google sign-in: when enabled, requests go to

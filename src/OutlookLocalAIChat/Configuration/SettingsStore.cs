@@ -59,6 +59,16 @@ namespace OutlookLocalAIChat.Configuration
                         stored.ToneProfile,
                         TextBoundary.MaxToneProfileCharacters),
                     UseToneProfile = stored.UseToneProfile,
+                    ToneStrength = Math.Max(
+                        10,
+                        Math.Min(
+                            100,
+                            stored.ToneStrength == 0
+                                ? 60
+                                : stored.ToneStrength)),
+                    DraftRules = TextBoundary.PlainText(
+                        stored.DraftRules,
+                        2000),
                     SwitchToVisionModelForImages =
                         stored.SwitchToVisionModelForImages,
                     DiscoveredModels = NormalizeDiscoveredModels(
@@ -127,6 +137,12 @@ namespace OutlookLocalAIChat.Configuration
                     TextBoundary.MaxToneProfileCharacters),
                 UseToneProfile = settings.UseToneProfile &&
                     !string.IsNullOrWhiteSpace(settings.ToneProfile),
+                ToneStrength = Math.Max(
+                    10,
+                    Math.Min(100, settings.ToneStrength)),
+                DraftRules = TextBoundary.PlainText(
+                    settings.DraftRules,
+                    2000),
                 SwitchToVisionModelForImages =
                     settings.SwitchToVisionModelForImages,
                 DiscoveredModels = NormalizeDiscoveredModels(
@@ -194,6 +210,10 @@ namespace OutlookLocalAIChat.Configuration
             public string ToneProfile { get; set; }
 
             public bool UseToneProfile { get; set; }
+
+            public int ToneStrength { get; set; }
+
+            public string DraftRules { get; set; }
 
             public bool SwitchToVisionModelForImages { get; set; }
 

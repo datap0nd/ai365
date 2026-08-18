@@ -161,12 +161,23 @@ remain in memory until cleared or Outlook closes. `/search clear` removes the
 email working set but retains external files. **Clear** removes all context, and
 **New** starts a new conversation with no retained context.
 
-Writing-style analysis never runs automatically. It requires a click in
-Settings, reads at most 15 recent usable Sent Items messages, removes obvious
-quoted history, and sends bounded samples to the configured AI endpoint. The
-result is visible and editable before saving. It is included only in draft
-creation and revision requests, and only for wording, greeting, cadence, and
-sign-off. It cannot alter any capability or security rule.
+Settings is organized into four tabs: **Connection** (endpoint, model, API
+key, updates), **Gemini** (Google sign-in with a responsible-use notice —
+cloud processing under your account; follow your organization's
+confidential-data policies), **Writing soul**, and **Support** (describe a
+problem and MetoAI opens a pre-filled, unsent report email to the creator
+with the recent diagnostic log — timestamps, operations, and error codes
+only — for you to review and send yourself).
+
+The **writing soul** is a small, editable portrait of how you write.
+Analysis never runs automatically: it requires a click, reads at most 15
+recent usable Sent Items messages, removes obvious quoted history, and
+sends bounded samples to the configured AI endpoint. The result is visible
+and editable before saving. A **soul strength** slider (10–100) controls
+how strongly drafts follow your voice, and **hard draft rules** (one per
+line) are followed exactly in every draft. Soul, strength, and rules apply
+only to draft creation and revision, and only to wording, greeting,
+cadence, and sign-off. They cannot alter any capability or security rule.
 
 ## Hard security boundary
 
