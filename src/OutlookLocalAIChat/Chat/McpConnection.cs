@@ -55,7 +55,7 @@ namespace OutlookLocalAIChat.Chat
         private readonly StringBuilder _stderrTail =
             new StringBuilder();
         private Process _process;
-        private Stream _stdinStream;
+        private StreamWriter _stdin;
         private StreamReader _stdout;
         private string _httpSessionId = string.Empty;
         private bool _initialized;
@@ -322,12 +322,16 @@ namespace OutlookLocalAIChat.Chat
                     "The MCP server process could not be started.");
             }
 
-            // Requests are written as raw ASCII bytes straight to
-            // the pipe: a StreamWriter would emit an encoding
-            // preamble (BOM) before the first line, which strict
-            // JSON-RPC servers reject. The wire is pure ASCII
-            // because the serializer escapes non-ASCII characters.
-            _stdinStream = _process.StandardInput.BaseStream;
+            // Only the built-in standard-input writer reliably
+            // delivers to the child (verified empirically: raw
+            // writes to its BaseStream never arrive). Its first
+            // write emits an encoding preamble (BOM), which strict
+            // JSON-RPC servers reject when glued to a message - so
+            // the preamble is flushed inside a discardable blank
+            // line first, and every real message starts clean.
+            _stdin = _process.StandardInput;
+            _stdin.AutoFlush = true;
+            _stdin.WriteLine();
             _stdout = _process.StandardOutput;
             // Drain stderr so a chatty server can never block,
             // keeping a bounded tail for diagnostics.
@@ -375,15 +379,8 @@ namespace OutlookLocalAIChat.Chat
             }
 
             _process = null;
-            _stdinStream = null;
+            _stdin = null;
             _stdout = null;
-        }
-
-        private void WriteLineAscii(string line)
-        {
-            var bytes = Encoding.ASCII.GetBytes(line + "\n");
-            _stdinStream.Write(bytes, 0, bytes.Length);
-            _stdinStream.Flush();
         }
 
         private void Notify(string method)
@@ -409,7 +406,7 @@ namespace OutlookLocalAIChat.Chat
                 return;
             }
 
-            WriteLineAscii(_serializer.Serialize(message));
+            _stdin.WriteLine(_serializer.Serialize(message));
         }
 
         private IDictionary<string, object> Request(
@@ -463,7 +460,7 @@ namespace OutlookLocalAIChat.Chat
             int id,
             int timeoutMs)
         {
-            WriteLineAscii(requestJson);
+            _stdin.WriteLine(requestJson);
             var reader = _stdout;
             // Lines the server wrote that are not our response are
             // skipped, but a bounded sample is kept so a protocol
