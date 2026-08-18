@@ -302,6 +302,9 @@ namespace OutlookLocalAIChat.Chat
                 return;
             }
 
+            // Canonical redirection only: the JSON-RPC wire stays
+            // pure ASCII because the serializer escapes non-ASCII
+            // characters, so no custom stream encoding is needed.
             var info = new ProcessStartInfo
             {
                 FileName = _config.Target,
@@ -310,9 +313,7 @@ namespace OutlookLocalAIChat.Chat
                 CreateNoWindow = true,
                 RedirectStandardInput = true,
                 RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                StandardOutputEncoding =
-                    new UTF8Encoding(false)
+                RedirectStandardError = true
             };
             _process = Process.Start(info);
             if (_process == null)
@@ -321,12 +322,8 @@ namespace OutlookLocalAIChat.Chat
                     "The MCP server process could not be started.");
             }
 
-            _stdin = new StreamWriter(
-                _process.StandardInput.BaseStream,
-                new UTF8Encoding(false))
-            {
-                AutoFlush = true
-            };
+            _stdin = _process.StandardInput;
+            _stdin.AutoFlush = true;
             _stdout = _process.StandardOutput;
             // Drain stderr so a chatty server can never block,
             // keeping a bounded tail for diagnostics.

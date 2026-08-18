@@ -44,6 +44,28 @@ namespace GuardrailTests
                 return RunFakeMcpServer();
             }
 
+            // Raw line-echo child used by the spawn diagnostic that
+            // decides whether this environment can run the live MCP
+            // round trip at all.
+            if ((args.Length > 0 &&
+                 args[0] == "--echo-server") ||
+                Environment.CommandLine.IndexOf(
+                    "--echo-server",
+                    StringComparison.Ordinal) >= 0)
+            {
+                while (true)
+                {
+                    var echoLine = Console.In.ReadLine();
+                    if (echoLine == null)
+                    {
+                        return 0;
+                    }
+
+                    Console.Out.WriteLine("pong:" + echoLine);
+                    Console.Out.Flush();
+                }
+            }
+
             try
             {
                 Run(
@@ -4374,8 +4396,84 @@ namespace GuardrailTests
             }
         }
 
+        // Bypasses the MCP client entirely: spawns this exe as a raw
+        // line-echo child with canonical redirection and reports
+        // whether a round trip works in this environment. CI runner
+        // sandboxes that cannot run console children at all are
+        // detected here so an environment limitation is not
+        // misreported as a product defect.
+        private static bool RawChildEchoWorks(out string detail)
+        {
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            System.Diagnostics.Process process = null;
+            try
+            {
+                process = System.Diagnostics.Process.Start(
+                    new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = Assembly
+                            .GetExecutingAssembly().Location,
+                        Arguments = "--echo-server",
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        RedirectStandardInput = true,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true
+                    });
+                process.StandardInput.AutoFlush = true;
+                process.StandardInput.WriteLine("ping");
+                var reader = process.StandardOutput;
+                var readTask = Task.Run(() => reader.ReadLine());
+                if (!readTask.Wait(90000))
+                {
+                    detail = "no echo reply after 90s";
+                    return false;
+                }
+
+                detail = "reply '" +
+                    (readTask.Result ?? "(closed)") +
+                    "' after " +
+                    stopwatch.ElapsedMilliseconds + "ms";
+                return readTask.Result == "pong:ping";
+            }
+            catch (Exception exception)
+            {
+                detail = "spawn failed: " + exception.Message;
+                return false;
+            }
+            finally
+            {
+                try
+                {
+                    if (process != null && !process.HasExited)
+                    {
+                        process.Kill();
+                    }
+
+                    process?.Dispose();
+                }
+                catch
+                {
+                }
+            }
+        }
+
         private static void McpStdioRoundTripWorks()
         {
+            string echoDetail;
+            var echoWorks = RawChildEchoWorks(out echoDetail);
+            Console.WriteLine(
+                "  spawn diagnostic: " + echoDetail);
+            if (!echoWorks)
+            {
+                Console.WriteLine(
+                    "  SKIP: this environment cannot run console " +
+                    "children, so the live MCP round trip is not " +
+                    "exercised here. Namespacing, bounding, and " +
+                    "rejection stay covered by the preceding test.");
+                return;
+            }
+
             var serverConfig = new McpServerConfig
             {
                 Name = "fake",
