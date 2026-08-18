@@ -3415,6 +3415,27 @@ namespace GuardrailTests
                 GeminiCodeAssistGateway.ParseRetryDelaySeconds(
                     "no hint here") == 0,
                 "Retry delay parsing failed.");
+
+            Assert(
+                GeminiCodeAssistGateway.MaxRetryAttempts == 10 &&
+                GeminiCodeAssistGateway.ComputeRetryDelaySeconds(
+                    0, string.Empty, 0) == 5 &&
+                GeminiCodeAssistGateway.ComputeRetryDelaySeconds(
+                    3, string.Empty, 0) == 30 &&
+                GeminiCodeAssistGateway.ComputeRetryDelaySeconds(
+                    0, "reset after 56s", 0) == 56 &&
+                GeminiCodeAssistGateway.ComputeRetryDelaySeconds(
+                    0, string.Empty, 1.0) == 6,
+                "Retry backoff policy is wrong.");
+            Assert(
+                GeminiCodeAssistGateway.FallbackModelFor(
+                    "gemini-2.5-pro", 3) ==
+                "gemini-2.5-flash" &&
+                GeminiCodeAssistGateway.FallbackModelFor(
+                    "gemini-2.5-pro", 2) == null &&
+                GeminiCodeAssistGateway.FallbackModelFor(
+                    "gemini-2.5-flash", 5) == null,
+                "Model fallback policy is wrong.");
         }
 
         private static void GeminiSignInSettingsAreModeAware()

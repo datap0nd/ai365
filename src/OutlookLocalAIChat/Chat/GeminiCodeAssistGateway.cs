@@ -83,6 +83,114 @@ namespace OutlookLocalAIChat.Chat
         // so slowness is never a mystery.
         public Action<string> StatusListener { get; set; }
 
+        // Retry policy mirroring the Gemini CLI: up to ten attempts
+        // per request, exponential backoff (5s doubling to a 30s
+        // cap) with jitter, the server's retry hint honored when
+        // longer, and a persistent-429 fallback from pro to flash
+        // that sticks for the rest of the session.
+        public const int MaxRetryAttempts = 10;
+        private readonly Random _retryJitter = new Random();
+        private bool _fallbackToFlash;
+        private bool _fallbackNoticeShown;
+
+        public static int ComputeRetryDelaySeconds(
+            int attempt,
+            string body,
+            double jitter01)
+        {
+            var backoff = Math.Min(30, 5 << Math.Min(attempt, 3));
+            var hint = ParseRetryDelaySeconds(body);
+            var delay = Math.Min(90, Math.Max(backoff, hint));
+            return delay +
+                (int)(delay * 0.2 *
+                      Math.Max(0.0, Math.Min(1.0, jitter01)));
+        }
+
+        // After a few exhausted attempts on the pro model the CLI
+        // downgrades to flash and carries on; flash and flash-lite
+        // have no lower tier and just keep retrying.
+        public static string FallbackModelFor(
+            string model,
+            int attempt)
+        {
+            var name = (model ?? string.Empty).ToLowerInvariant();
+            return attempt >= 3 &&
+                   name.IndexOf(
+                       "gemini",
+                       StringComparison.Ordinal) >= 0 &&
+                   name.IndexOf(
+                       "pro",
+                       StringComparison.Ordinal) >= 0
+                ? "gemini-2.5-flash"
+                : null;
+        }
+
+        private string EffectiveModel(string model)
+        {
+            var normalized = NormalizeModel(model);
+            if (_fallbackToFlash &&
+                normalized.ToLowerInvariant().IndexOf(
+                    "pro",
+                    StringComparison.Ordinal) >= 0)
+            {
+                if (!_fallbackNoticeShown)
+                {
+                    _fallbackNoticeShown = true;
+                    StatusListener?.Invoke(
+                        "gemini-2.5-pro is at capacity - using " +
+                        "gemini-2.5-flash for this session");
+                }
+
+                return "gemini-2.5-flash";
+            }
+
+            return normalized;
+        }
+
+        // Central 429 policy for generateContent. Returns true when
+        // the caller should retry (after any wait), false when the
+        // attempts are exhausted and the caller should fail.
+        private async Task<bool> HandleCapacityAsync(
+            IDictionary<string, object> envelope,
+            int attempt,
+            string body,
+            CancellationToken cancellationToken)
+        {
+            if (attempt >= MaxRetryAttempts - 1)
+            {
+                return false;
+            }
+
+            var fallback = _fallbackToFlash
+                ? null
+                : FallbackModelFor(
+                    Convert.ToString(envelope["model"]),
+                    attempt);
+            if (fallback != null)
+            {
+                _fallbackToFlash = true;
+                _fallbackNoticeShown = true;
+                envelope["model"] = fallback;
+                StatusListener?.Invoke(
+                    "gemini-2.5-pro is at capacity - switching " +
+                    "to " + fallback);
+                return true;
+            }
+
+            var delay = ComputeRetryDelaySeconds(
+                attempt,
+                body,
+                _retryJitter.NextDouble());
+            StatusListener?.Invoke(
+                "Gemini is at capacity - retry " +
+                (attempt + 1) + " of " + MaxRetryAttempts +
+                " in " + delay + "s");
+            await Task.Delay(
+                TimeSpan.FromSeconds(delay),
+                cancellationToken).ConfigureAwait(true);
+            return true;
+        }
+
         public static string CredentialsPath
         {
             get
@@ -559,7 +667,7 @@ namespace OutlookLocalAIChat.Chat
                 cancellationToken).ConfigureAwait(true);
             var envelope = new Dictionary<string, object>
             {
-                { "model", NormalizeModel(requestModel.model) },
+                { "model", EffectiveModel(requestModel.model) },
                 { "project", project },
                 {
                     "request",
@@ -568,12 +676,35 @@ namespace OutlookLocalAIChat.Chat
                         _thoughtSignatures)
                 }
             };
-            var root = await PostJsonAsync(
-                httpClient,
-                settings,
-                ":generateContent",
-                envelope,
-                cancellationToken).ConfigureAwait(true);
+            IDictionary<string, object> root = null;
+            for (var attempt = 0;
+                 attempt < MaxRetryAttempts;
+                 attempt++)
+            {
+                try
+                {
+                    root = await PostJsonAsync(
+                        httpClient,
+                        settings,
+                        ":generateContent",
+                        envelope,
+                        cancellationToken).ConfigureAwait(true);
+                    break;
+                }
+                catch (AiEndpointException exception)
+                    when (exception.HttpStatus == 429)
+                {
+                    if (!await HandleCapacityAsync(
+                        envelope,
+                        attempt,
+                        exception.ResponseSnippet,
+                        cancellationToken).ConfigureAwait(true))
+                    {
+                        throw;
+                    }
+                }
+            }
+
             object responseValue = null;
             root?.TryGetValue("response", out responseValue);
             if (_thoughtSignatures.Count > 500)
@@ -614,7 +745,7 @@ namespace OutlookLocalAIChat.Chat
                 cancellationToken).ConfigureAwait(true);
             var envelope = new Dictionary<string, object>
             {
-                { "model", NormalizeModel(requestModel.model) },
+                { "model", EffectiveModel(requestModel.model) },
                 { "project", project },
                 {
                     "request",
@@ -623,9 +754,11 @@ namespace OutlookLocalAIChat.Chat
                         _thoughtSignatures)
                 }
             };
-            var json = _serializer.Serialize(envelope);
-            for (var attempt = 0; ; attempt++)
+            for (var attempt = 0;
+                 attempt < MaxRetryAttempts;
+                 attempt++)
             {
+                var json = _serializer.Serialize(envelope);
                 var token = await GetAccessTokenAsync(
                     httpClient,
                     settings,
@@ -661,34 +794,25 @@ namespace OutlookLocalAIChat.Chat
                                 .ConfigureAwait(true);
                             var status =
                                 (int)response.StatusCode;
-                            if (status == 429 && attempt == 0)
-                            {
-                                var delaySeconds =
-                                    ParseRetryDelaySeconds(body);
-                                if (delaySeconds > 0 &&
-                                    delaySeconds <= 90)
-                                {
-                                    StatusListener?.Invoke(
-                                        "Gemini quota reached - " +
-                                        "retrying in " +
-                                        delaySeconds + "s");
-                                    await Task.Delay(
-                                        TimeSpan.FromSeconds(
-                                            delaySeconds + 1),
-                                        cancellationToken)
-                                        .ConfigureAwait(true);
-                                    continue;
-                                }
-                            }
-
                             if (status == 429)
                             {
+                                if (await HandleCapacityAsync(
+                                    envelope,
+                                    attempt,
+                                    body,
+                                    cancellationToken)
+                                    .ConfigureAwait(true))
+                                {
+                                    continue;
+                                }
+
                                 throw new AiEndpointException(
                                     "GEMINI_RATE_LIMITED",
                                     "The Gemini quota for this " +
-                                    "model is exhausted right " +
-                                    "now. Wait a minute and try " +
-                                    "again, or switch to " +
+                                    "model stayed exhausted " +
+                                    "through " + MaxRetryAttempts +
+                                    " retries. Wait a few minutes " +
+                                    "and try again, or switch to " +
                                     "gemini-2.5-flash.",
                                     httpStatus: status,
                                     responseSnippet: body);
@@ -733,6 +857,12 @@ namespace OutlookLocalAIChat.Chat
                     }
                 }
             }
+
+            throw new AiEndpointException(
+                "GEMINI_RATE_LIMITED",
+                "The Gemini quota stayed exhausted through " +
+                MaxRetryAttempts + " retries. Wait a few minutes " +
+                "and try again.");
         }
 
         private async Task<ChatCompletionResponseMessage>
