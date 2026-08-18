@@ -99,6 +99,8 @@ namespace OutlookLocalAIChat.UI
         private DateTime _statusChangedAt = DateTime.UtcNow;
         private readonly List<string> _transcriptEvents =
             new List<string>();
+        private readonly DiagnosticsRecorder _diagnostics =
+            new DiagnosticsRecorder();
         private readonly WebView2 _webView = new WebView2();
 
         private object _outlookApplication;
@@ -380,6 +382,9 @@ namespace OutlookLocalAIChat.UI
                         break;
                     case "addShared":
                         HandleAddShared();
+                        break;
+                    case "copyDiag":
+                        HandleCopyDiagnostics();
                         break;
                 }
             }
@@ -1872,6 +1877,11 @@ namespace OutlookLocalAIChat.UI
                     DraftIntentPolicy.AllowsCreate(prompt),
                     hasLinkedDraft &&
                     DraftIntentPolicy.AllowsUpdate(prompt));
+            _diagnostics.BeginRequest(
+                "Outlook",
+                _settings.Model,
+                draftAuthorization.CanCreate ||
+                draftAuthorization.CanUpdate);
             AppendUserTurn(prompt);
             SetBusy(true);
             _requestStartedAt = DateTime.UtcNow;
@@ -1906,10 +1916,14 @@ namespace OutlookLocalAIChat.UI
                     SetStatus(
                         "Draft created - unsent, open for review",
                         false);
+                    _diagnostics.CompleteRequest(
+                        "Done - draft created");
                 }
                 else if (draftAuthorization.IsUpdated)
                 {
                     SetStatus("Draft updated", false);
+                    _diagnostics.CompleteRequest(
+                        "Done - draft updated");
                 }
                 else if (draftAuthorization.IsConsumed)
                 {
@@ -1918,10 +1932,14 @@ namespace OutlookLocalAIChat.UI
                             ? "Draft update did not complete"
                             : "Draft creation did not complete",
                         true);
+                    _diagnostics.CompleteRequest(
+                        "Draft attempt consumed but not completed");
                 }
                 else if (draftAuthorization.CanCreate)
                 {
                     SetStatus("No draft was created", false);
+                    _diagnostics.CompleteRequest(
+                        "Done - no draft was created");
                 }
                 else
                 {
@@ -1930,10 +1948,12 @@ namespace OutlookLocalAIChat.UI
                             ? "Done - draft unchanged"
                             : "Done",
                         false);
+                    _diagnostics.CompleteRequest("Done");
                 }
             }
             catch (OperationCanceledException)
             {
+                _diagnostics.CompleteRequest("Stopped by user");
                 PostToWeb(new Dictionary<string, object>
                 {
                     { "type", "restorePrompt" },
@@ -1947,6 +1967,8 @@ namespace OutlookLocalAIChat.UI
             catch (Exception exception)
             {
                 Log.Error("CompleteMailboxChat", exception);
+                _diagnostics.CompleteRequest(
+                    "Failed: " + FirstLine(exception.Message));
                 if (generation == _requestGeneration)
                 {
                     var details = DiagnosticDetails.ForException(
@@ -2048,6 +2070,15 @@ namespace OutlookLocalAIChat.UI
                 _settings.ToneStrength,
                 _settings.DraftRules,
                 mcpTools);
+            var exposedNames = new List<string>();
+            foreach (var tool in request.tools)
+            {
+                exposedNames.Add(tool.function.name);
+            }
+
+            _diagnostics.SetExposedTools(exposedNames);
+            _diagnostics.RecordEvent(
+                "resolved model: " + activeModel);
             var mailboxTools = new MailboxToolHost(
                 _outlookApplication,
                 selectedMessage,
@@ -2152,6 +2183,10 @@ namespace OutlookLocalAIChat.UI
                         result = mailboxTools.Execute(toolCall);
                     }
                     results.Add(result);
+                    _diagnostics.RecordEvent(
+                        "tool " +
+                        (toolCall?.function?.name ?? "(null)") +
+                        " -> " + result.StatusText);
                     if (isDraftCall)
                     {
                         AppendDraftAction(result.StatusText);
@@ -2278,6 +2313,28 @@ namespace OutlookLocalAIChat.UI
                         "Settings saved - " + _settings.Model,
                         false);
                 }
+            }
+        }
+
+        // Copies the bounded per-request diagnostics record to the
+        // clipboard so a misbehaving request can be reported
+        // precisely. Contains no keys, settings, or message bodies.
+        private void HandleCopyDiagnostics()
+        {
+            try
+            {
+                Clipboard.SetText(_diagnostics.BuildReport(
+                    "AI365 Outlook pane"));
+                SetStatus(
+                    "Diagnostics copied to the clipboard",
+                    false);
+            }
+            catch (Exception exception)
+            {
+                Log.Error("CopyDiagnostics", exception);
+                SetStatus(
+                    "Could not copy diagnostics",
+                    true);
             }
         }
 

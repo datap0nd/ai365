@@ -84,6 +84,8 @@ namespace OutlookLocalAIChat.UI
             new List<ExternalImageContext>();
         private readonly List<string> _transcriptEvents =
             new List<string>();
+        private readonly DiagnosticsRecorder _diagnostics =
+            new DiagnosticsRecorder();
         private readonly System.Windows.Forms.Timer _elapsedTimer =
             new System.Windows.Forms.Timer
             {
@@ -362,6 +364,9 @@ namespace OutlookLocalAIChat.UI
                         break;
                     case "addShared":
                         HandleAddShared();
+                        break;
+                    case "copyDiag":
+                        HandleCopyDiagnostics();
                         break;
                 }
             }
@@ -1169,6 +1174,10 @@ namespace OutlookLocalAIChat.UI
                 new OneShotDraftAuthorization(
                     DocumentDraftIntentPolicy.AllowsDraft(prompt),
                     false);
+            _diagnostics.BeginRequest(
+                HostName,
+                _settings.Model,
+                draftAuthorization.CanCreate);
             AppendUserTurn(prompt);
             SetBusy(true);
             _requestStartedAt = DateTime.UtcNow;
@@ -1200,20 +1209,26 @@ namespace OutlookLocalAIChat.UI
                         "Draft ready - unsaved and unsent, " +
                         "open for review",
                         false);
+                    _diagnostics.CompleteRequest(
+                        "Done - draft created");
                 }
                 else if (draftAuthorization.IsConsumed)
                 {
                     SetStatus(
                         "The draft attempt did not complete",
                         true);
+                    _diagnostics.CompleteRequest(
+                        "Draft attempt consumed but not completed");
                 }
                 else
                 {
                     SetStatus("Done", false);
+                    _diagnostics.CompleteRequest("Done");
                 }
             }
             catch (OperationCanceledException)
             {
+                _diagnostics.CompleteRequest("Stopped by user");
                 PostToWeb(new Dictionary<string, object>
                 {
                     { "type", "restorePrompt" },
@@ -1227,6 +1242,8 @@ namespace OutlookLocalAIChat.UI
             catch (Exception exception)
             {
                 Log.Error("CompleteDocumentChat", exception);
+                _diagnostics.CompleteRequest(
+                    "Failed: " + FirstLine(exception.Message));
                 if (generation == _requestGeneration)
                 {
                     var details = DiagnosticDetails.ForException(
@@ -1319,6 +1336,15 @@ namespace OutlookLocalAIChat.UI
                 draftAuthorization.CanCreate,
                 externalContext,
                 mcpTools);
+            var exposedNames = new List<string>();
+            foreach (var tool in request.tools)
+            {
+                exposedNames.Add(tool.function.name);
+            }
+
+            _diagnostics.SetExposedTools(exposedNames);
+            _diagnostics.RecordEvent(
+                "resolved model: " + activeModel);
             if (externalImages.Count > 0)
             {
                 VisionAttachmentExchange.AppendVisionContext(
@@ -1415,6 +1441,9 @@ namespace OutlookLocalAIChat.UI
                     }
 
                     results.Add(result);
+                    _diagnostics.RecordEvent(
+                        "tool " + (name ?? "(null)") + " -> " +
+                        result.StatusText);
                     if (isDraftCall)
                     {
                         AppendDraftAction(result.StatusText);
@@ -1494,6 +1523,28 @@ namespace OutlookLocalAIChat.UI
             {
                 Log.Error("OfficeSwitchModel", exception);
                 SetStatus("The model change was not saved", true);
+            }
+        }
+
+        // Copies the bounded per-request diagnostics record to the
+        // clipboard so a misbehaving request can be reported
+        // precisely. Contains no keys, settings, or message bodies.
+        private void HandleCopyDiagnostics()
+        {
+            try
+            {
+                Clipboard.SetText(_diagnostics.BuildReport(
+                    "AI365 " + HostName + " pane"));
+                SetStatus(
+                    "Diagnostics copied to the clipboard",
+                    false);
+            }
+            catch (Exception exception)
+            {
+                Log.Error("OfficeCopyDiagnostics", exception);
+                SetStatus(
+                    "Could not copy diagnostics",
+                    true);
             }
         }
 

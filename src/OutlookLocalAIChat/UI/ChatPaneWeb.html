@@ -550,6 +550,7 @@
     <button id="menuAddFiles">&#128206;&#xFE0E;&nbsp; Add files or pictures</button>
     <button id="menuShare">&#8644;&#xFE0E;&nbsp; Share last answer to AI365 apps</button>
     <button id="menuAddShared">&#8645;&#xFE0E;&nbsp; Add shared AI365 context</button>
+    <button id="menuCopyDiag">&#9741;&#xFE0E;&nbsp; Copy diagnostics</button>
   </div>
   <div id="composerCard">
     <button id="btnPlus" title="Add emails, files, or pictures to the context">+</button>
@@ -1374,6 +1375,11 @@
     .addEventListener("click", function () {
       closePlusMenu();
       post("addShared");
+    });
+  document.getElementById("menuCopyDiag")
+    .addEventListener("click", function () {
+      closePlusMenu();
+      post("copyDiag");
     });
 
   // Drag-and-drop: the drop gesture is forwarded to the host. Outlook
