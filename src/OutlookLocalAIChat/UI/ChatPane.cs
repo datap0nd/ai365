@@ -508,11 +508,20 @@ namespace OutlookLocalAIChat.UI
                 });
             }
 
+            // The page renders the bounded raw markdown (tables,
+            // lists, code) as safe DOM nodes; the plain text plus
+            // bold ranges remain the fallback path.
             PostTranscript(new Dictionary<string, object>
             {
                 { "type", "assistant" },
                 { "text", formatted.PlainText },
-                { "bold", ranges }
+                { "bold", ranges },
+                {
+                    "md",
+                    TextBoundary.PlainText(
+                        text,
+                        TextBoundary.MaxAssistantCharacters)
+                }
             });
         }
 

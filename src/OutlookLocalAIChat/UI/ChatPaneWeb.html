@@ -274,17 +274,98 @@
     padding: 6px 10px;
     white-space: pre-wrap;
   }
-  #typing { display: none; gap: 4px; padding: 4px 2px; }
+  #typing { display: none; align-items: flex-end; gap: 8px; padding: 4px 2px; }
   #typing.on { display: flex; }
-  #typing span {
+  #typing .dots { display: flex; gap: 4px; padding-bottom: 6px; }
+  #typing .dots span {
     width: 6px;
     height: 6px;
     border-radius: 50%;
     background: var(--dim);
     animation: pulse 1.2s infinite ease-in-out;
   }
-  #typing span:nth-child(2) { animation-delay: 0.18s; }
-  #typing span:nth-child(3) { animation-delay: 0.36s; }
+  #typing .dots span:nth-child(2) { animation-delay: 0.18s; }
+  #typing .dots span:nth-child(3) { animation-delay: 0.36s; }
+  #typing canvas {
+    image-rendering: pixelated;
+    animation: palbob 1.1s infinite ease-in-out;
+  }
+  @keyframes palbob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-2px); }
+  }
+
+  /* Rich assistant output: markdown blocks built as DOM nodes only. */
+  .msg .body.md { white-space: normal; }
+  .md p { white-space: pre-wrap; margin: 0 0 8px; }
+  .md p:last-child { margin-bottom: 0; }
+  .md h1, .md h2, .md h3, .md h4 {
+    margin: 10px 0 6px;
+    line-height: 1.3;
+    font-weight: 700;
+  }
+  .md h1 { font-size: 16px; }
+  .md h2 { font-size: 14.5px; }
+  .md h3 { font-size: 13.5px; }
+  .md h4 { font-size: 13px; color: var(--dim); }
+  .md ul, .md ol { margin: 0 0 8px; padding-left: 22px; }
+  .md li { margin: 2px 0; white-space: pre-wrap; }
+  .md ul ul, .md ol ol, .md ul ol, .md ol ul { margin-bottom: 0; }
+  .md blockquote {
+    margin: 0 0 8px;
+    padding: 4px 10px;
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    border-radius: 0 8px 8px 0;
+    white-space: pre-wrap;
+  }
+  .md hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 10px 0;
+  }
+  .md code {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 0 4px;
+    font: 12px/1.5 Consolas, "Cascadia Mono", monospace;
+  }
+  .md pre {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin: 0 0 8px;
+    overflow-x: auto;
+    font: 12px/1.5 Consolas, "Cascadia Mono", monospace;
+    white-space: pre;
+  }
+  .md pre code { background: none; border: none; padding: 0; }
+  .md .tblwrap { overflow-x: auto; margin: 0 0 8px; }
+  .md table {
+    border-collapse: collapse;
+    font-size: 12.5px;
+    min-width: 60%;
+  }
+  .md th, .md td {
+    border: 1px solid var(--border);
+    padding: 4px 9px;
+    text-align: left;
+    vertical-align: top;
+  }
+  .md th {
+    background: var(--card);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .md tr:nth-child(even) td { background: rgba(255, 255, 255, 0.02); }
+  .md .mlink {
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: help;
+  }
 
   footer {
     flex-shrink: 0;
@@ -513,13 +594,109 @@
     chat.scrollTop = chat.scrollHeight;
   }
 
+  // Pixel pal: a little sprite that works away while the model
+  // thinks. Pure canvas pixels — no external assets, no HTML from
+  // dynamic text.
+  var palTimer = null;
+  var palFrame = 0;
+  var palCanvas = null;
+  var PAL_SCALE = 4;
+  var palColors = {
+    B: "#5c8fff", D: "#3f6cd1", W: "#ffffff", K: "#22242a",
+    Y: "#f5c451", G: "#3ddc97", M: "#6a6b72"
+  };
+  var palFrames = [
+    [
+      "......Y......",
+      "......D......",
+      "..BBBBBBBBB..",
+      "..BWWBBBWWB..",
+      "..BWKBBBKWB..",
+      "..BBBBBBBBB..",
+      "...BDDDDDB...",
+      "....BBBBB....",
+      "..B..BBB..B..",
+      "..BB.....BB..",
+      "...MMMMMMM...",
+      "..MMMMMMMMM.."
+    ],
+    [
+      "......G......",
+      "......D......",
+      "..BBBBBBBBB..",
+      "..BWWBBBWWB..",
+      "..BWKBBBKWB..",
+      "..BBBBBBBBB..",
+      "...BDDDDDB...",
+      "....BBBBB....",
+      ".....BBB.....",
+      "..BB.....BB..",
+      "..BMMMMMMMB..",
+      "..MMMMMMMMM.."
+    ],
+    [
+      "......Y......",
+      "......D......",
+      "..BBBBBBBBB..",
+      "..BBBBBBBBB..",
+      "..BDBBBBBDB..",
+      "..BBBBBBBBB..",
+      "...BDDDDDB...",
+      "....BBBBB....",
+      "..B..BBB..B..",
+      "..BB.....BB..",
+      "...MMMMMMM...",
+      "..MMMMMMMMM.."
+    ]
+  ];
+  var palCycle = [0, 1, 0, 2, 1];
+
+  function drawPal(frameIndex) {
+    if (!palCanvas) { return; }
+    var rows = palFrames[palCycle[frameIndex % palCycle.length]];
+    var ctx = palCanvas.getContext("2d");
+    ctx.clearRect(0, 0, palCanvas.width, palCanvas.height);
+    for (var y = 0; y < rows.length; y++) {
+      for (var x = 0; x < rows[y].length; x++) {
+        var color = palColors[rows[y].charAt(x)];
+        if (!color) { continue; }
+        ctx.fillStyle = color;
+        ctx.fillRect(
+          x * PAL_SCALE, y * PAL_SCALE, PAL_SCALE, PAL_SCALE);
+      }
+    }
+  }
+
+  function startPal() {
+    if (palTimer) { return; }
+    palFrame = 0;
+    drawPal(0);
+    palTimer = setInterval(function () {
+      palFrame++;
+      drawPal(palFrame);
+    }, 260);
+  }
+
+  function stopPal() {
+    if (palTimer) {
+      clearInterval(palTimer);
+      palTimer = null;
+    }
+  }
+
   function ensureTyping() {
     if (!typing) {
       typing = el("div", "");
       typing.id = "typing";
-      typing.appendChild(el("span"));
-      typing.appendChild(el("span"));
-      typing.appendChild(el("span"));
+      palCanvas = document.createElement("canvas");
+      palCanvas.width = 13 * PAL_SCALE;
+      palCanvas.height = 12 * PAL_SCALE;
+      typing.appendChild(palCanvas);
+      var dots = el("div", "dots");
+      dots.appendChild(el("span"));
+      dots.appendChild(el("span"));
+      dots.appendChild(el("span"));
+      typing.appendChild(dots);
     }
     chat.appendChild(typing);
   }
@@ -535,7 +712,226 @@
     scrollDown();
   }
 
-  function addAssistant(text, ranges) {
+  // ------------------------------------------------------------------
+  // Rich text rendering. Markdown from the model is parsed locally and
+  // built exclusively out of createElement/textContent DOM nodes, so
+  // model output is never interpreted as HTML. Links never navigate:
+  // they render as styled text with the URL shown on hover.
+  // ------------------------------------------------------------------
+
+  function appendInline(text, node) {
+    var remaining = text;
+    var pattern = new RegExp(
+      "(`[^`\\n]+`)" +
+      "|(\\*\\*[^*\\s](?:[^*\\n]|\\*(?!\\*))*?\\*\\*)" +
+      "|(__[^_\\s](?:[^_\\n]|_(?!_))*?__)" +
+      "|(\\*[^*\\s][^*\\n]*?\\*)" +
+      "|(\\[[^\\]\\n]+\\]\\([^)\\s]+\\))");
+    while (remaining) {
+      var match = pattern.exec(remaining);
+      if (!match) {
+        node.appendChild(document.createTextNode(remaining));
+        return;
+      }
+      if (match.index > 0) {
+        node.appendChild(
+          document.createTextNode(remaining.slice(0, match.index)));
+      }
+      var token = match[0];
+      if (match[1]) {
+        var code = document.createElement("code");
+        code.textContent = token.slice(1, -1);
+        node.appendChild(code);
+      } else if (match[2] || match[3]) {
+        var strong = document.createElement("strong");
+        appendInline(token.slice(2, -2), strong);
+        node.appendChild(strong);
+      } else if (match[4]) {
+        var em = document.createElement("em");
+        em.textContent = token.slice(1, -1);
+        node.appendChild(em);
+      } else {
+        var close = token.indexOf("](");
+        var link = el("span", "mlink");
+        link.textContent = token.slice(1, close);
+        link.title = token.slice(close + 2, -1);
+        node.appendChild(link);
+      }
+      remaining = remaining.slice(match.index + token.length);
+    }
+  }
+
+  function isTableRow(line) {
+    return line.indexOf("|") >= 0 && /\S/.test(line);
+  }
+
+  function isTableSeparator(line) {
+    return /^\s*\|?\s*:?-{2,}[\s:|-]*\|?\s*$/.test(line) &&
+      line.indexOf("-") >= 0;
+  }
+
+  function splitTableRow(line) {
+    var trimmed = line.replace(/^\s*\|/, "").replace(/\|\s*$/, "");
+    return trimmed.split("|").map(function (cell) {
+      return cell.trim();
+    });
+  }
+
+  function tableAlignments(line) {
+    return splitTableRow(line).map(function (cell) {
+      var left = cell.charAt(0) === ":";
+      var right = cell.charAt(cell.length - 1) === ":";
+      if (left && right) { return "center"; }
+      if (right) { return "right"; }
+      return "";
+    });
+  }
+
+  function renderMarkdown(md, container) {
+    var lines = md.replace(/\r\n?/g, "\n").split("\n");
+    var i = 0;
+    var match;
+    while (i < lines.length) {
+      var line = lines[i];
+      if (!/\S/.test(line)) { i++; continue; }
+      if (/^\s*```/.test(line)) {
+        var codeLines = [];
+        i++;
+        while (i < lines.length && !/^\s*```/.test(lines[i])) {
+          codeLines.push(lines[i]);
+          i++;
+        }
+        i++;
+        var pre = document.createElement("pre");
+        var preCode = document.createElement("code");
+        preCode.textContent = codeLines.join("\n");
+        pre.appendChild(preCode);
+        container.appendChild(pre);
+        continue;
+      }
+      match = /^\s{0,3}(#{1,4})\s+(.*)$/.exec(line);
+      if (match) {
+        var heading = document.createElement(
+          "h" + match[1].length);
+        appendInline(match[2].replace(/\s*#+\s*$/, ""), heading);
+        container.appendChild(heading);
+        i++;
+        continue;
+      }
+      if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+        container.appendChild(document.createElement("hr"));
+        i++;
+        continue;
+      }
+      if (/^\s*>\s?/.test(line)) {
+        var quoted = [];
+        while (i < lines.length && /^\s*>\s?/.test(lines[i])) {
+          quoted.push(lines[i].replace(/^\s*>\s?/, ""));
+          i++;
+        }
+        var quote = document.createElement("blockquote");
+        appendInline(quoted.join("\n"), quote);
+        container.appendChild(quote);
+        continue;
+      }
+      if (isTableRow(line) &&
+          i + 1 < lines.length &&
+          isTableSeparator(lines[i + 1])) {
+        var aligns = tableAlignments(lines[i + 1]);
+        var wrap = el("div", "tblwrap");
+        var table = document.createElement("table");
+        var thead = document.createElement("thead");
+        var headRow = document.createElement("tr");
+        splitTableRow(line).forEach(function (cell, index) {
+          var th = document.createElement("th");
+          if (aligns[index]) { th.style.textAlign = aligns[index]; }
+          appendInline(cell, th);
+          headRow.appendChild(th);
+        });
+        thead.appendChild(headRow);
+        table.appendChild(thead);
+        var tbody = document.createElement("tbody");
+        i += 2;
+        while (i < lines.length && isTableRow(lines[i])) {
+          var bodyRow = document.createElement("tr");
+          splitTableRow(lines[i]).forEach(function (cell, index) {
+            var td = document.createElement("td");
+            if (aligns[index]) { td.style.textAlign = aligns[index]; }
+            appendInline(cell, td);
+            bodyRow.appendChild(td);
+          });
+          tbody.appendChild(bodyRow);
+          i++;
+        }
+        table.appendChild(tbody);
+        wrap.appendChild(table);
+        container.appendChild(wrap);
+        continue;
+      }
+      var listMatch = /^(\s*)([-*+]|\d{1,3}[.)])\s+(.*)$/.exec(line);
+      if (listMatch) {
+        var ordered = /\d/.test(listMatch[2].charAt(0));
+        var list = document.createElement(ordered ? "ol" : "ul");
+        var sublist = null;
+        while (i < lines.length) {
+          var itemMatch =
+            /^(\s*)([-*+]|\d{1,3}[.)])\s+(.*)$/.exec(lines[i]);
+          if (!itemMatch) { break; }
+          var item = document.createElement("li");
+          appendInline(itemMatch[3], item);
+          if (itemMatch[1].length >= 2) {
+            if (!sublist) {
+              sublist = document.createElement(
+                /\d/.test(itemMatch[2].charAt(0)) ? "ol" : "ul");
+              if (list.lastChild) {
+                list.lastChild.appendChild(sublist);
+              } else {
+                list.appendChild(sublist);
+              }
+            }
+            sublist.appendChild(item);
+          } else {
+            sublist = null;
+            list.appendChild(item);
+          }
+          i++;
+        }
+        container.appendChild(list);
+        continue;
+      }
+      var paragraph = [];
+      while (i < lines.length &&
+             /\S/.test(lines[i]) &&
+             !/^\s*```/.test(lines[i]) &&
+             !/^\s{0,3}#{1,4}\s+/.test(lines[i]) &&
+             !/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(lines[i]) &&
+             !/^\s*>\s?/.test(lines[i]) &&
+             !/^(\s*)([-*+]|\d{1,3}[.)])\s+/.test(lines[i]) &&
+             !(isTableRow(lines[i]) &&
+               i + 1 < lines.length &&
+               isTableSeparator(lines[i + 1]))) {
+        paragraph.push(lines[i]);
+        i++;
+      }
+      var p = document.createElement("p");
+      appendInline(paragraph.join("\n"), p);
+      container.appendChild(p);
+    }
+  }
+
+  function addAssistant(text, ranges, md) {
+    if (typeof md === "string" && /\S/.test(md)) {
+      var richMsg = el("div", "msg ai");
+      var richWho = el("div", "who");
+      richWho.textContent = "MetoAI";
+      var richBody = el("div", "body md");
+      renderMarkdown(md, richBody);
+      richMsg.appendChild(richWho);
+      richMsg.appendChild(richBody);
+      chat.appendChild(richMsg);
+      scrollDown();
+      return;
+    }
     var msg = el("div", "msg ai");
     var who = el("div", "who");
     who.textContent = "MetoAI";
@@ -604,10 +1000,14 @@
     if (value) {
       ensureTyping();
       typing.classList.add("on");
+      startPal();
       scrollDown();
-    } else if (typing && typing.parentNode) {
-      typing.classList.remove("on");
-      typing.parentNode.removeChild(typing);
+    } else {
+      stopPal();
+      if (typing && typing.parentNode) {
+        typing.classList.remove("on");
+        typing.parentNode.removeChild(typing);
+      }
     }
   }
 
@@ -706,7 +1106,9 @@
 
   function clearChat() {
     while (chat.firstChild) { chat.removeChild(chat.firstChild); }
+    stopPal();
     typing = null;
+    palCanvas = null;
     suggestCard = null;
     streamBubble = null;
     streamBody = null;
@@ -837,7 +1239,7 @@
     if (!m || !m.type) { return; }
     switch (m.type) {
       case "user": addUser(m.text || ""); break;
-      case "assistant": addAssistant(m.text || "", m.bold); break;
+      case "assistant": addAssistant(m.text || "", m.bold, m.md); break;
       case "activity": addActivity(m.text || "", m.kind); break;
       case "suggest": showSuggest(m.questions); break;
       case "delta": streamDelta(m.text || ""); break;
