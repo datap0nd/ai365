@@ -135,6 +135,74 @@
     flex-shrink: 0;
   }
   .tchip .tx:hover { color: var(--error); background: var(--card2); }
+  .qcard {
+    background: var(--card);
+    border: 1px solid var(--accent-soft);
+    border-left: 3px solid var(--accent);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin: 8px 0;
+    animation: fadein 0.15s ease-out;
+  }
+  .qcard.done { opacity: 0.55; pointer-events: none; }
+  .qtitle { font-weight: 600; font-size: 13px; }
+  .qhint { font-size: 11px; color: var(--dim); margin-top: 2px; }
+  .qlabel { font-size: 12px; margin-top: 10px; }
+  .qopts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 5px;
+  }
+  .qopt {
+    background: var(--card2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 3px 11px;
+    font-size: 11px;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .qopt:hover { border-color: var(--accent); }
+  .qopt.sel {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .qtext {
+    width: 100%;
+    margin-top: 6px;
+    background: var(--card2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 5px 9px;
+    font-size: 11.5px;
+    color: var(--text);
+    outline: none;
+  }
+  .qtext:focus { border-color: var(--accent); }
+  .qactions { display: flex; gap: 8px; margin-top: 12px; }
+  .qgo {
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #fff;
+    cursor: pointer;
+  }
+  .qgo:hover { filter: brightness(1.1); }
+  .qskip {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 12px;
+    color: var(--dim);
+    cursor: pointer;
+  }
+  .qskip:hover { color: var(--text); border-color: var(--dim); }
   .tchip.warn {
     background: rgba(245, 196, 81, 0.10);
     border-color: rgba(245, 196, 81, 0.45);
@@ -634,6 +702,102 @@
   function clearChat() {
     while (chat.firstChild) { chat.removeChild(chat.firstChild); }
     typing = null;
+    suggestCard = null;
+  }
+
+  var suggestCard = null;
+
+  function showSuggest(questions) {
+    if (suggestCard && suggestCard.parentNode === chat) {
+      chat.removeChild(suggestCard);
+    }
+    suggestCard = null;
+    var card = el("div", "qcard");
+    var title = el("div", "qtitle");
+    title.textContent = "Suggest a response";
+    card.appendChild(title);
+    var hint = el("div", "qhint");
+    hint.textContent =
+      "Answer these to shape the reply draft, or skip straight " +
+      "to a draft. The draft always opens unsent for your review.";
+    card.appendChild(hint);
+    var controls = [];
+    (questions || []).slice(0, 3).forEach(function (q) {
+      if (!q || !q.text) { return; }
+      var label = el("div", "qlabel");
+      label.textContent = q.text;
+      card.appendChild(label);
+      var optsRow = el("div", "qopts");
+      var state = { selected: "" };
+      var input = document.createElement("input");
+      input.type = "text";
+      input.className = "qtext";
+      input.placeholder = "Or type your own answer (optional)";
+      (q.options || []).slice(0, 4).forEach(function (opt) {
+        var chipBtn = document.createElement("button");
+        chipBtn.className = "qopt";
+        chipBtn.textContent = opt;
+        chipBtn.addEventListener("click", function () {
+          var was = chipBtn.classList.contains("sel");
+          Array.prototype.forEach.call(
+            optsRow.children,
+            function (child) { child.classList.remove("sel"); });
+          if (was) {
+            state.selected = "";
+          } else {
+            chipBtn.classList.add("sel");
+            state.selected = opt;
+            input.value = "";
+          }
+        });
+        optsRow.appendChild(chipBtn);
+      });
+      if (optsRow.children.length > 0) {
+        card.appendChild(optsRow);
+      }
+      input.addEventListener("input", function () {
+        if (input.value) {
+          Array.prototype.forEach.call(
+            optsRow.children,
+            function (child) { child.classList.remove("sel"); });
+          state.selected = "";
+        }
+      });
+      card.appendChild(input);
+      controls.push({
+        q: q.text,
+        getAnswer: function () {
+          return (input.value || state.selected || "").trim();
+        }
+      });
+    });
+    var actions = el("div", "qactions");
+    var go = document.createElement("button");
+    go.className = "qgo";
+    go.textContent = "Create draft";
+    var skip = document.createElement("button");
+    skip.className = "qskip";
+    skip.textContent = "Skip questions";
+    function submit(withAnswers) {
+      if (busy) { return; }
+      var answers = [];
+      if (withAnswers) {
+        controls.forEach(function (c) {
+          var a = c.getAnswer();
+          if (a) { answers.push({ question: c.q, answer: a }); }
+        });
+      }
+      card.classList.add("done");
+      post("suggestAnswers", { answers: answers });
+    }
+    go.addEventListener("click", function () { submit(true); });
+    skip.addEventListener("click", function () { submit(false); });
+    actions.appendChild(go);
+    actions.appendChild(skip);
+    card.appendChild(actions);
+    chat.appendChild(card);
+    suggestCard = card;
+    scrollDown();
   }
 
   function handle(m) {
@@ -642,6 +806,7 @@
       case "user": addUser(m.text || ""); break;
       case "assistant": addAssistant(m.text || "", m.bold); break;
       case "activity": addActivity(m.text || "", m.kind); break;
+      case "suggest": showSuggest(m.questions); break;
       case "status": setStatus(m.text, m.error); break;
       case "busy": setBusy(!!m.value); break;
       case "draft":

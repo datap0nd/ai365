@@ -139,7 +139,13 @@ the tool-call probe allows up to 90 seconds.
 7. The sidebar records which bounded context operations ran.
 8. Ask explicitly, for example "create a reply draft" or "write an email."
    Local code recognizes that drafting intent and exposes one creation attempt
-   for that request. The draft opens unsent in Outlook.
+   for that request. The draft opens unsent in Outlook. You can also
+   right-click an email and choose **MetoAI - Suggest a response**: the
+   sidebar asks up to three quick questions (reply tone plus up to two
+   model-suggested questions specific to that email), and your answers
+   shape the reply draft. Skipping the questions goes straight to a
+   draft. The composed request goes through the same drafting pipeline,
+   so it still authorizes exactly one draft that opens unsent for review.
 9. A mailbox question without explicit drafting language cannot expose draft
    creation. Loaded email text and model output cannot authorize it.
 10. The same Outlook draft stays linked to that chat. Follow-up instructions such

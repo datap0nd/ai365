@@ -73,6 +73,10 @@ namespace OutlookLocalAIChat
                   "<button id=\"OutlookLocalAIChat.SendToAi\" " +
                   "label=\"Send to MetoAI\" imageMso=\"ResearchPane\" " +
                   "onAction=\"OnSendToAi\"/>" +
+                  "<button id=\"OutlookLocalAIChat.SuggestReply\" " +
+                  "label=\"MetoAI - Suggest a response\" " +
+                  "imageMso=\"Reply\" " +
+                  "onAction=\"OnSuggestReply\"/>" +
                   "</contextMenu></contextMenus>"
                 : string.Empty;
 
@@ -94,6 +98,12 @@ namespace OutlookLocalAIChat
         {
             OpenChat(control, false);
             _chatPane?.AddActiveSelection();
+        }
+
+        public void OnSuggestReply(object control)
+        {
+            OpenChat(control, true);
+            _chatPane?.BeginSuggestResponse();
         }
 
         public void OnOpenChat(object control)

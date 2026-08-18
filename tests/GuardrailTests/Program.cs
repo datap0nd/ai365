@@ -89,6 +89,9 @@ namespace GuardrailTests
                     "Oversized text carries a truncation notice",
                     OversizedTextCarriesTruncationNotice);
                 Run(
+                    "Suggested reply questions are bounded",
+                    SuggestedReplyQuestionsAreBounded);
+                Run(
                     "Small inline signature images are ignored",
                     SignatureImagesAreIgnored);
                 Run(
@@ -3103,6 +3106,73 @@ namespace GuardrailTests
                     Directory.Delete(temp, true);
                 }
             }
+        }
+
+        private static void SuggestedReplyQuestionsAreBounded()
+        {
+            var snapshot = new MessageSnapshot(
+                "suggest-entry",
+                "store",
+                "Quarterly planning meeting",
+                "Jordan Blake",
+                "user@example.com",
+                DateTime.Now,
+                "Can you confirm whether you will attend the " +
+                "planning meeting on Thursday?");
+            var request = SuggestQuestionsRequestFactory.Create(
+                "local-model",
+                snapshot);
+            var system = Convert.ToString(
+                ((ChatCompletionInputMessage)
+                    request.messages[0]).content);
+            var user = Convert.ToString(
+                ((ChatCompletionInputMessage)
+                    request.messages[1]).content);
+            Assert(
+                system.Contains("untrusted"),
+                "The question request must mark email content " +
+                "as untrusted data.");
+            Assert(
+                user.Contains("Quarterly planning meeting"),
+                "The question request must include the email " +
+                "subject.");
+            Assert(
+                request.tools == null &&
+                request.max_tokens.HasValue,
+                "The question request must be tool-free and " +
+                "token-bounded.");
+
+            var parsed = SuggestQuestionsRequestFactory.Parse(
+                "1. What outcome do you want?|Confirm|" +
+                "Reschedule|Decline|ExtraDropped\n" +
+                "- Should I mention the missing invoice?\n" +
+                "note without a question mark\n" +
+                "What else should the reply cover?");
+            Assert(
+                parsed.Count ==
+                SuggestQuestionsRequestFactory.MaxQuestions,
+                "Question parsing must cap at " +
+                SuggestQuestionsRequestFactory.MaxQuestions +
+                " but returned " + parsed.Count + ".");
+            Assert(
+                parsed[0].Text ==
+                "What outcome do you want?" &&
+                parsed[0].Options.Count ==
+                SuggestQuestionsRequestFactory
+                    .MaxOptionsPerQuestion &&
+                parsed[0].Options[0] == "Confirm",
+                "Numbering must be stripped and options capped: " +
+                parsed[0].Text);
+            Assert(
+                parsed[1].Text.Contains("missing invoice"),
+                "The second question was not parsed: " +
+                parsed[1].Text);
+            Assert(
+                SuggestQuestionsRequestFactory.Parse(
+                    string.Empty).Count == 0 &&
+                SuggestQuestionsRequestFactory.Parse(
+                    null).Count == 0,
+                "Empty model output must parse to no questions.");
         }
 
         private static void OversizedTextCarriesTruncationNotice()

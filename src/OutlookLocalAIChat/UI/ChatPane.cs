@@ -89,6 +89,7 @@ namespace OutlookLocalAIChat.UI
             new List<ExternalDocumentContext>();
         private readonly List<ExternalImageContext> _externalImages =
             new List<ExternalImageContext>();
+        private string _pendingSuggestJson;
         private readonly List<string> _transcriptEvents =
             new List<string>();
         private readonly WebView2 _webView = new WebView2();
@@ -345,6 +346,13 @@ namespace OutlookLocalAIChat.UI
                             Convert.ToString(modelValue) ??
                             string.Empty);
                         break;
+                    case "suggestAnswers":
+                        object answersValue;
+                        message.TryGetValue(
+                            "answers",
+                            out answersValue);
+                        HandleSuggestAnswers(answersValue);
+                        break;
                 }
             }
             catch (Exception exception)
@@ -371,6 +379,12 @@ namespace OutlookLocalAIChat.UI
             foreach (var recorded in _transcriptEvents.ToArray())
             {
                 PostRawToWeb(recorded);
+            }
+
+            if (_pendingSuggestJson != null)
+            {
+                PostRawToWeb(_pendingSuggestJson);
+                _pendingSuggestJson = null;
             }
 
             PostToWeb(new Dictionary<string, object>
@@ -776,6 +790,179 @@ namespace OutlookLocalAIChat.UI
         // ------------------------------------------------------------------
         // Context management (unchanged capability boundaries).
         // ------------------------------------------------------------------
+
+        // "Suggest a response" from the Outlook context menu: capture
+        // the right-clicked email, ask up to three short questions in
+        // the pane (tone plus model-suggested specifics), then feed
+        // the answers into the normal drafting pipeline. The composed
+        // prompt goes through HandleSendMessage, so every existing
+        // boundary applies: explicit drafting language authorizes one
+        // draft creation and nothing else changes.
+        public void BeginSuggestResponse()
+        {
+            if (_busy)
+            {
+                SetStatus(
+                    "MetoAI is busy - try again in a moment",
+                    true);
+                return;
+            }
+
+            RefreshSelectedMessage();
+            if (_selectedMessage == null)
+            {
+                SetStatus(
+                    "Select an email first, then use Suggest a " +
+                    "response",
+                    true);
+                return;
+            }
+
+            RunSuggestQuestionFlow();
+        }
+
+        private async void RunSuggestQuestionFlow()
+        {
+            SetBusy(true);
+            SetStatus("Preparing reply questions...", false);
+            var questions = new List<object>
+            {
+                new Dictionary<string, object>
+                {
+                    {
+                        "text",
+                        "What tone should the reply take?"
+                    },
+                    {
+                        "options",
+                        new List<string>
+                        {
+                            "Professional",
+                            "Friendly",
+                            "Brief and direct",
+                            "Warm and personal"
+                        }
+                    }
+                }
+            };
+            try
+            {
+                if (_settings != null && _settings.IsConfigured)
+                {
+                    var model = ModelRouting.ResolveForRequest(
+                        _settings,
+                        false);
+                    var request =
+                        SuggestQuestionsRequestFactory.Create(
+                            model,
+                            _selectedMessage);
+                    var response = await _client.CompleteAsync(
+                        _settings,
+                        request,
+                        CancellationToken.None);
+                    var parsed =
+                        SuggestQuestionsRequestFactory.Parse(
+                            response?.content ?? string.Empty);
+                    foreach (var question in parsed)
+                    {
+                        questions.Add(
+                            new Dictionary<string, object>
+                            {
+                                { "text", question.Text },
+                                {
+                                    "options",
+                                    new List<string>(
+                                        question.Options)
+                                }
+                            });
+                    }
+                }
+            }
+            catch (Exception exception)
+            {
+                // The tone question alone still gives a useful flow.
+                Log.Error("SuggestQuestions", exception);
+            }
+
+            SetBusy(false);
+            SetStatus(
+                "Answer the questions to shape the draft",
+                false);
+            var payload = new Dictionary<string, object>
+            {
+                { "type", "suggest" },
+                { "questions", questions }
+            };
+            if (_webReady)
+            {
+                PostToWeb(payload);
+            }
+            else
+            {
+                _pendingSuggestJson =
+                    _serializer.Serialize(payload);
+            }
+        }
+
+        private void HandleSuggestAnswers(object answersValue)
+        {
+            if (_busy)
+            {
+                return;
+            }
+
+            var hasDraft = _draftTools != null &&
+                _draftTools.HasActiveDraft;
+            var lines = new List<string>
+            {
+                hasDraft
+                    ? "Rewrite the linked draft as a reply to " +
+                      "the selected email."
+                    : "Draft a reply to the selected email."
+            };
+            var answers = answersValue as object[];
+            if (answers != null)
+            {
+                var count = 0;
+                foreach (var entry in answers)
+                {
+                    if (count == 3)
+                    {
+                        break;
+                    }
+
+                    var map = entry as IDictionary<string, object>;
+                    if (map == null)
+                    {
+                        continue;
+                    }
+
+                    object questionValue;
+                    object answerValue;
+                    map.TryGetValue("question", out questionValue);
+                    map.TryGetValue("answer", out answerValue);
+                    var question = TextBoundary.SingleLine(
+                        Convert.ToString(questionValue) ??
+                        string.Empty,
+                        200);
+                    var answer = TextBoundary.SingleLine(
+                        Convert.ToString(answerValue) ??
+                        string.Empty,
+                        300);
+                    if (answer.Length == 0)
+                    {
+                        continue;
+                    }
+
+                    lines.Add(question.Length > 0
+                        ? question + " " + answer
+                        : "Guidance: " + answer);
+                    count++;
+                }
+            }
+
+            HandleSendMessage(string.Join("\n", lines));
+        }
 
         public void RefreshSelectedMessage()
         {
