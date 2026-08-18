@@ -1,7 +1,10 @@
-# MetoAI (outlook-local-ai-chat)
+# AI365 (ai365)
 
-Windows Outlook COM add-in (.NET Framework 4.8, C# 7.3, classic csproj).
-It cannot be built or run on Linux — the Windows CI workflow
+Windows Office COM add-in suite (.NET Framework 4.8, C# 7.3, classic
+csproj): one assembly hosts three add-ins — Outlook (`AddIn.cs`), Excel
+(`ExcelAddIn.cs`), and PowerPoint (`PowerPointAddIn.cs`) — sharing the chat
+stack, Gemini/local-model client, MCP client, and guardrails. It cannot be
+built or run on Linux — the Windows CI workflow
 (`.github/workflows/build.yml`) is the compile/test gate.
 
 ## Git workflow
@@ -22,9 +25,13 @@ It cannot be built or run on Linux — the Windows CI workflow
 - New source files must be added to `OutlookLocalAIChat.csproj` (classic
   csproj — no globbing).
 - Security boundaries are load-bearing: the static scan asserts exact strings
-  in several files (tool names, draft authorization, working-set caps).
-  Check `scripts/Test-Guardrails.ps1` before renaming or rewording anything
-  it references.
+  in several files (tool names, draft authorization, working-set caps, the
+  AI365 Draft sheet name, the [AI365 draft] slide marker, and the MCP
+  namespace). Check `scripts/Test-Guardrails.ps1` before renaming or
+  rewording anything it references.
+- Hard capability rules across every host: the model can never send email,
+  never save/delete/print/close documents, and every write surface is a
+  clearly marked draft gated by a one-shot, prompt-authorized permission.
 - Guardrail tests use only public APIs (no InternalsVisibleTo) and a
   hand-rolled runner in `tests/GuardrailTests/Program.cs` — register new
   tests in `Main`.

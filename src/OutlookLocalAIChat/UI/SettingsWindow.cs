@@ -36,7 +36,7 @@ namespace OutlookLocalAIChat.UI
         private readonly Button _analyzeTone =
             MakeButton("Analyze 15 sent emails", false, 176);
         private readonly Button _updateButton =
-            MakeButton("Update MetoAI", false, 128);
+            MakeButton("Update AI365", false, 128);
         private readonly Label _updateStatus = new Label();
         private readonly CheckBox _useGeminiSignIn = new CheckBox();
         private readonly Button _googleSignIn =
@@ -97,7 +97,7 @@ namespace OutlookLocalAIChat.UI
                 throw new ArgumentNullException(nameof(store));
             _outlookApplication = outlookApplication;
 
-            Text = "MetoAI settings";
+            Text = "AI365 settings";
             StartPosition = FormStartPosition.CenterParent;
             ClientSize = new Size(700, 670);
             MinimumSize = new Size(620, 620);
@@ -127,7 +127,7 @@ namespace OutlookLocalAIChat.UI
             var tabs = new TabControl
             {
                 Dock = DockStyle.Fill,
-                AccessibleName = "MetoAI settings sections"
+                AccessibleName = "AI365 settings sections"
             };
             tabs.TabPages.Add(BuildConnectionPage());
             tabs.TabPages.Add(BuildGeminiPage());
@@ -291,7 +291,7 @@ namespace OutlookLocalAIChat.UI
                 "Switch to vision model for images";
             _switchVisionForImages.AccessibleDescription =
                 "Uses your saved model list to pick a vision model for this request only. " +
-                "Save settings after Refresh models so MetoAI knows which vision models are available.";
+                "Save settings after Refresh models so AI365 knows which vision models are available.";
 
             _useToneProfile.AutoSize = true;
             _useToneProfile.Text =
@@ -402,8 +402,9 @@ namespace OutlookLocalAIChat.UI
 
             ConfigureSupportingLabel(_updateStatus);
             _updateStatus.Text =
-                "Update downloads the latest MetoAI release, closes Outlook, " +
-                "installs silently, and reopens Outlook.";
+                "Update downloads the latest AI365 release and installs " +
+                "silently once Outlook, Excel, and PowerPoint are closed. " +
+                "One update refreshes all three add-ins.";
             _updateStatus.AccessibleRole = AccessibleRole.StatusBar;
             layout.Controls.Add(_updateStatus, 0, 13);
             page.Controls.Add(layout);
@@ -420,19 +421,17 @@ namespace OutlookLocalAIChat.UI
             }
 
             _error.Text = string.Empty;
-            if (_outlookApplication == null)
-            {
-                _error.Text =
-                    "[OUTLOOK_NOT_READY] Open MetoAI from Outlook before updating.";
-                return;
-            }
-
             var confirm = MessageBox.Show(
                 this,
-                "MetoAI will download the latest version, close Outlook, " +
-                "install the update silently, and reopen Outlook. Open " +
-                "items may ask to be saved while Outlook closes. Continue?",
-                "Update MetoAI",
+                "AI365 will download the latest version and install it " +
+                "silently once Outlook, Excel, and PowerPoint are closed. " +
+                (_outlookApplication != null
+                    ? "Outlook closes and reopens automatically; close " +
+                      "Excel and PowerPoint yourself if they are open. "
+                    : "Close the Office apps yourself to let the update " +
+                      "finish. ") +
+                "One update refreshes all three AI365 add-ins. Continue?",
+                "Update AI365",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Question);
             if (confirm != DialogResult.Yes)
@@ -452,12 +451,17 @@ namespace OutlookLocalAIChat.UI
                     await SelfUpdater.DownloadInstallerAsync(
                         _updateCancellation.Token);
                 _updateStatus.ForeColor = SuccessText;
-                _updateStatus.Text =
-                    "Update downloaded. Outlook will close and reopen with " +
-                    "the new version.";
-                SelfUpdater.LaunchUpdateAndQuitOutlook(
+                _updateStatus.Text = _outlookApplication != null
+                    ? "Update downloaded. Outlook will close and " +
+                      "reopen with the new version."
+                    : "Update downloaded. Close Outlook, Excel, and " +
+                      "PowerPoint to let it install.";
+                SelfUpdater.LaunchUpdateAndQuitHost(
                     _outlookApplication,
-                    installerPath);
+                    installerPath,
+                    _outlookApplication != null
+                        ? "outlook.exe"
+                        : string.Empty);
                 _updating = false;
                 Close();
             }
@@ -466,7 +470,7 @@ namespace OutlookLocalAIChat.UI
                 _updating = false;
                 _updateStatus.ForeColor = SecondaryText;
                 _updateStatus.Text =
-                    "The update was cancelled. MetoAI is unchanged.";
+                    "The update was cancelled. AI365 is unchanged.";
                 SetCommonControlsEnabled(true);
             }
             catch (Exception exception)
@@ -474,7 +478,7 @@ namespace OutlookLocalAIChat.UI
                 _updating = false;
                 _updateStatus.ForeColor = SecondaryText;
                 _updateStatus.Text =
-                    "The update did not start. MetoAI is unchanged.";
+                    "The update did not start. AI365 is unchanged.";
                 _error.Text = DiagnosticDetails.ForException(
                     exception,
                     "UPDATE_FAILED");
@@ -586,7 +590,7 @@ namespace OutlookLocalAIChat.UI
                 SupportingText(
                     "Pick a gemini model on the Connection tab " +
                     "after signing in (gemini-2.5-flash is a good " +
-                    "default). If a model is at capacity, MetoAI " +
+                    "default). If a model is at capacity, AI365 " +
                     "hops to the next available one and says so in " +
                     "the status line."),
                 0,
@@ -594,7 +598,7 @@ namespace OutlookLocalAIChat.UI
             layout.Controls.Add(
                 SupportingText(
                     "Sign-in uses your browser and Google's own " +
-                    "pages; MetoAI never sees your password and " +
+                    "pages; AI365 never sees your password and " +
                     "stores only an encrypted sign-in token for " +
                     "this Windows user."),
                 0,
@@ -866,12 +870,12 @@ namespace OutlookLocalAIChat.UI
 
             var intro = SupportingText(
                 "Found a problem or have an idea? Describe it " +
-                "below and click Create report email. MetoAI " +
+                "below and click Create report email. AI365 " +
                 "opens a pre-filled email to the creator " +
                 "(r.cunha@samsung.com) with your notes and the " +
                 "recent diagnostic log so you can review " +
                 "everything and send it yourself from Outlook. " +
-                "MetoAI never sends anything on its own.");
+                "AI365 never sends anything on its own.");
             intro.ForeColor = SystemColors.ControlText;
             layout.Controls.Add(intro, 0, 0);
             layout.Controls.Add(
@@ -963,21 +967,21 @@ namespace OutlookLocalAIChat.UI
                 dynamic mail = application.CreateItem(0);
                 mail.To = "r.cunha@samsung.com";
                 mail.Subject =
-                    "MetoAI report - version " +
+                    "AI365 report - version " +
                     SelfUpdater.InstalledVersion();
                 mail.Body =
                     "What happened / feedback:\n" +
                     (description.Length > 0
                         ? description
                         : "(no description entered)") +
-                    "\n\n--- Recent MetoAI diagnostic log " +
+                    "\n\n--- Recent AI365 diagnostic log " +
                     "(review before sending) ---\n" +
                     Log.Tail(120);
                 mail.Display(false);
                 _supportStatus.Text =
                     "A report email opened in Outlook. Review it " +
                     "and use Outlook's own controls to send it - " +
-                    "MetoAI never sends anything itself.";
+                    "AI365 never sends anything itself.";
             }
             catch (Exception exception)
             {
@@ -1033,7 +1037,7 @@ namespace OutlookLocalAIChat.UI
                 "you open and how you sign off. Drafts are shaped " +
                 "by it so they sound like you, not like a bot. " +
                 "Nothing is analyzed automatically: click Analyze " +
-                "and MetoAI reads up to 15 recent Sent Items " +
+                "and AI365 reads up to 15 recent Sent Items " +
                 "messages, removes obvious quoted history, and " +
                 "sends bounded samples to your configured model " +
                 "to distill the portrait. Review and edit the " +
@@ -1087,7 +1091,7 @@ namespace OutlookLocalAIChat.UI
                     "replies under three paragraphs. Rules and " +
                     "the soul shape wording, greeting, cadence, " +
                     "and sign-off only - they cannot change " +
-                    "MetoAI permissions or security rules."),
+                    "AI365 permissions or security rules."),
                 0,
                 9);
 
@@ -1373,7 +1377,7 @@ namespace OutlookLocalAIChat.UI
             if (_outlookApplication == null)
             {
                 _error.Text =
-                    "[OUTLOOK_NOT_READY] Open MetoAI from Outlook before analyzing your writing style.";
+                    "[OUTLOOK_NOT_READY] Open AI365 from Outlook before analyzing your writing style.";
                 return;
             }
 
@@ -1791,7 +1795,7 @@ namespace OutlookLocalAIChat.UI
             if (!gemini)
             {
                 _googleStatus.Text =
-                    "Off - MetoAI talks to the endpoint below.";
+                    "Off - AI365 talks to the endpoint below.";
             }
             else if (_signingIn)
             {

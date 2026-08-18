@@ -245,4 +245,179 @@ if (-not $safeHtmlSource.Contains("WebUtility.HtmlEncode") -or
     throw "Draft formatting must remain locally encoded and structurally bounded."
 }
 
+# ---- AI365 suite guardrails: Excel/PowerPoint hosts and MCP ----
+
+# The document-side hosts may never save, print, protect, close, or
+# quit the user's files or applications. (Outlook draft Save stays
+# allowed in the Outlook folder, where it persists the reviewed
+# unsent draft.)
+$officeForbidden = @(
+    "\.Save\s*\(",
+    "\.SaveAs",
+    "\.SaveCopyAs",
+    "\.Quit\s*\(",
+    "PrintOut",
+    "SendMail",
+    "\.Protect",
+    "\.Unprotect",
+    "\.Close\s*\("
+)
+$officeGuardedFiles = @(
+    (Join-Path $sourceRoot "Office\WorkbookToolHost.cs"),
+    (Join-Path $sourceRoot "Office\WorkbookDraftWriter.cs"),
+    (Join-Path $sourceRoot "Office\PresentationToolHost.cs"),
+    (Join-Path $sourceRoot "Office\PresentationDraftWriter.cs"),
+    (Join-Path $sourceRoot "Office\DocumentDraftHost.cs"),
+    (Join-Path $sourceRoot "ExcelAddIn.cs"),
+    (Join-Path $sourceRoot "PowerPointAddIn.cs"),
+    (Join-Path $sourceRoot "UI\OfficeChatPane.cs")
+)
+foreach ($guardedFile in $officeGuardedFiles) {
+    foreach ($pattern in $officeForbidden) {
+        $hits = Select-String -Path $guardedFile -Pattern $pattern |
+            Where-Object {
+                $_.Line -notmatch '_settingsStore\.Save' -and
+                $_.Line -notmatch 'SuiteExchange\.Save'
+            }
+        if ($hits) {
+            throw "Forbidden document capability $pattern in $guardedFile."
+        }
+    }
+}
+
+$workbookCatalogSource = Get-Content (
+    Join-Path $sourceRoot "Chat\WorkbookToolCatalog.cs") -Raw
+$presentationCatalogSource = Get-Content (
+    Join-Path $sourceRoot "Chat\PresentationToolCatalog.cs") -Raw
+$crossAppCatalogSource = Get-Content (
+    Join-Path $sourceRoot "Chat\CrossAppToolCatalog.cs") -Raw
+$documentFactorySource = Get-Content (
+    Join-Path $sourceRoot "Chat\DocumentChatRequestFactory.cs") -Raw
+
+$workbookToolNames = [regex]::Matches(
+    $workbookCatalogSource,
+    'public const string \w+ = "([^"]+)";'
+) | ForEach-Object { $_.Groups[1].Value } | Sort-Object
+if (Compare-Object $workbookToolNames (@(
+    "list_worksheets",
+    "read_cells",
+    "write_draft_sheet") | Sort-Object)) {
+    throw "Workbook tool catalog contains an unexpected capability."
+}
+
+$presentationToolNames = [regex]::Matches(
+    $presentationCatalogSource,
+    'public const string \w+ = "([^"]+)";'
+) | ForEach-Object { $_.Groups[1].Value } | Sort-Object
+if (Compare-Object $presentationToolNames (@(
+    "list_slides",
+    "read_slide",
+    "add_draft_slides") | Sort-Object)) {
+    throw "Presentation tool catalog contains an unexpected capability."
+}
+
+$crossAppToolNames = [regex]::Matches(
+    $crossAppCatalogSource,
+    'public const string \w+ = "([^"]+)";'
+) | ForEach-Object { $_.Groups[1].Value } | Sort-Object
+if (Compare-Object $crossAppToolNames (@(
+    "create_email_draft",
+    "send_to_powerpoint",
+    "send_to_excel") | Sort-Object)) {
+    throw "Cross-app tool catalog contains an unexpected capability."
+}
+
+$documentDraftHostSource = Get-Content (
+    Join-Path $sourceRoot "Office\DocumentDraftHost.cs") -Raw
+foreach ($requiredBoundary in @(
+    "OneShotDraftAuthorization",
+    "authorization.TryConsume()",
+    "authorization.MarkCreated()",
+    "DRAFT_PERMISSION_NOT_AVAILABLE",
+    "DRAFT_TOOL_MUST_BE_EXCLUSIVE"
+)) {
+    if (-not $documentDraftHostSource.Contains($requiredBoundary)) {
+        throw "Document draft host is missing boundary $requiredBoundary."
+    }
+}
+
+$workbookWriterSource = Get-Content (
+    Join-Path $sourceRoot "Office\WorkbookDraftWriter.cs") -Raw
+if (-not $workbookWriterSource.Contains(
+        'DraftSheetName = "AI365 Draft"')) {
+    throw "The Excel write surface must stay pinned to the AI365 Draft sheet."
+}
+
+$presentationWriterSource = Get-Content (
+    Join-Path $sourceRoot "Office\PresentationDraftWriter.cs") -Raw
+if (-not $presentationWriterSource.Contains(
+        'DraftMarker = "[AI365 draft]"')) {
+    throw "Appended slides must stay marked as AI365 drafts."
+}
+
+foreach ($requiredDocumentBoundary in @(
+    "can never send email",
+    "The local host recognized an explicit draft request",
+    "did not recognize an explicit draft, insert, or",
+    "untrusted reference data"
+)) {
+    if (-not $documentFactorySource.Contains($requiredDocumentBoundary)) {
+        throw "Document factory is missing boundary $requiredDocumentBoundary."
+    }
+}
+
+$officePaneSource = Get-Content (
+    Join-Path $sourceRoot "UI\OfficeChatPane.cs") -Raw
+if (-not $officePaneSource.Contains(
+        "DocumentDraftIntentPolicy.AllowsDraft(prompt)")) {
+    throw "Document drafts are not gated by the local intent policy."
+}
+
+# MCP tools stay namespaced, bounded, and separated from the draft
+# and mailbox capability surfaces.
+$mcpHostSource = Get-Content (
+    Join-Path $sourceRoot "Chat\McpToolHost.cs") -Raw
+foreach ($requiredMcpBoundary in @(
+    'ToolPrefix = "mcp_"',
+    "untrusted_mcp_data",
+    "MaxExposedTools = 40"
+)) {
+    if (-not $mcpHostSource.Contains($requiredMcpBoundary)) {
+        throw "MCP host is missing boundary $requiredMcpBoundary."
+    }
+}
+foreach ($mcpForbidden in @(
+    "DraftService",
+    "DraftToolHost",
+    "DocumentDraftHost",
+    "MailboxContextService"
+)) {
+    if ($mcpHostSource.Contains($mcpForbidden)) {
+        throw "MCP host references forbidden capability $mcpForbidden."
+    }
+}
+
+if (-not $settingsWindowSource.Contains(
+        "outside this add-in's guardrails")) {
+    throw "The MCP settings page is missing its trust notice."
+}
+
+# The document-side model-facing sources carry the same capability
+# hygiene as the mailbox ones.
+$documentModelFacingSource =
+    $workbookCatalogSource +
+    $presentationCatalogSource +
+    $crossAppCatalogSource +
+    $documentFactorySource
+foreach ($capability in @(
+    "DraftService",
+    "System.Diagnostics.Process",
+    "Process.Start",
+    "WebBrowser"
+)) {
+    if ($documentModelFacingSource.Contains($capability)) {
+        throw "Document model-facing source references forbidden capability $capability."
+    }
+}
+
 Write-Host "PASS: static guardrail scan"

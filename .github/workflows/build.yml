@@ -97,13 +97,13 @@ jobs:
         shell: pwsh
         run: |
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" `
-            "/DAppVersion=1.10.3" `
+            "/DAppVersion=2.0.0" `
             "installer\OutlookLocalAIChat.iss"
 
       - name: Smoke-test installer registration
         shell: powershell
         run: |
-          $installer = Resolve-Path "artifacts\OutlookLocalAIChatSetup.exe"
+          $installer = Resolve-Path "artifacts\AI365Setup.exe"
           Start-Process $installer -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
           $installedDll = Join-Path $env:LOCALAPPDATA "Programs\OutlookLocalAIChat\OutlookLocalAIChat.dll"
           if (-not (Test-Path $installedDll)) {
@@ -267,8 +267,8 @@ jobs:
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: OutlookLocalAIChatSetup
-          path: artifacts/OutlookLocalAIChatSetup.exe
+          name: AI365Setup
+          path: artifacts/AI365Setup.exe
           if-no-files-found: error
 
       - name: Publish latest installer from main
@@ -280,7 +280,7 @@ jobs:
           body: |
             Built automatically from the latest commit on main.
             Commit: ${{ github.sha }}
-          files: artifacts/OutlookLocalAIChatSetup.exe
+          files: artifacts/AI365Setup.exe
           make_latest: true
           draft: false
           prerelease: false
@@ -289,5 +289,5 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/OutlookLocalAIChatSetup.exe
+          files: artifacts/AI365Setup.exe
           generate_release_notes: true

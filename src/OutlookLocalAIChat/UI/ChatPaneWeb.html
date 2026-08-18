@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy"
       content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;">
-<title>MetoAI</title>
+<title>AI365</title>
 <style>
   :root {
     --bg: #1a1b1e;
@@ -524,7 +524,7 @@
 </head>
 <body>
 <header>
-  <svg id="logo" viewBox="0 0 40 40" aria-label="MetoAI logo">
+  <svg id="logo" viewBox="0 0 40 40" aria-label="AI365 logo">
     <rect x="1" y="1" width="38" height="38" rx="9" fill="#5c8fff"/>
     <rect x="9" y="13" width="22" height="15" rx="2"
           fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/>
@@ -532,7 +532,7 @@
           stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
   </svg>
   <div class="head-text">
-    <div id="draft">Say "create a draft" to open one. MetoAI can never send.</div>
+    <div id="draft">Say "create a draft" to open one. AI365 can never send.</div>
   </div>
   <nav>
     <button id="btnClearChat"
@@ -553,7 +553,7 @@
   </div>
   <div id="composerCard">
     <button id="btnPlus" title="Add emails, files, or pictures to the context">+</button>
-    <textarea id="input" rows="1" placeholder="Message MetoAI..." maxlength="4000"></textarea>
+    <textarea id="input" rows="1" placeholder="Message AI365..." maxlength="4000"></textarea>
     <button id="btnSend" title="Send">&#8593;</button>
   </div>
   <div id="bottomRow">
@@ -926,7 +926,7 @@
     if (typeof md === "string" && /\S/.test(md)) {
       var richMsg = el("div", "msg ai");
       var richWho = el("div", "who");
-      richWho.textContent = "MetoAI";
+      richWho.textContent = "AI365";
       var richBody = el("div", "body md");
       renderMarkdown(md, richBody);
       richMsg.appendChild(richWho);
@@ -937,7 +937,7 @@
     }
     var msg = el("div", "msg ai");
     var who = el("div", "who");
-    who.textContent = "MetoAI";
+    who.textContent = "AI365";
     var body = el("div", "body");
     var list = (ranges || []).slice().sort(function (a, b) {
       return a.s - b.s;
@@ -1159,7 +1159,7 @@
     if (!streamBubble) {
       streamBubble = el("div", "msg ai");
       var who = el("div", "who");
-      who.textContent = "MetoAI";
+      who.textContent = "AI365";
       streamBody = el("div", "body");
       streamBubble.appendChild(who);
       streamBubble.appendChild(streamBody);

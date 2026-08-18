@@ -81,7 +81,7 @@ namespace OutlookLocalAIChat.Configuration
                 "Fast",
                 "Excellent",
                 true,
-                "Best speed/quality balance over Google sign-in. MetoAI disables its internal thinking for snappy replies and streams tokens live. Higher quotas than pro."),
+                "Best speed/quality balance over Google sign-in. AI365 disables its internal thinking for snappy replies and streams tokens live. Higher quotas than pro."),
             new ModelGuideEntry(
                 "gemini-2.5-pro",
                 new[] { "gemini", "pro" },
@@ -89,7 +89,7 @@ namespace OutlookLocalAIChat.Configuration
                 "Slow",
                 "Excellent",
                 true,
-                "Highest quality for complex drafting and reasoning. Tighter per-minute quotas and slower responses; MetoAI keeps its thinking at the minimum the model allows."),
+                "Highest quality for complex drafting and reasoning. Tighter per-minute quotas and slower responses; AI365 keeps its thinking at the minimum the model allows."),
             new ModelGuideEntry(
                 "gemini-2.5-flash-lite",
                 new[] { "gemini", "flash", "lite" },
@@ -105,7 +105,7 @@ namespace OutlookLocalAIChat.Configuration
                 "Medium",
                 "Very good",
                 true,
-                "Preferred vision model. Receives email images through MetoAI vision input. Best for screenshots, scans, and inline photos."),
+                "Preferred vision model. Receives email images through AI365 vision input. Best for screenshots, scans, and inline photos."),
             new ModelGuideEntry(
                 "qwen3.6-35b-a3b",
                 new[] { "qwen", "35", "a3b" },
@@ -244,7 +244,7 @@ namespace OutlookLocalAIChat.Configuration
 
             if (IsDisallowedModel(value))
             {
-                return "This model is not available in MetoAI.";
+                return "This model is not available in AI365.";
             }
 
             var profile = Resolve(value);

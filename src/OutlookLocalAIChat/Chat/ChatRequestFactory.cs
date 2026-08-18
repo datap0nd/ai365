@@ -328,7 +328,7 @@ namespace OutlookLocalAIChat.Chat
                     " The current model is text-only and cannot view images. Image " +
                     "attachments in this context appear as filename and metadata only. " +
                     "If the user asks about image content, say that a model tagged " +
-                    "Vision must be selected in MetoAI settings (or auto-switch to " +
+                    "Vision must be selected in AI365 settings (or auto-switch to " +
                     "vision enabled), then answer what you can from the text.";
             }
 
@@ -467,7 +467,7 @@ namespace OutlookLocalAIChat.Chat
 
             return "\nWeb-hosted images referenced by URL: " +
                 remoteImageCount +
-                " (not stored in the email; MetoAI cannot view them)";
+                " (not stored in the email; AI365 cannot view them)";
         }
 
         private static string BuildAttachmentReference(

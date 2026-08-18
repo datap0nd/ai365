@@ -16,6 +16,7 @@ using OutlookLocalAIChat;
 using OutlookLocalAIChat.Chat;
 using OutlookLocalAIChat.Configuration;
 using OutlookLocalAIChat.Interop;
+using OutlookLocalAIChat.Office;
 using OutlookLocalAIChat.Outlook;
 using OutlookLocalAIChat.Security;
 using OutlookLocalAIChat.UI;
@@ -104,6 +105,21 @@ namespace GuardrailTests
                     "Soul strength and draft rules stay bounded",
                     SoulStrengthAndDraftRulesStayBounded);
                 Run(
+                    "Document panes gate drafts behind explicit intent",
+                    DocumentDraftIntentRequiresExplicitPhrase);
+                Run(
+                    "Workbook and presentation catalogs stay read only",
+                    WorkbookAndPresentationCatalogsStayReadOnly);
+                Run(
+                    "Document factory authorizes at most one marked draft",
+                    DocumentFactoryGatesDraftTools);
+                Run(
+                    "MCP tools are namespaced, bounded, and user-configured",
+                    McpToolsAreNamespacedAndBounded);
+                Run(
+                    "MCP stdio round trip works against a scripted server",
+                    McpStdioRoundTripWorks);
+                Run(
                     "Small inline signature images are ignored",
                     SignatureImagesAreIgnored);
                 Run(
@@ -151,7 +167,7 @@ namespace GuardrailTests
                     "Outlook multi-selection accepts one to ten emails",
                     OutlookMultiSelectionIsBounded);
                 Run(
-                    "Active Explorer selection is used for Send to MetoAI",
+                    "Active Explorer selection is used for Send to AI365",
                     ActiveExplorerSelectionIsUsed);
                 Run(
                     "External context is explicit and bounded",
@@ -200,7 +216,7 @@ namespace GuardrailTests
                     "Chat pane is a registered COM control",
                     ChatPaneIsComControl);
                 Run(
-                    "Outlook ribbon includes Send to MetoAI",
+                    "Outlook ribbon includes Send to AI365",
                     RibbonIncludesSendToAi);
                 Run(
                     "Selected subjects hide reply and forward prefixes",
@@ -334,7 +350,7 @@ namespace GuardrailTests
 
             var csvPath = Path.Combine(
                 Path.GetTempPath(),
-                "MetoAI-test-" + Guid.NewGuid().ToString("N") + ".csv");
+                "AI365-test-" + Guid.NewGuid().ToString("N") + ".csv");
             File.WriteAllText(
                 csvPath,
                 "Name,Amount\nWidget,42\nGadget,17");
@@ -1590,8 +1606,8 @@ namespace GuardrailTests
             Assert(
                 xml.Contains("ContextMenuMailItem") &&
                 xml.Contains("OnSendToAi") &&
-                xml.Contains("Send to MetoAI") &&
-                xml.Contains("label=\"MetoAI\""),
+                xml.Contains("Send to AI365") &&
+                xml.Contains("label=\"AI365\""),
                 "The Outlook explorer ribbon XML is incomplete: " + xml);
         }
 
@@ -1696,7 +1712,7 @@ namespace GuardrailTests
         {
             var pngPath = Path.Combine(
                 Path.GetTempPath(),
-                "MetoAI-prefetch-" + Guid.NewGuid().ToString("N") + ".png");
+                "AI365-prefetch-" + Guid.NewGuid().ToString("N") + ".png");
             File.WriteAllBytes(
                 pngPath,
                 Convert.FromBase64String(
@@ -1856,7 +1872,7 @@ namespace GuardrailTests
         {
             var pngPath = Path.Combine(
                 Path.GetTempPath(),
-                "MetoAI-test-" + Guid.NewGuid().ToString("N") + ".png");
+                "AI365-test-" + Guid.NewGuid().ToString("N") + ".png");
             File.WriteAllBytes(
                 pngPath,
                 Convert.FromBase64String(
@@ -2048,7 +2064,7 @@ namespace GuardrailTests
         {
             var pngPath = Path.Combine(
                 Path.GetTempPath(),
-                "MetoAI-pasted-" + Guid.NewGuid().ToString("N"));
+                "AI365-pasted-" + Guid.NewGuid().ToString("N"));
             File.WriteAllBytes(
                 pngPath,
                 Convert.FromBase64String(
@@ -2098,7 +2114,7 @@ namespace GuardrailTests
         {
             var pngPath = Path.Combine(
                 Path.GetTempPath(),
-                "MetoAI-sig-" + Guid.NewGuid().ToString("N") + ".png");
+                "AI365-sig-" + Guid.NewGuid().ToString("N") + ".png");
             File.WriteAllBytes(
                 pngPath,
                 Convert.FromBase64String(
@@ -2177,7 +2193,7 @@ namespace GuardrailTests
         {
             var temp = Path.Combine(
                 Path.GetTempPath(),
-                "MetoAI-local-" + Guid.NewGuid().ToString("N"));
+                "AI365-local-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(temp);
             try
             {
@@ -2232,7 +2248,7 @@ namespace GuardrailTests
         {
             var temp = Path.Combine(
                 Path.GetTempPath(),
-                "MetoAI-legacy-" + Guid.NewGuid().ToString("N"));
+                "AI365-legacy-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(temp);
             try
             {
@@ -2569,7 +2585,7 @@ namespace GuardrailTests
         {
             var agendaPath = Path.Combine(
                 Path.GetTempPath(),
-                "MetoAI-agenda-" +
+                "AI365-agenda-" +
                 Guid.NewGuid().ToString("N") +
                 ".txt");
             File.WriteAllText(
@@ -2667,7 +2683,7 @@ namespace GuardrailTests
         {
             var temp = Path.Combine(
                 Path.GetTempPath(),
-                "MetoAI-docs-" + Guid.NewGuid().ToString("N"));
+                "AI365-docs-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(temp);
             var pptxPath = Path.Combine(temp, "deck.pptx");
             var docxPath = Path.Combine(temp, "notes.docx");
@@ -2798,7 +2814,7 @@ namespace GuardrailTests
         {
             var temp = Path.Combine(
                 Path.GetTempPath(),
-                "MetoAI-xlsx-" + Guid.NewGuid().ToString("N"));
+                "AI365-xlsx-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(temp);
             try
             {
@@ -2940,7 +2956,7 @@ namespace GuardrailTests
         {
             var temp = Path.Combine(
                 Path.GetTempPath(),
-                "MetoAI-xlsb-" + Guid.NewGuid().ToString("N"));
+                "AI365-xlsb-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(temp);
             try
             {
@@ -3057,7 +3073,7 @@ namespace GuardrailTests
         {
             var temp = Path.Combine(
                 Path.GetTempPath(),
-                "MetoAI-variants-" + Guid.NewGuid().ToString("N"));
+                "AI365-variants-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(temp);
             try
             {
@@ -3632,7 +3648,7 @@ namespace GuardrailTests
         {
             var temp = Path.Combine(
                 Path.GetTempPath(),
-                "MetoAI-scale-" + Guid.NewGuid().ToString("N"));
+                "AI365-scale-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(temp);
             try
             {
@@ -3703,7 +3719,7 @@ namespace GuardrailTests
         {
             var temp = Path.Combine(
                 Path.GetTempPath(),
-                "MetoAI-trunc-" + Guid.NewGuid().ToString("N"));
+                "AI365-trunc-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(temp);
             try
             {
@@ -3770,7 +3786,7 @@ namespace GuardrailTests
         {
             var pngPath = Path.Combine(
                 Path.GetTempPath(),
-                "MetoAI-big-" + Guid.NewGuid().ToString("N") + ".png");
+                "AI365-big-" + Guid.NewGuid().ToString("N") + ".png");
             using (var bitmap = new System.Drawing.Bitmap(
                 1400,
                 1400,
@@ -3945,20 +3961,395 @@ namespace GuardrailTests
         {
             Assert(
                 SelfUpdater.InstallerUrl.StartsWith(
-                    "https://github.com/datap0nd/outlook-local-ai-chat/releases/",
+                    "https://github.com/datap0nd/ai365/releases/",
                     StringComparison.Ordinal),
                 "The updater must download only the official release installer over HTTPS.");
 
             var script = SelfUpdater.BuildUpdateScript();
             Assert(
                 script.Contains("OUTLOOK.EXE") &&
+                script.Contains("EXCEL.EXE") &&
+                script.Contains("POWERPNT.EXE") &&
                 script.Contains("if %tries% GEQ 150 exit /b 1") &&
                 script.Contains(
                     "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART") &&
-                script.Contains("start \"\" outlook.exe") &&
-                script.Contains("%~1"),
-                "The update script must wait for Outlook to close, install " +
-                "silently with a bounded wait, and restart Outlook.");
+                script.Contains(
+                    "if not \"%restart%\"==\"\" start \"\" \"%restart%\"") &&
+                script.Contains("%~1") &&
+                script.Contains("%~2"),
+                "The update script must wait for every Office host to close, " +
+                "install silently with a bounded wait, and restart only the " +
+                "requested host.");
+        }
+
+        private static void DocumentDraftIntentRequiresExplicitPhrase()
+        {
+            Assert(
+                !DocumentDraftIntentPolicy.AllowsDraft(
+                    "what does this sheet say about the budget"),
+                "A plain question must not authorize a document draft.");
+            Assert(
+                !DocumentDraftIntentPolicy.AllowsDraft(
+                    "summarize slide 3"),
+                "A summary request must not authorize a document draft.");
+            Assert(
+                !DocumentDraftIntentPolicy.AllowsDraft(null),
+                "A null prompt must not authorize a document draft.");
+            Assert(
+                DocumentDraftIntentPolicy.AllowsDraft(
+                    "Email these slides to John"),
+                "An explicit email request must authorize a draft.");
+            Assert(
+                DocumentDraftIntentPolicy.AllowsDraft(
+                    "put this in powerpoint"),
+                "An explicit cross-app request must authorize a draft.");
+            Assert(
+                DocumentDraftIntentPolicy.AllowsDraft(
+                    "create a table in a new sheet with the totals"),
+                "An explicit sheet-write request must authorize a draft.");
+            Assert(
+                DocumentDraftIntentPolicy.AllowsDraft(
+                    "add slides about pricing"),
+                "An explicit slide request must authorize a draft.");
+        }
+
+        private static void WorkbookAndPresentationCatalogsStayReadOnly()
+        {
+            var workbookNames = WorkbookToolCatalog.ApprovedNames
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToArray();
+            Assert(
+                workbookNames.SequenceEqual(new[]
+                {
+                    "list_worksheets",
+                    "read_cells"
+                }),
+                "The workbook read catalog gained an unexpected capability.");
+            var presentationNames = PresentationToolCatalog
+                .ApprovedNames
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToArray();
+            Assert(
+                presentationNames.SequenceEqual(new[]
+                {
+                    "list_slides",
+                    "read_slide"
+                }),
+                "The presentation read catalog gained an unexpected capability.");
+            Assert(
+                !WorkbookToolCatalog.IsApproved(
+                    WorkbookToolCatalog.WriteDraftSheet) &&
+                !PresentationToolCatalog.IsApproved(
+                    PresentationToolCatalog.AddDraftSlides),
+                "Draft writers must never pass the read-only approval check.");
+
+            Assert(
+                DocumentDraftHost.IsDraftTool(
+                    "excel",
+                    WorkbookToolCatalog.WriteDraftSheet) &&
+                !DocumentDraftHost.IsDraftTool(
+                    "excel",
+                    PresentationToolCatalog.AddDraftSlides) &&
+                DocumentDraftHost.IsDraftTool(
+                    "excel",
+                    CrossAppToolCatalog.SendToPowerPoint) &&
+                !DocumentDraftHost.IsDraftTool(
+                    "excel",
+                    CrossAppToolCatalog.SendToExcel) &&
+                DocumentDraftHost.IsDraftTool(
+                    "powerpoint",
+                    CrossAppToolCatalog.SendToExcel) &&
+                !DocumentDraftHost.IsDraftTool(
+                    "powerpoint",
+                    CrossAppToolCatalog.SendToPowerPoint) &&
+                DocumentDraftHost.IsDraftTool(
+                    "excel",
+                    CrossAppToolCatalog.CreateEmailDraft) &&
+                DocumentDraftHost.IsDraftTool(
+                    "powerpoint",
+                    CrossAppToolCatalog.CreateEmailDraft) &&
+                !DocumentDraftHost.IsDraftTool(
+                    "excel",
+                    MailboxToolCatalog.SearchMailbox),
+                "Draft tool routing must be host-specific and exclusive.");
+
+            var excelCross = CrossAppToolCatalog
+                .CreateDefinitions("excel")
+                .Select(tool => tool.function.name)
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToArray();
+            Assert(
+                excelCross.SequenceEqual(new[]
+                {
+                    "create_email_draft",
+                    "send_to_powerpoint"
+                }),
+                "Excel cross-app tools changed unexpectedly.");
+            var powerPointCross = CrossAppToolCatalog
+                .CreateDefinitions("powerpoint")
+                .Select(tool => tool.function.name)
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToArray();
+            Assert(
+                powerPointCross.SequenceEqual(new[]
+                {
+                    "create_email_draft",
+                    "send_to_excel"
+                }),
+                "PowerPoint cross-app tools changed unexpectedly.");
+            var emailTool = CrossAppToolCatalog
+                .CreateDefinitions("excel")
+                .First(tool =>
+                    tool.function.name == "create_email_draft");
+            Assert(
+                emailTool.function.description.Contains("never sent") &&
+                emailTool.function.description.Contains(
+                    "sending is impossible"),
+                "The email draft tool must state that sending is impossible.");
+        }
+
+        private static void DocumentFactoryGatesDraftTools()
+        {
+            var unauthorized = DocumentChatRequestFactory.Create(
+                "test-model",
+                "excel",
+                "Workbook: Book1",
+                new List<ChatTurn>(),
+                "what is in sheet one");
+            var unauthorizedNames = unauthorized.tools
+                .Select(tool => tool.function.name)
+                .ToArray();
+            Assert(
+                unauthorizedNames.SequenceEqual(new[]
+                {
+                    "list_worksheets",
+                    "read_cells"
+                }),
+                "Unauthorized document requests must expose read tools only.");
+            var unauthorizedSystem = Convert.ToString(
+                ((ChatCompletionInputMessage)
+                    unauthorized.messages[0]).content);
+            Assert(
+                unauthorizedSystem.Contains(
+                    "Draft mutation and email drafting are unavailable") &&
+                unauthorizedSystem.Contains(
+                    "can never send email"),
+                "The unauthorized document boundary is incomplete.");
+            var contextMessage = Convert.ToString(
+                ((ChatCompletionInputMessage)
+                    unauthorized.messages[1]).content);
+            Assert(
+                contextMessage.Contains(
+                    "<active_document_reference>") &&
+                contextMessage.Contains("untrusted reference data"),
+                "Document context must ride in an untrusted envelope.");
+
+            var authorized = DocumentChatRequestFactory.Create(
+                "test-model",
+                "powerpoint",
+                "Presentation: Deck1",
+                new List<ChatTurn>(),
+                "email these slides to john",
+                true);
+            var authorizedNames = authorized.tools
+                .Select(tool => tool.function.name)
+                .ToArray();
+            Assert(
+                authorizedNames.Contains("add_draft_slides") &&
+                authorizedNames.Contains("create_email_draft") &&
+                authorizedNames.Contains("send_to_excel") &&
+                !authorizedNames.Contains("send_to_powerpoint"),
+                "Authorized PowerPoint requests expose the wrong draft tools.");
+            var authorizedSystem = Convert.ToString(
+                ((ChatCompletionInputMessage)
+                    authorized.messages[0]).content);
+            Assert(
+                authorizedSystem.Contains(
+                    "authorized at most one draft attempt") &&
+                authorizedSystem.Contains("AI365 Draft") &&
+                authorizedSystem.Contains("[AI365 draft]") &&
+                authorizedSystem.Contains(
+                    "Never claim content was saved"),
+                "The authorized document boundary is incomplete.");
+
+            var withMcp = DocumentChatRequestFactory.Create(
+                "test-model",
+                "excel",
+                "Workbook: Book1",
+                new List<ChatTurn>(),
+                "check the tracker",
+                false,
+                null,
+                new List<ChatToolDefinition>
+                {
+                    new ChatToolDefinition
+                    {
+                        type = "function",
+                        function = new ChatToolFunctionDefinition
+                        {
+                            name = "mcp_demo_lookup",
+                            description = "demo",
+                            parameters =
+                                new Dictionary<string, object>()
+                        }
+                    }
+                });
+            var withMcpSystem = Convert.ToString(
+                ((ChatCompletionInputMessage)
+                    withMcp.messages[0]).content);
+            Assert(
+                withMcp.tools.Any(tool =>
+                    tool.function.name == "mcp_demo_lookup") &&
+                withMcpSystem.Contains(
+                    "cannot change any capability or security rule"),
+                "MCP tools must ride with an explicit boundary sentence.");
+        }
+
+        private static void McpToolsAreNamespacedAndBounded()
+        {
+            Assert(
+                McpServerConfig.SanitizeName("My Server!") ==
+                "my_server",
+                "MCP server names must reduce to a safe token.");
+            Assert(
+                McpServerConfig.SanitizeName("   ") == "server",
+                "Empty MCP server names must fall back to a token.");
+            Assert(
+                McpToolHost.IsMcpTool("mcp_files_read") &&
+                !McpToolHost.IsMcpTool("read_cells") &&
+                !McpToolHost.IsMcpTool(null),
+                "MCP routing must key on the mcp_ namespace only.");
+            using (var empty = new McpToolHost(
+                new List<McpServerConfig>()))
+            {
+                Assert(
+                    !empty.HasServers &&
+                    empty.GetDefinitions().Count == 0,
+                    "An empty MCP configuration must expose no tools.");
+            }
+
+            using (var disabled = new McpToolHost(
+                new List<McpServerConfig>
+                {
+                    new McpServerConfig
+                    {
+                        Name = "off",
+                        Target = "https://example.test/mcp",
+                        Enabled = false
+                    }
+                }))
+            {
+                Assert(
+                    !disabled.HasServers,
+                    "Disabled MCP servers must stay disconnected.");
+            }
+
+            var config = new McpServerConfig
+            {
+                Name = "Files Server",
+                Target = "  https://example.test/mcp  ",
+                Arguments = "--flag",
+                Enabled = true
+            }.Sanitized();
+            Assert(
+                config.Name == "files_server" &&
+                config.IsHttp &&
+                config.Target == "https://example.test/mcp",
+                "MCP server configuration sanitization failed.");
+        }
+
+        private static void McpStdioRoundTripWorks()
+        {
+            var script =
+                "while ($true) {\n" +
+                "  $line = [Console]::In.ReadLine()\n" +
+                "  if ($null -eq $line) { break }\n" +
+                "  try { $msg = $line | ConvertFrom-Json } catch { continue }\n" +
+                "  if ($null -eq $msg.method) { continue }\n" +
+                "  if ($msg.method -eq 'initialize') {\n" +
+                "    [Console]::Out.WriteLine('{\"jsonrpc\":\"2.0\",\"id\":' + $msg.id + ',\"result\":{\"protocolVersion\":\"2025-03-26\",\"capabilities\":{},\"serverInfo\":{\"name\":\"fake\",\"version\":\"1.0\"}}}')\n" +
+                "  } elseif ($msg.method -eq 'tools/list') {\n" +
+                "    [Console]::Out.WriteLine('{\"jsonrpc\":\"2.0\",\"id\":' + $msg.id + ',\"result\":{\"tools\":[{\"name\":\"echo\",\"description\":\"Echoes the value back\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"string\"}}}}]}}')\n" +
+                "  } elseif ($msg.method -eq 'tools/call') {\n" +
+                "    [Console]::Out.WriteLine('{\"jsonrpc\":\"2.0\",\"id\":' + $msg.id + ',\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"echo:' + $msg.params.arguments.value + '\"}],\"isError\":false}}')\n" +
+                "  }\n" +
+                "  [Console]::Out.Flush()\n" +
+                "}\n";
+            var scriptPath = Path.Combine(
+                Path.GetTempPath(),
+                "AI365-mcp-" + Guid.NewGuid().ToString("N") +
+                ".ps1");
+            File.WriteAllText(
+                scriptPath,
+                script,
+                Encoding.ASCII);
+            var host = new McpToolHost(
+                new List<McpServerConfig>
+                {
+                    new McpServerConfig
+                    {
+                        Name = "fake",
+                        Target = "powershell.exe",
+                        Arguments =
+                            "-NoProfile -ExecutionPolicy Bypass " +
+                            "-File \"" + scriptPath + "\"",
+                        Enabled = true
+                    }
+                });
+            try
+            {
+                Assert(
+                    host.HasServers,
+                    "The scripted MCP server was not registered.");
+                var definitions = host.GetDefinitions();
+                Assert(
+                    definitions.Count == 1 &&
+                    definitions[0].function.name ==
+                    "mcp_fake_echo",
+                    "The MCP tool was not namespaced as expected: " +
+                    string.Join(
+                        ", ",
+                        definitions.Select(definition =>
+                            definition.function.name)));
+                Assert(
+                    definitions[0].function.description
+                        .Contains("user-configured"),
+                    "MCP tool descriptions must disclose their origin.");
+                var result = host.Execute(new ChatToolCall
+                {
+                    id = "call1",
+                    type = "function",
+                    function = new ChatToolCallFunction
+                    {
+                        name = "mcp_fake_echo",
+                        arguments = "{\"value\":\"hi\"}"
+                    }
+                });
+                Assert(
+                    result.Content.Contains("untrusted_mcp_data") &&
+                    result.Content.Contains("echo:hi"),
+                    "The MCP stdio round trip failed: " +
+                    result.Content);
+                var rejected = host.Execute(new ChatToolCall
+                {
+                    id = "call2",
+                    type = "function",
+                    function = new ChatToolCallFunction
+                    {
+                        name = "mcp_fake_other",
+                        arguments = "{}"
+                    }
+                });
+                Assert(
+                    rejected.Content.Contains(
+                        "MCP_TOOL_NOT_ALLOWED"),
+                    "Unregistered MCP tools must be rejected.");
+            }
+            finally
+            {
+                host.Dispose();
+                File.Delete(scriptPath);
+            }
         }
 
         private static void Assert(bool condition, string message)

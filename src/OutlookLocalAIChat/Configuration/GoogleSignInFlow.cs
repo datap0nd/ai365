@@ -35,7 +35,7 @@ namespace OutlookLocalAIChat.Configuration
     // same flow, OAuth client, and scopes the open-source Gemini CLI
     // uses, so anything an admin has already allowed for Gemini CLI
     // works here identically. The user's password never touches
-    // MetoAI: Google's own pages handle the sign-in and MetoAI only
+    // AI365: Google's own pages handle the sign-in and AI365 only
     // receives tokens on 127.0.0.1.
     public static class GoogleSignInFlow
     {
@@ -228,7 +228,7 @@ namespace OutlookLocalAIChat.Configuration
                     {
                         throw new InvalidOperationException(
                             "Google returned no refresh token. " +
-                            "Remove MetoAI's access at " +
+                            "Remove AI365's access at " +
                             "myaccount.google.com/permissions " +
                             "and sign in again.");
                     }
@@ -278,7 +278,7 @@ namespace OutlookLocalAIChat.Configuration
             {
                 var html =
                     "<!DOCTYPE html><html><head><meta charset=" +
-                    "\"utf-8\"><title>MetoAI</title></head>" +
+                    "\"utf-8\"><title>AI365</title></head>" +
                     "<body style=\"font-family:Segoe UI," +
                     "sans-serif;background:#1a1b1e;color:#e8e8ec;" +
                     "display:flex;align-items:center;" +
@@ -292,7 +292,7 @@ namespace OutlookLocalAIChat.Configuration
                         ? "You can close this tab and return " +
                           "to Outlook."
                         : "Close this tab and try again from " +
-                          "MetoAI Settings.") +
+                          "AI365 Settings.") +
                     "</p></div></body></html>";
                 var bytes = Encoding.UTF8.GetBytes(html);
                 response.ContentType = "text/html; charset=utf-8";

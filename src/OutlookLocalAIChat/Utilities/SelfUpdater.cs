@@ -13,7 +13,7 @@ namespace OutlookLocalAIChat.Utilities
     public static class SelfUpdater
     {
         public const string InstallerUrl =
-            "https://github.com/datap0nd/outlook-local-ai-chat/releases/latest/download/OutlookLocalAIChatSetup.exe";
+            "https://github.com/datap0nd/ai365/releases/latest/download/AI365Setup.exe";
 
         public const int MaxInstallerBytes = 100 * 1024 * 1024;
         public const int MinInstallerBytes = 200 * 1024;
@@ -25,7 +25,7 @@ namespace OutlookLocalAIChat.Utilities
                 SecurityProtocolType.Tls12;
             var path = Path.Combine(
                 Path.GetTempPath(),
-                "MetoAI-Update-" +
+                "AI365-Update-" +
                 Guid.NewGuid().ToString("N") +
                 ".exe");
             using (var http = new HttpClient())
@@ -100,18 +100,33 @@ namespace OutlookLocalAIChat.Utilities
         }
 
         // The script receives the installer path as %1 so the file itself
-        // stays pure ASCII regardless of the user's profile path.
+        // stays pure ASCII regardless of the user's profile path. One
+        // installer carries all three add-ins (Outlook, Excel, and
+        // PowerPoint share a single assembly), so the script waits for
+        // every Office host to close before installing and the whole
+        // suite updates together.
         public static string BuildUpdateScript()
         {
             var builder = new StringBuilder();
             builder.AppendLine("@echo off");
             builder.AppendLine("set \"installer=%~1\"");
+            builder.AppendLine("set \"restart=%~2\"");
             builder.AppendLine("set tries=0");
             builder.AppendLine(":wait");
+            builder.AppendLine("set running=0");
             builder.AppendLine(
                 "tasklist /FI \"IMAGENAME eq OUTLOOK.EXE\" | " +
                 "find /I \"OUTLOOK.EXE\" >nul");
-            builder.AppendLine("if errorlevel 1 goto install");
+            builder.AppendLine("if not errorlevel 1 set running=1");
+            builder.AppendLine(
+                "tasklist /FI \"IMAGENAME eq EXCEL.EXE\" | " +
+                "find /I \"EXCEL.EXE\" >nul");
+            builder.AppendLine("if not errorlevel 1 set running=1");
+            builder.AppendLine(
+                "tasklist /FI \"IMAGENAME eq POWERPNT.EXE\" | " +
+                "find /I \"POWERPNT.EXE\" >nul");
+            builder.AppendLine("if not errorlevel 1 set running=1");
+            builder.AppendLine("if %running%==0 goto install");
             builder.AppendLine("set /a tries+=1");
             builder.AppendLine("if %tries% GEQ 150 exit /b 1");
             builder.AppendLine("timeout /T 2 /NOBREAK >nul");
@@ -119,24 +134,23 @@ namespace OutlookLocalAIChat.Utilities
             builder.AppendLine(":install");
             builder.AppendLine(
                 "\"%installer%\" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART");
-            builder.AppendLine("start \"\" outlook.exe");
+            builder.AppendLine(
+                "if not \"%restart%\"==\"\" start \"\" \"%restart%\"");
             builder.AppendLine("del \"%installer%\"");
             return builder.ToString();
         }
 
-        public static void LaunchUpdateAndQuitOutlook(
-            object outlookApplication,
-            string installerPath)
+        // hostApplication may be null when the update starts from the
+        // Excel/PowerPoint pane settings: nothing is quit and the
+        // script simply waits for the user to close the Office apps.
+        public static void LaunchUpdateAndQuitHost(
+            object hostApplication,
+            string installerPath,
+            string restartExecutable)
         {
-            if (outlookApplication == null)
-            {
-                throw new ArgumentNullException(
-                    nameof(outlookApplication));
-            }
-
             var scriptPath = Path.Combine(
                 Path.GetTempPath(),
-                "MetoAI-Update-" +
+                "AI365-Update-" +
                 Guid.NewGuid().ToString("N") +
                 ".cmd");
             File.WriteAllText(
@@ -146,14 +160,18 @@ namespace OutlookLocalAIChat.Utilities
             var start = new System.Diagnostics.ProcessStartInfo
             {
                 FileName = scriptPath,
-                Arguments = "\"" + installerPath + "\"",
+                Arguments = "\"" + installerPath + "\" \"" +
+                    (restartExecutable ?? string.Empty) + "\"",
                 UseShellExecute = true,
                 WindowStyle =
                     System.Diagnostics.ProcessWindowStyle.Hidden
             };
             System.Diagnostics.Process.Start(start);
-            dynamic application = outlookApplication;
-            application.Quit();
+            if (hostApplication != null)
+            {
+                dynamic application = hostApplication;
+                application.Quit();
+            }
         }
 
         public static string InstalledVersion()

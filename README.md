@@ -1,24 +1,43 @@
-# MetoAI
+# AI365
 
-A Windows-only AI chat add-in for classic Outlook in Microsoft Office
-Professional Plus 2021. It installs locally, opens as a native Outlook sidebar,
-and lets an OpenAI-compatible model request bounded read-only context from the
-local Inbox and Sent Items. It opens and safely revises one linked unsent draft
-for human review.
+A Windows-only AI assistant suite for classic Microsoft Office
+(Professional Plus 2021): one installer adds an **AI365** sidebar to
+**Outlook, Excel, and PowerPoint**. Every pane shares the same chat stack -
+local OpenAI-compatible models or Google Gemini via browser sign-in, the same
+settings and writing soul, rich markdown output with tables, optional MCP
+tool servers, and the same hard guardrails: the model can read bounded
+context but can never send email, save a file, or delete anything.
 
-It does not use Microsoft 365 add-in deployment, Microsoft Graph, Entra ID, or
-an external Outlook MCP server.
+- **Outlook**: chat with the local Inbox and Sent Items, read attachments and
+  images, and open or revise one linked **unsent** draft for human review.
+- **Excel**: chat with the open workbook (bounded sheet and cell reads); the
+  only write surface is a clearly marked **AI365 Draft** worksheet that the
+  add-in never saves.
+- **PowerPoint**: chat with the open presentation (bounded slide and notes
+  reads); the only write surface is appended **[AI365 draft]** slides that
+  the add-in never saves.
+- **Connected**: from Excel or PowerPoint, "email this to ..." opens an
+  unsent Outlook draft (optionally attaching the saved file); "put this in
+  PowerPoint" / "put this in Excel" drafts into the sibling app; and a
+  deliberate **Share to AI365 apps** hand-off moves one bounded snippet
+  between panes. One **Update** click in Settings refreshes all three add-ins
+  together.
+
+It does not use Microsoft 365 add-in deployment, Microsoft Graph, or
+Entra ID.
 
 ## Install
 
-1. Close Outlook.
+1. Close Outlook, Excel, and PowerPoint.
 2. Download
-   [OutlookLocalAIChatSetup.exe](https://github.com/datap0nd/outlook-local-ai-chat/releases/latest/download/OutlookLocalAIChatSetup.exe).
+   [AI365Setup.exe](https://github.com/datap0nd/ai365/releases/latest/download/AI365Setup.exe).
    This link tracks the **Latest** release, which is rebuilt automatically on
    every push to `main`.
-3. Run the installer for your Windows account.
-4. Start classic Outlook.
-5. Choose **MetoAI > MetoAI** on the ribbon.
+3. Run the installer for your Windows account. It registers the add-in for
+   all three Office apps at once.
+4. Start classic Outlook, Excel, or PowerPoint.
+5. In Outlook choose **AI365 > AI365** on the ribbon; in Excel and PowerPoint
+   the **AI365** button sits on the **Home** tab.
 6. Open **Settings** and enter:
    - the OpenAI-compatible endpoint or base URL;
    - the API key;
@@ -30,9 +49,11 @@ an external Outlook MCP server.
 9. Optional: open **Writing style**, click **Analyze 15 sent emails**, review
    the generated drafting instructions, edit them, and enable the profile.
 
-To update later, open **Settings** and click **Update MetoAI**. After a
-confirmation it downloads the latest release installer, closes Outlook,
-installs silently for your Windows account, and reopens Outlook.
+To update later, open **Settings** in any AI365 pane and click
+**Update AI365**. After a confirmation it downloads the latest release
+installer, waits for Outlook, Excel, and PowerPoint to close (Outlook closes
+and reopens automatically when the update starts there), and installs
+silently for your Windows account. One update refreshes the whole suite.
 
 Examples:
 
@@ -58,7 +79,7 @@ inert text nodes - model output is still never parsed as HTML.
 
 ## Model choice
 
-MetoAI does not ship with a preset model list or a preferred default. After you
+AI365 does not ship with a preset model list or a preferred default. After you
 enter an endpoint and API key, use **Refresh models** in Settings to populate the
 dropdown from `GET /v1/models`. You can also type any model ID manually. Every
 dropdown entry is tagged **Vision** (reads email images) or **Text**
@@ -68,7 +89,7 @@ For email **images**, pick a model tagged **Vision**. Vision capability is
 detected from the model ID: `vl` or `vision` in the name (for example
 `qwen3-vl-30b`), multimodal Gemma generations (`gemma3`/`gemma-4` and later),
 and common vision families such as LLaVA, Pixtral, MiniCPM-V, InternVL,
-Moondream, and SmolVLM. MetoAI loads image attachments automatically and sends
+Moondream, and SmolVLM. AI365 loads image attachments automatically and sends
 them as multimodal input, capped at eight images per request. Multimodal Gemma
 requires the server to load its vision projector; if the server rejects image
 input, use a `vl` model instead. Text-only models get spreadsheet text and
@@ -84,11 +105,11 @@ the tool-call probe allows up to 90 seconds.
 
 ## Use
 
-1. Open **MetoAI**. The chat appears as a sidebar inside Outlook.
-   You can also right-click selected email messages and choose **Send to MetoAI**.
+1. Open **AI365**. The chat appears as a sidebar inside Outlook.
+   You can also right-click selected email messages and choose **Send to AI365**.
    The sidebar opens with `Selected: subject` at the top. Common `RE:`, `FW:`,
    and `FWD:` prefixes are hidden in that display.
-2. To choose a bounded group first, enter `/search person or topic`. MetoAI
+2. To choose a bounded group first, enter `/search person or topic`. AI365
    searches locally and keeps the newest ten matching Inbox or Sent Items
    emails as the working set. No email body is sent during this command.
 3. Review the listed subjects and send another `/search` to replace the set if
@@ -97,8 +118,8 @@ the tool-call probe allows up to 90 seconds.
    remove it. The layer collapses automatically when you send a normal AI
    prompt and can be reopened with **Show**.
 4. Alternatively, Ctrl+click one to ten emails in Outlook, then choose
-   **Add email**, right-click **Send to MetoAI**, or drag the selected messages
-   onto the MetoAI pane. Multiple messages become the same locked working set.
+   **Add email**, right-click **Send to AI365**, or drag the selected messages
+   onto the AI365 pane. Multiple messages become the same locked working set.
 5. Use the **+** menu or drag files from Windows Explorer to add external
    context: up to three documents and four images. Documents go through the
    same extractors as email attachments (PDF, Office, text formats), and
@@ -113,9 +134,9 @@ the tool-call probe allows up to 90 seconds.
    only those emails. Without one, it may perform one bounded mailbox search
    and load no more than ten unique email bodies for the request. Meeting
    invites and calendar items are readable like email — subject, body, time,
-   location, and attachments — but MetoAI can never accept, decline, or
+   location, and attachments — but AI365 can never accept, decline, or
    schedule anything. When a body
-   is loaded, MetoAI also reads up to ten **email attachments** per
+   is loaded, AI365 also reads up to ten **email attachments** per
    message: images (PNG, JPEG, GIF, BMP, WebP, TIFF), spreadsheets (XLSX,
    XLSM, XLSB, XLTX, XLTM, XLS, CSV, TSV — all worksheets, including
    binary BIFF12 workbooks), documents (PDF, PPTX, PPTM, PPSX, PPSM,
@@ -140,7 +161,7 @@ the tool-call probe allows up to 90 seconds.
 8. Ask explicitly, for example "create a reply draft" or "write an email."
    Local code recognizes that drafting intent and exposes one creation attempt
    for that request. The draft opens unsent in Outlook. You can also
-   right-click an email and choose **MetoAI - Suggest a response**: the
+   right-click an email and choose **AI365 - Suggest a response**: the
    sidebar asks up to three quick questions (reply tone plus up to two
    model-suggested questions specific to that email), and your answers
    shape the reply draft. Skipping the questions goes straight to a
@@ -165,7 +186,7 @@ Settings is organized into four tabs: **Connection** (endpoint, model, API
 key, updates), **Gemini** (Google sign-in with a responsible-use notice —
 cloud processing under your account; follow your organization's
 confidential-data policies), **Writing soul**, and **Support** (describe a
-problem and MetoAI opens a pre-filled, unsent report email to the creator
+problem and AI365 opens a pre-filled, unsent report email to the creator
 with the recent diagnostic log — timestamps, operations, and error codes
 only — for you to review and send yourself).
 
@@ -178,6 +199,61 @@ how strongly drafts follow your voice, and **hard draft rules** (one per
 line) are followed exactly in every draft. Soul, strength, and rules apply
 only to draft creation and revision, and only to wording, greeting,
 cadence, and sign-off. They cannot alter any capability or security rule.
+
+## Excel and PowerPoint panes
+
+The Excel and PowerPoint sidebars reuse the same chat page, models,
+streaming, context tray, and settings as Outlook. Their tool surface is
+document-shaped and read-only:
+
+- Excel: `list_worksheets` and `read_cells` (at most 500 rows x 50 columns
+  per read, 500 characters per cell, tab-separated, truncation flagged).
+- PowerPoint: `list_slides` and `read_slide` (bounded slide text including
+  speaker notes).
+- **+ > Add current selection / Add current slide** snapshots what you have
+  selected into the bounded context tray; files and pictures work exactly as
+  in Outlook.
+
+Writes exist only as clearly marked drafts, and only when your own latest
+message contains an explicit request ("put this in a draft sheet", "add
+slides about ...", "email this to ..."). One draft attempt per request, as
+in Outlook:
+
+- `write_draft_sheet` fills the dedicated **AI365 Draft** worksheet
+  (created at the end of the workbook; other sheets are never touched).
+- `add_draft_slides` appends slides whose titles carry the
+  **[AI365 draft]** marker; existing slides are never modified.
+- `create_email_draft` opens an unsent Outlook draft for review - Outlook
+  starts if needed, the draft can attach the current file when it is saved
+  on disk, and sending stays impossible.
+- `send_to_powerpoint` / `send_to_excel` draft into the sibling app the same
+  way.
+
+The add-in never calls Save, SaveAs, Delete, Print, Protect, Close, or Quit
+on your documents - saving stays a human action, so even a discarded draft
+sheet or slide costs nothing.
+
+## Rich answers and the pixel pal
+
+Assistant replies render as safe rich text: tables with alignment, nested
+lists, headings, code blocks, quotes, and inline emphasis. The page builds
+everything as inert DOM nodes - model output is never parsed as HTML, and
+links never navigate (the URL shows on hover). While the model thinks, a
+small pixel robot types away next to the usual dots.
+
+## MCP tool servers
+
+Settings has an **MCP** tab where you can register up to eight Model Context
+Protocol servers - local commands (stdio) or HTTP(S) endpoints. Their tools
+appear to the model as `mcp_<server>_<tool>` (40 tools max), every result
+comes back bounded and marked as untrusted data, and slow servers are timed
+out (stdio servers are killed rather than left blocking).
+
+Only you can add a server: nothing in email, document, or model text can
+register one. A server runs with your Windows account's own permissions,
+outside AI365's guardrails - AI365 itself still cannot send email or save or
+delete documents, but a server you add acts with whatever powers it has.
+Only add servers you trust, and prefer read-only ones.
 
 ## Hard security boundary
 
@@ -218,7 +294,7 @@ scoped exception, not a general mutation permission.
   only the bounded `create_draft` and `update_draft` operations.
 - The draft path exposes no send, move, delete, schedule, BCC, arbitrary HTML,
   or mailbox traversal operation.
-- Classic Outlook COM has no permission-manifest switch for sending. MetoAI
+- Classic Outlook COM has no permission-manifest switch for sending. AI365
   instead hardcodes the absence of a send capability, keeps the Outlook object
   outside the model client, and verifies the source plus compiled assembly in CI.
 - Drafts are saved and displayed as unsent Outlook items.
@@ -268,7 +344,7 @@ The local formatter HTML-encodes all text and inserts only fixed headings,
 subheadings, lists, dividers, paragraphs, and `<strong>` markup. The model can
 request these visual structures with a small text layout syntax, but raw HTML is
 rejected. If a model returns Markdown emphasis markers, the shared local formatter
-removes them and applies real bold formatting in both MetoAI and Outlook. Stray
+removes them and applies real bold formatting in both AI365 and Outlook. Stray
 formatting asterisks are removed. Arbitrary model HTML is never accepted. Neither
 tool has a send operation.
 
@@ -312,7 +388,7 @@ browser sign-in* in Settings and click **Sign in with Google**. A browser
 window opens on Google's own sign-in pages (standard OAuth installed-app flow
 with PKCE and a loopback redirect — the same flow, OAuth client, and scopes
 the open-source Gemini CLI uses, so a Google Workspace org that allows Gemini
-CLI allows this identically). MetoAI never sees the password; it receives
+CLI allows this identically). AI365 never sees the password; it receives
 tokens on 127.0.0.1, stores the refresh token encrypted for the current
 Windows user (DPAPI), and calls Google's Code Assist `generateContent` API,
 where enterprise Gemini licensing resolves from the account alone. Requests
@@ -325,9 +401,9 @@ Cloud project** field in Settings (the same value for everyone in the
 organization; the `GOOGLE_CLOUD_PROJECT` environment variable also works as
 a fallback). The Gemini CLI's other environment settings are not needed:
 `NODE_OPTIONS=--use-system-ca` exists because Node.js does not trust the
-Windows certificate store by default, while MetoAI uses it natively (so
+Windows certificate store by default, while AI365 uses it natively (so
 corporate TLS inspection just works), and `GEMINI_TELEMETRY_ENABLED`
-controls CLI telemetry, which MetoAI does not have. Note that with any
+controls CLI telemetry, which AI365 does not have. Note that with any
 cloud provider, email content leaves your machine — the local-endpoint
 setup keeps everything on-device.
 
@@ -388,7 +464,7 @@ timeout failures before the endpoint returns an HTTP response.
 
 1. Close Outlook.
 2. Open Windows **Installed apps** or **Apps & features**.
-3. Uninstall **MetoAI**.
+3. Uninstall **AI365**.
 
 Endpoint settings remain under:
 
@@ -430,7 +506,7 @@ Build the installer:
 The installer is written to:
 
 ```text
-artifacts\OutlookLocalAIChatSetup.exe
+artifacts\AI365Setup.exe
 ```
 
 GitHub Actions builds, smoke-tests, and publishes the same single-file installer.
@@ -439,7 +515,7 @@ above always points at the newest build.
 
 ## Compatibility
 
-- Classic Outlook for Windows
+- Classic Outlook, Excel, and PowerPoint for Windows
 - Microsoft Office Professional Plus 2021
 - 32-bit or 64-bit Office on Windows
 - .NET Framework 4.8

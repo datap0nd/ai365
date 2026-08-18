@@ -1,8 +1,8 @@
-#define AppName "MetoAI"
+#define AppName "AI365"
 #ifndef AppVersion
-  #define AppVersion "1.10.3"
+  #define AppVersion "2.0.0"
 #endif
-#define AppPublisher "MetoAI contributors"
+#define AppPublisher "AI365 contributors"
 #define AppProgId "OutlookLocalAIChat.AddIn"
 #define AppClsid "{{0D6E56F9-BE2D-4B94-B5E4-4C2DB0FD13E7}"
 #define PaneProgId "OutlookLocalAIChat.ChatPane"
@@ -29,7 +29,7 @@ DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x86 x64compatible
 OutputDir=..\artifacts
-OutputBaseFilename=OutlookLocalAIChatSetup
+OutputBaseFilename=AI365Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -38,7 +38,7 @@ CloseApplicationsFilter=outlook.exe,excel.exe,powerpnt.exe
 RestartApplications=no
 UninstallDisplayName={#AppName}
 VersionInfoVersion={#AppVersion}
-VersionInfoDescription=Local mailbox AI chat with one linked unsent Outlook draft
+VersionInfoDescription=AI assistant suite for Outlook, Excel, and PowerPoint - drafts only, never sends or saves
 VersionInfoProductName={#AppName}
 VersionInfoCompany={#AppPublisher}
 

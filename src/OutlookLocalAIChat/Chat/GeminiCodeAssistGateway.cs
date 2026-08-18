@@ -12,10 +12,10 @@ using OutlookLocalAIChat.Security;
 
 namespace OutlookLocalAIChat.Chat
 {
-    // Gemini over Google sign-in, end to end inside MetoAI. The user
+    // Gemini over Google sign-in, end to end inside AI365. The user
     // clicks Sign in with Google in Settings (GoogleSignInFlow runs
     // the browser OAuth flow); the refresh token is stored
-    // DPAPI-protected in MetoAI's own settings and exchanged here
+    // DPAPI-protected in AI365's own settings and exchanged here
     // for short-lived access tokens. Requests go to the same Code
     // Assist generateContent API the Gemini CLI uses, so enterprise
     // Gemini licensing resolves server-side from the account alone -
@@ -407,7 +407,7 @@ namespace OutlookLocalAIChat.Chat
                 return _cachedAccessToken;
             }
 
-            // MetoAI's own browser sign-in is the primary source;
+            // AI365's own browser sign-in is the primary source;
             // an existing Gemini CLI session on the same machine
             // works as a silent fallback.
             var refreshToken =
@@ -440,7 +440,7 @@ namespace OutlookLocalAIChat.Chat
             {
                 throw new AiEndpointException(
                     "GEMINI_SIGNIN_MISSING",
-                    "No Google sign-in was found. Open MetoAI " +
+                    "No Google sign-in was found. Open AI365 " +
                     "Settings and click Sign in with Google.");
             }
 
@@ -487,7 +487,7 @@ namespace OutlookLocalAIChat.Chat
                             "The Google sign-in could not be " +
                             "refreshed (" +
                             (int)response.StatusCode +
-                            "). Open MetoAI Settings and click " +
+                            "). Open AI365 Settings and click " +
                             "Sign in with Google again.",
                             responseSnippet: body);
                     }
@@ -504,7 +504,7 @@ namespace OutlookLocalAIChat.Chat
                         throw new AiEndpointException(
                             "GEMINI_SIGNIN_EXPIRED",
                             "Google returned no access token. " +
-                            "Open MetoAI Settings and click Sign " +
+                            "Open AI365 Settings and click Sign " +
                             "in with Google again.",
                             responseSnippet: body);
                     }
@@ -680,7 +680,7 @@ namespace OutlookLocalAIChat.Chat
                 "GEMINI_PROJECT_UNRESOLVED",
                 "Google did not provide a Gemini project for this " +
                 "account. Enter your organization's Google Cloud " +
-                "project id in MetoAI Settings (the Google Cloud " +
+                "project id in AI365 Settings (the Google Cloud " +
                 "project field next to the Gemini sign-in - the " +
                 "same id for everyone in the organization, ask " +
                 "your admin or a colleague where it works), then " +
@@ -965,7 +965,7 @@ namespace OutlookLocalAIChat.Chat
                                 status == 401 || status == 403
                                     ? " The Google sign-in may " +
                                       "have expired - open " +
-                                      "MetoAI Settings and click " +
+                                      "AI365 Settings and click " +
                                       "Sign in with Google again."
                                     : string.Empty;
                             throw new AiEndpointException(
@@ -1951,7 +1951,7 @@ namespace OutlookLocalAIChat.Chat
 
                     var hint = status == 401 || status == 403
                         ? " The Google sign-in may have " +
-                          "expired - open MetoAI Settings " +
+                          "expired - open AI365 Settings " +
                           "and click Sign in with Google " +
                           "again."
                         : string.Empty;
