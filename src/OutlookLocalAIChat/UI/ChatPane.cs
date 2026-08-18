@@ -90,6 +90,13 @@ namespace OutlookLocalAIChat.UI
         private readonly List<ExternalImageContext> _externalImages =
             new List<ExternalImageContext>();
         private string _pendingSuggestJson;
+        private readonly System.Windows.Forms.Timer _elapsedTimer =
+            new System.Windows.Forms.Timer
+            {
+                Interval = 5000
+            };
+        private DateTime _requestStartedAt = DateTime.UtcNow;
+        private DateTime _statusChangedAt = DateTime.UtcNow;
         private readonly List<string> _transcriptEvents =
             new List<string>();
         private readonly WebView2 _webView = new WebView2();
@@ -120,6 +127,8 @@ namespace OutlookLocalAIChat.UI
             // response is never a mystery.
             _client.GeminiGateway.StatusListener =
                 message => SetStatus(message, false);
+            _elapsedTimer.Tick += ElapsedTick;
+            _elapsedTimer.Start();
 
             Dock = DockStyle.Fill;
             BackColor = Color.FromArgb(26, 27, 30);
@@ -540,11 +549,42 @@ namespace OutlookLocalAIChat.UI
         {
             _statusText = TextBoundary.SingleLine(text, 300);
             _statusError = error;
+            _statusChangedAt = DateTime.UtcNow;
             PostToWeb(new Dictionary<string, object>
             {
                 { "type", "status" },
                 { "text", _statusText },
                 { "error", error }
+            });
+        }
+
+        // While a request runs, a ticker appends elapsed time to a
+        // status that has not changed recently, so a long wait is
+        // always visibly progressing instead of looking frozen.
+        private void ElapsedTick(object sender, EventArgs eventArgs)
+        {
+            if (!_busy)
+            {
+                return;
+            }
+
+            var sinceChange =
+                DateTime.UtcNow - _statusChangedAt;
+            if (sinceChange.TotalSeconds < 8)
+            {
+                return;
+            }
+
+            var elapsed = (int)(DateTime.UtcNow - _requestStartedAt)
+                .TotalSeconds;
+            PostToWeb(new Dictionary<string, object>
+            {
+                { "type", "status" },
+                {
+                    "text",
+                    _statusText + " (" + elapsed + "s)"
+                },
+                { "error", _statusError }
             });
         }
 
@@ -858,6 +898,7 @@ namespace OutlookLocalAIChat.UI
         private async void RunSuggestQuestionFlow()
         {
             SetBusy(true);
+            _requestStartedAt = DateTime.UtcNow;
             SetStatus("Preparing reply questions...", false);
             var generation = ++_requestGeneration;
             var cancellation = new CancellationTokenSource();
@@ -1706,6 +1747,7 @@ namespace OutlookLocalAIChat.UI
                     DraftIntentPolicy.AllowsUpdate(prompt));
             AppendUserTurn(prompt);
             SetBusy(true);
+            _requestStartedAt = DateTime.UtcNow;
             var generation = ++_requestGeneration;
             var cancellation = new CancellationTokenSource();
             _requestCancellation = cancellation;
@@ -2078,6 +2120,8 @@ namespace OutlookLocalAIChat.UI
             }
 
             _shutdown = true;
+            _elapsedTimer.Stop();
+            _elapsedTimer.Dispose();
             _requestCancellation?.Cancel();
             _requestCancellation?.Dispose();
             _requestCancellation = null;
