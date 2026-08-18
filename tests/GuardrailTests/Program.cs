@@ -3424,23 +3424,34 @@ namespace GuardrailTests
             Assert(
                 GeminiCodeAssistGateway.MaxRetryAttempts == 10 &&
                 GeminiCodeAssistGateway.ComputeRetryDelaySeconds(
-                    0, string.Empty, 0) == 5 &&
+                    0, string.Empty, 0) == 1 &&
+                GeminiCodeAssistGateway.ComputeRetryDelaySeconds(
+                    1, string.Empty, 0) == 3 &&
+                GeminiCodeAssistGateway.ComputeRetryDelaySeconds(
+                    2, string.Empty, 0) == 20 &&
                 GeminiCodeAssistGateway.ComputeRetryDelaySeconds(
                     3, string.Empty, 0) == 30 &&
                 GeminiCodeAssistGateway.ComputeRetryDelaySeconds(
-                    0, "reset after 56s", 0) == 56 &&
+                    2, "reset after 56s", 0) == 56 &&
                 GeminiCodeAssistGateway.ComputeRetryDelaySeconds(
-                    0, string.Empty, 1.0) == 6,
-                "Retry backoff policy is wrong.");
+                    2, string.Empty, 1.0) == 24,
+                "Retry policy must fast-probe (1s, 3s) then back " +
+                "off with the server hint honored.");
             Assert(
                 GeminiCodeAssistGateway.FallbackModelFor(
-                    "gemini-2.5-pro", 3) ==
+                    "gemini-2.5-pro", 2) ==
                 "gemini-2.5-flash" &&
                 GeminiCodeAssistGateway.FallbackModelFor(
-                    "gemini-2.5-pro", 2) == null &&
+                    "gemini-3.5-flash", 2) ==
+                "gemini-2.5-flash" &&
                 GeminiCodeAssistGateway.FallbackModelFor(
-                    "gemini-2.5-flash", 5) == null,
-                "Model fallback policy is wrong.");
+                    "gemini-2.5-pro", 1) == null &&
+                GeminiCodeAssistGateway.FallbackModelFor(
+                    "gemini-2.5-flash", 5) == null &&
+                GeminiCodeAssistGateway.FallbackModelFor(
+                    "qwen3-vl-30b", 5) == null,
+                "Any Gemini model except the fallback itself " +
+                "must fall back after the fast probes.");
         }
 
         private static void GeminiSignInSettingsAreModeAware()

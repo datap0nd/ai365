@@ -100,15 +100,33 @@ namespace OutlookLocalAIChat.Chat
         // longer, and a persistent-429 fallback from pro to flash
         // that sticks for the rest of the session.
         public const int MaxRetryAttempts = 10;
+        public const string FallbackModel = "gemini-2.5-flash";
         private readonly Random _retryJitter = new Random();
-        private bool _fallbackToFlash;
-        private bool _fallbackNoticeShown;
+        // Models this session fell back from after persistent
+        // capacity errors; requests for them route to the fallback
+        // model until Outlook restarts, matching the CLI.
+        private readonly HashSet<string> _capacityFallbacks =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         public static int ComputeRetryDelaySeconds(
             int attempt,
             string body,
             double jitter01)
         {
+            // The CLI's interactive capacity choreography: two fast
+            // probes (1s, 3s) before the model fallback decision,
+            // then exponential backoff capped at 30s, always
+            // honoring a longer server hint up to 90s.
+            if (attempt == 0)
+            {
+                return 1;
+            }
+
+            if (attempt == 1)
+            {
+                return 3;
+            }
+
             var backoff = Math.Min(30, 5 << Math.Min(attempt, 3));
             var hint = ParseRetryDelaySeconds(body);
             var delay = Math.Min(90, Math.Max(backoff, hint));
@@ -117,51 +135,44 @@ namespace OutlookLocalAIChat.Chat
                       Math.Max(0.0, Math.Min(1.0, jitter01)));
         }
 
-        // After a few exhausted attempts on the pro model the CLI
-        // downgrades to flash and carries on; flash and flash-lite
-        // have no lower tier and just keep retrying.
+        // The CLI falls back to its flash default from ANY model
+        // whose capacity stays exhausted after the two fast probes -
+        // including newer models a tier does not actually serve,
+        // which also answer with capacity errors. Only the fallback
+        // model itself has nowhere to go and keeps retrying.
         public static string FallbackModelFor(
             string model,
             int attempt)
         {
-            var name = (model ?? string.Empty).ToLowerInvariant();
-            return attempt >= 3 &&
+            var name = NormalizeModel(model).ToLowerInvariant();
+            return attempt >= 2 &&
                    name.IndexOf(
                        "gemini",
                        StringComparison.Ordinal) >= 0 &&
-                   name.IndexOf(
-                       "pro",
-                       StringComparison.Ordinal) >= 0
-                ? "gemini-2.5-flash"
+                   !string.Equals(
+                       name,
+                       FallbackModel,
+                       StringComparison.Ordinal)
+                ? FallbackModel
                 : null;
         }
 
         private string EffectiveModel(string model)
         {
             var normalized = NormalizeModel(model);
-            if (_fallbackToFlash &&
-                normalized.ToLowerInvariant().IndexOf(
-                    "pro",
-                    StringComparison.Ordinal) >= 0)
+            if (_capacityFallbacks.Contains(normalized))
             {
-                if (!_fallbackNoticeShown)
-                {
-                    _fallbackNoticeShown = true;
-                    StatusListener?.Invoke(
-                        "gemini-2.5-pro is at capacity - using " +
-                        "gemini-2.5-flash for this session");
-                }
-
-                return "gemini-2.5-flash";
+                return FallbackModel;
             }
 
             return normalized;
         }
 
-        // Central 429 policy for generateContent. Returns true when
-        // the caller should retry (after any wait), false when the
-        // attempts are exhausted and the caller should fail.
-        private async Task<bool> HandleCapacityAsync(
+        // Central 429 policy for generateContent. Returns 1 when the
+        // caller should retry after the wait, 2 when the model was
+        // swapped for the fallback (caller restarts its attempt
+        // counter), and 0 when attempts are exhausted.
+        private async Task<int> HandleCapacityAsync(
             IDictionary<string, object> envelope,
             int attempt,
             string body,
@@ -169,23 +180,19 @@ namespace OutlookLocalAIChat.Chat
         {
             if (attempt >= MaxRetryAttempts - 1)
             {
-                return false;
+                return 0;
             }
 
-            var fallback = _fallbackToFlash
-                ? null
-                : FallbackModelFor(
-                    Convert.ToString(envelope["model"]),
-                    attempt);
+            var current = Convert.ToString(envelope["model"]);
+            var fallback = FallbackModelFor(current, attempt);
             if (fallback != null)
             {
-                _fallbackToFlash = true;
-                _fallbackNoticeShown = true;
+                _capacityFallbacks.Add(NormalizeModel(current));
                 envelope["model"] = fallback;
                 StatusListener?.Invoke(
-                    "gemini-2.5-pro is at capacity - switching " +
-                    "to " + fallback);
-                return true;
+                    current + " is at capacity - switching to " +
+                    fallback + " for this session");
+                return 2;
             }
 
             var delay = ComputeRetryDelaySeconds(
@@ -199,7 +206,7 @@ namespace OutlookLocalAIChat.Chat
             await Task.Delay(
                 TimeSpan.FromSeconds(delay),
                 cancellationToken).ConfigureAwait(true);
-            return true;
+            return 1;
         }
 
         public static string CredentialsPath
@@ -705,13 +712,19 @@ namespace OutlookLocalAIChat.Chat
                 catch (AiEndpointException exception)
                     when (exception.HttpStatus == 429)
                 {
-                    if (!await HandleCapacityAsync(
+                    var action = await HandleCapacityAsync(
                         envelope,
                         attempt,
                         exception.ResponseSnippet,
-                        cancellationToken).ConfigureAwait(true))
+                        cancellationToken).ConfigureAwait(true);
+                    if (action == 0)
                     {
                         throw;
+                    }
+
+                    if (action == 2)
+                    {
+                        attempt = -1;
                     }
                 }
             }
@@ -807,12 +820,19 @@ namespace OutlookLocalAIChat.Chat
                                 (int)response.StatusCode;
                             if (status == 429)
                             {
-                                if (await HandleCapacityAsync(
-                                    envelope,
-                                    attempt,
-                                    body,
-                                    cancellationToken)
-                                    .ConfigureAwait(true))
+                                var action =
+                                    await HandleCapacityAsync(
+                                        envelope,
+                                        attempt,
+                                        body,
+                                        cancellationToken)
+                                        .ConfigureAwait(true);
+                                if (action == 2)
+                                {
+                                    attempt = -1;
+                                }
+
+                                if (action != 0)
                                 {
                                     continue;
                                 }
@@ -1808,26 +1828,9 @@ namespace OutlookLocalAIChat.Chat
                         // until it resets. One cancellable wait
                         // and retry absorbs short limits instead
                         // of failing the request.
-                        if (status == 429 && attempt == 0)
-                        {
-                            var delaySeconds =
-                                ParseRetryDelaySeconds(body);
-                            if (delaySeconds > 0 &&
-                                delaySeconds <= 90)
-                            {
-                                StatusListener?.Invoke(
-                                    "Gemini quota reached - " +
-                                    "retrying in " +
-                                    delaySeconds + "s");
-                                await Task.Delay(
-                                    TimeSpan.FromSeconds(
-                                        delaySeconds + 1),
-                                    cancellationToken)
-                                    .ConfigureAwait(true);
-                                continue;
-                            }
-                        }
-
+                        // Capacity handling lives in the callers'
+                        // retry loops (fast probes, backoff, and
+                        // model fallback); this layer only reports.
                         if (status == 429)
                         {
                             throw new AiEndpointException(
