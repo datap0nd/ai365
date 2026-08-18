@@ -325,10 +325,18 @@ namespace OutlookLocalAIChat.Chat
                 return _cachedProject;
             }
 
+            // The Settings field wins over the environment variable
+            // so colleagues can be set up without touching their
+            // machine configuration.
             var environmentProject =
-                (Environment.GetEnvironmentVariable(
-                     "GOOGLE_CLOUD_PROJECT") ?? string.Empty)
-                .Trim();
+                (settings?.GeminiProject ?? string.Empty).Trim();
+            if (environmentProject.Length == 0)
+            {
+                environmentProject =
+                    (Environment.GetEnvironmentVariable(
+                         "GOOGLE_CLOUD_PROJECT") ?? string.Empty)
+                    .Trim();
+            }
             var loadBody = new Dictionary<string, object>
             {
                 { "metadata", ClientMetadata(environmentProject) }
@@ -442,11 +450,12 @@ namespace OutlookLocalAIChat.Chat
             return new AiEndpointException(
                 "GEMINI_PROJECT_UNRESOLVED",
                 "Google did not provide a Gemini project for this " +
-                "account. If your organization uses Gemini with a " +
-                "designated Google Cloud project, set the " +
-                "GOOGLE_CLOUD_PROJECT environment variable to that " +
-                "project id (the same variable Gemini CLI uses), " +
-                "restart Outlook, and try again.");
+                "account. Enter your organization's Google Cloud " +
+                "project id in MetoAI Settings (the Google Cloud " +
+                "project field next to the Gemini sign-in - the " +
+                "same id for everyone in the organization, ask " +
+                "your admin or a colleague where it works), then " +
+                "sign in and try again.");
         }
 
         private static string FindDefaultTierId(

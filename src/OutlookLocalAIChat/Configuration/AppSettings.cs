@@ -28,6 +28,11 @@ namespace OutlookLocalAIChat.Configuration
         public string GeminiRefreshToken { get; set; } =
             string.Empty;
 
+        // Optional Google Cloud project id for organizations whose
+        // Gemini license designates one; used during account
+        // onboarding. Takes precedence over GOOGLE_CLOUD_PROJECT.
+        public string GeminiProject { get; set; } = string.Empty;
+
         public List<string> DiscoveredModels { get; set; } =
             new List<string>();
 

@@ -52,6 +52,9 @@ namespace OutlookLocalAIChat.Configuration
                     UseGeminiSignIn = stored.UseGeminiSignIn,
                     GeminiRefreshToken = Unprotect(
                         stored.ProtectedGeminiRefreshToken),
+                    GeminiProject = TextBoundary.SingleLine(
+                        stored.GeminiProject,
+                        200),
                     ToneProfile = TextBoundary.PlainText(
                         stored.ToneProfile,
                         TextBoundary.MaxToneProfileCharacters),
@@ -116,6 +119,9 @@ namespace OutlookLocalAIChat.Configuration
                         ? Protect(
                             settings.GeminiRefreshToken.Trim())
                         : string.Empty,
+                GeminiProject = TextBoundary.SingleLine(
+                    settings.GeminiProject,
+                    200),
                 ToneProfile = TextBoundary.PlainText(
                     settings.ToneProfile,
                     TextBoundary.MaxToneProfileCharacters),
@@ -182,6 +188,8 @@ namespace OutlookLocalAIChat.Configuration
             public bool UseGeminiSignIn { get; set; }
 
             public string ProtectedGeminiRefreshToken { get; set; }
+
+            public string GeminiProject { get; set; }
 
             public string ToneProfile { get; set; }
 

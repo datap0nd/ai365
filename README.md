@@ -309,10 +309,16 @@ are translated to Gemini's native format and back, so tool calling, vision,
 and every hard guardrail (read-only mailbox, one-shot unsent drafts, no send
 capability) apply unchanged. An existing Gemini CLI sign-in on the machine is
 honored automatically as a fallback. If your organization's Gemini license
-designates a Google Cloud project, set the `GOOGLE_CLOUD_PROJECT` environment
-variable to that project id (the same variable Gemini CLI uses) before
-starting Outlook. Note that with any cloud provider, email content leaves
-your machine — the local-endpoint setup keeps everything on-device.
+designates a Google Cloud project, enter that project id in the **Google
+Cloud project** field in Settings (the same value for everyone in the
+organization; the `GOOGLE_CLOUD_PROJECT` environment variable also works as
+a fallback). The Gemini CLI's other environment settings are not needed:
+`NODE_OPTIONS=--use-system-ca` exists because Node.js does not trust the
+Windows certificate store by default, while MetoAI uses it natively (so
+corporate TLS inspection just works), and `GEMINI_TELEMETRY_ENABLED`
+controls CLI telemetry, which MetoAI does not have. Note that with any
+cloud provider, email content leaves your machine — the local-endpoint
+setup keeps everything on-device.
 
 Gemini responses are speed-tuned: internal "thinking" is disabled on
 `gemini-2.5-flash` and `flash-lite` and floored at the model minimum on
