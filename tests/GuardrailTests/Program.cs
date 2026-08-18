@@ -98,6 +98,9 @@ namespace GuardrailTests
                     "Gemini sign-in settings are mode-aware",
                     GeminiSignInSettingsAreModeAware);
                 Run(
+                    "Context budgets scale only in large-context mode",
+                    ContextBudgetsScaleOnlyInLargeContextMode);
+                Run(
                     "Small inline signature images are ignored",
                     SignatureImagesAreIgnored);
                 Run(
@@ -3543,6 +3546,77 @@ namespace GuardrailTests
                 !classic.IsConfigured,
                 "Endpoint mode must still require endpoint and " +
                 "key.");
+        }
+
+        private static void ContextBudgetsScaleOnlyInLargeContextMode()
+        {
+            var temp = Path.Combine(
+                Path.GetTempPath(),
+                "MetoAI-scale-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(temp);
+            try
+            {
+                Assert(
+                    ContextScale.Multiplier == 1 &&
+                    ContextScale.Scaled(20000) == 20000,
+                    "The default multiplier must be 1 so local " +
+                    "models keep the conservative budgets.");
+
+                var builder = new StringBuilder();
+                var line = 0;
+                while (builder.Length <=
+                    EmailAttachmentReader
+                        .MaxCharactersPerAttachment + 5000)
+                {
+                    line++;
+                    builder.AppendLine(
+                        "Ledger row " + line +
+                        " with an ordinary description of the " +
+                        "transaction and approvals.");
+                }
+
+                var textPath = Path.Combine(temp, "big.txt");
+                File.WriteAllText(
+                    textPath,
+                    builder.ToString(),
+                    Encoding.UTF8);
+
+                ContextScale.Apply(true);
+                Assert(
+                    ContextScale.Multiplier ==
+                    ContextScale.LargeContextMultiplier &&
+                    ContextScale.Scaled(20000) == 80000,
+                    "Large-context mode must multiply text " +
+                    "budgets.");
+                var large = EmailAttachmentReader.LoadLocalFile(
+                    textPath);
+                Assert(
+                    large != null && !large.Truncated,
+                    "A file within the scaled budget must not be " +
+                    "truncated in large-context mode.");
+
+                ContextScale.Apply(false);
+                var small = EmailAttachmentReader.LoadLocalFile(
+                    textPath);
+                Assert(
+                    small != null && small.Truncated,
+                    "The same file must be truncated again at the " +
+                    "standard budget.");
+                Assert(
+                    EmailAttachmentReader.MaxAttachments == 10 &&
+                    MailboxWorkingSet.MaxMessages == 10 &&
+                    ExternalContextDocument.MaxDocuments == 3,
+                    "Capability caps must not scale with context " +
+                    "size.");
+            }
+            finally
+            {
+                ContextScale.Apply(false);
+                if (Directory.Exists(temp))
+                {
+                    Directory.Delete(temp, true);
+                }
+            }
         }
 
         private static void OversizedTextCarriesTruncationNotice()

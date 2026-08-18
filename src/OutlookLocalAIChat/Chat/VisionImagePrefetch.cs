@@ -75,7 +75,8 @@ namespace OutlookLocalAIChat.Chat
                 tool_call_id = PrefetchToolCallId,
                 content = TextBoundary.PlainText(
                     result.Content,
-                    TextBoundary.MaxToolResultCharacters)
+                    ContextScale.Scaled(
+                        TextBoundary.MaxToolResultCharacters))
             });
             VisionAttachmentExchange.AppendVisionContext(
                 request,

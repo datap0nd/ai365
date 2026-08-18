@@ -320,6 +320,15 @@ controls CLI telemetry, which MetoAI does not have. Note that with any
 cloud provider, email content leaves your machine — the local-endpoint
 setup keeps everything on-device.
 
+Context budgets are provider-aware: in Gemini mode every text budget is
+multiplied by four — attachments carry up to 80,000 extracted characters
+each (192,000 per message), email bodies up to 96,000 characters, inline
+selected-email text 24,000, external documents 80,000 each (192,000
+total), and tool results up to 480,000 characters — because Gemini models
+have ~1M-token context windows. Local endpoints keep the standard
+budgets, and capability caps (ten emails, ten attachments, three external
+documents, tool rounds, the 25 MB intake) never scale.
+
 Gemini responses are speed-tuned: internal "thinking" is disabled on
 `gemini-2.5-flash` and `flash-lite` and floored at the model minimum on
 `pro` (thinking is the dominant latency cost on ordinary mailbox

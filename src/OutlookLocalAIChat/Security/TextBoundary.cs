@@ -58,4 +58,35 @@ namespace OutlookLocalAIChat.Security
                 .Trim();
         }
     }
+
+    // Provider-aware context scaling. The character budgets in this
+    // assembly are sized for local models with modest context
+    // windows; Gemini models carry ~1M-token windows, so Gemini
+    // mode multiplies the TEXT budgets while capability caps
+    // (message counts, attachment counts, tool rounds, byte intake)
+    // stay fixed. Applied from settings at startup and on save.
+    public static class ContextScale
+    {
+        public const int LargeContextMultiplier = 4;
+
+        private static int _multiplier = 1;
+
+        public static int Multiplier
+        {
+            get { return _multiplier; }
+        }
+
+        public static void Apply(bool largeContext)
+        {
+            _multiplier = largeContext
+                ? LargeContextMultiplier
+                : 1;
+        }
+
+        public static int Scaled(int baseCharacters)
+        {
+            return baseCharacters * _multiplier;
+        }
+    }
+
 }

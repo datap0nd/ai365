@@ -115,7 +115,8 @@ namespace OutlookLocalAIChat.Chat
                     ? (turn.Role == "user"
                         ? TextBoundary.MaxUserPromptCharacters
                         : TextBoundary.MaxAssistantCharacters)
-                    : TrimmedHistoryCharacters;
+                    : ContextScale.Scaled(
+                        TrimmedHistoryCharacters);
                 messages.Add(new ChatCompletionInputMessage
                 {
                     role = turn.Role,
@@ -356,7 +357,8 @@ namespace OutlookLocalAIChat.Chat
                     tool_call_id = result.ToolCallId,
                     content = TextBoundary.PlainText(
                         result.Content,
-                        TextBoundary.MaxToolResultCharacters)
+                        ContextScale.Scaled(
+                            TextBoundary.MaxToolResultCharacters))
                 });
             }
 
@@ -384,7 +386,8 @@ namespace OutlookLocalAIChat.Chat
             // tool, which also returns the full body when needed.
             var body = TextBoundary.PlainText(
                 message.Body,
-                InlineSelectedBodyCharacters);
+                ContextScale.Scaled(
+                    InlineSelectedBodyCharacters));
             var bodyBlock = body.Length > 0
                 ? "\nBody (untrusted data" +
                   (message.Body != null &&

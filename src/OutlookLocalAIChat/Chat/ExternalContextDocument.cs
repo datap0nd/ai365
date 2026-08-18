@@ -20,7 +20,7 @@ namespace OutlookLocalAIChat.Chat
             Name = TextBoundary.SingleLine(name, 180);
             Content = TextBoundary.PlainText(
                 content,
-                MaxCharactersPerDocument);
+                ContextScale.Scaled(MaxCharactersPerDocument));
         }
 
         public string Name { get; }
@@ -46,7 +46,8 @@ namespace OutlookLocalAIChat.Chat
                     continue;
                 }
 
-                var remaining = MaxTotalCharacters -
+                var remaining =
+                    ContextScale.Scaled(MaxTotalCharacters) -
                     totalCharacters;
                 if (remaining <= 0)
                 {
@@ -56,7 +57,8 @@ namespace OutlookLocalAIChat.Chat
                 var content = TextBoundary.PlainText(
                     document.Content,
                     Math.Min(
-                        MaxCharactersPerDocument,
+                        ContextScale.Scaled(
+                            MaxCharactersPerDocument),
                         remaining));
                 result.Add(
                     new ExternalContextDocument(
@@ -131,7 +133,9 @@ namespace OutlookLocalAIChat.Chat
                     true))
                 {
                     var buffer = new char[
-                        ExternalContextDocument.MaxCharactersPerDocument];
+                        ContextScale.Scaled(
+                            ExternalContextDocument
+                                .MaxCharactersPerDocument)];
                     var read = reader.Read(
                         buffer,
                         0,

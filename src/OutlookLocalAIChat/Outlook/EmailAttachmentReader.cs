@@ -25,11 +25,12 @@ namespace OutlookLocalAIChat.Outlook
                 kind ?? string.Empty,
                 32);
             var raw = text ?? string.Empty;
+            var characterLimit = ContextScale.Scaled(
+                EmailAttachmentReader.MaxCharactersPerAttachment);
             var bounded = TextBoundary.PlainText(
                 raw,
-                EmailAttachmentReader.MaxCharactersPerAttachment);
-            Truncated = raw.Length >
-                EmailAttachmentReader.MaxCharactersPerAttachment;
+                characterLimit);
+            Truncated = raw.Length > characterLimit;
             Text = Truncated
                 ? bounded +
                   "\n[Truncated: more content follows beyond the " +
@@ -68,6 +69,25 @@ namespace OutlookLocalAIChat.Outlook
         // The data URL cap must stay comfortably above the encoded
         // image byte cap (800 KB is ~1.1M base64 characters).
         public const int MaxImageDataUrlCharacters = 2200000;
+
+        // Text budgets scale with the provider (see ContextScale);
+        // byte and count caps do not.
+        private static int ScaledCharactersPerAttachment
+        {
+            get
+            {
+                return ContextScale.Scaled(
+                    MaxCharactersPerAttachment);
+            }
+        }
+
+        private static int ScaledTotalCharacters
+        {
+            get
+            {
+                return ContextScale.Scaled(MaxTotalCharacters);
+            }
+        }
         // Inline images at or under this size are treated as signature
         // graphics (logos, banners) and skipped; pasted screenshots and
         // photos are far larger and always kept.
@@ -168,7 +188,7 @@ namespace OutlookLocalAIChat.Outlook
                 var signatureImagesSkipped = 0;
                 for (var index = 1;
                      index <= count &&
-                     totalCharacters < MaxTotalCharacters;
+                     totalCharacters < ScaledTotalCharacters;
                      index++)
                 {
                     object attachment = null;
@@ -254,7 +274,7 @@ namespace OutlookLocalAIChat.Outlook
                             continue;
                         }
 
-                        var remaining = MaxTotalCharacters -
+                        var remaining = ScaledTotalCharacters -
                             totalCharacters;
                         if (remaining <= 0)
                         {
@@ -908,7 +928,7 @@ namespace OutlookLocalAIChat.Outlook
                         }
                     }
 
-                    if (builder.Length >= MaxCharactersPerAttachment)
+                    if (builder.Length >= ScaledCharactersPerAttachment)
                     {
                         break;
                     }
@@ -991,7 +1011,7 @@ namespace OutlookLocalAIChat.Outlook
                             }
 
                             if (builder.Length >
-                                MaxCharactersPerAttachment)
+                                ScaledCharactersPerAttachment)
                             {
                                 break;
                             }
@@ -1060,7 +1080,7 @@ namespace OutlookLocalAIChat.Outlook
                             }
 
                             if (builder.Length >
-                                MaxCharactersPerAttachment)
+                                ScaledCharactersPerAttachment)
                             {
                                 break;
                             }
@@ -1094,7 +1114,7 @@ namespace OutlookLocalAIChat.Outlook
         {
             return PdfTextExtractor.Extract(
                 File.ReadAllBytes(path),
-                MaxCharactersPerAttachment);
+                ScaledCharactersPerAttachment);
         }
 
         private static int CountReadableCharacters(string text)
@@ -1354,7 +1374,7 @@ namespace OutlookLocalAIChat.Outlook
             {
                 text = XlsbTextExtractor.Extract(
                     File.ReadAllBytes(path),
-                    MaxCharactersPerAttachment);
+                    ScaledCharactersPerAttachment);
             }
             else if (extension.Equals(
                 ".xls",
@@ -1423,7 +1443,7 @@ namespace OutlookLocalAIChat.Outlook
                         sheetEntry,
                         sharedStrings,
                         builder);
-                    if (builder.Length > MaxCharactersPerAttachment)
+                    if (builder.Length > ScaledCharactersPerAttachment)
                     {
                         break;
                     }
@@ -1505,7 +1525,7 @@ namespace OutlookLocalAIChat.Outlook
                         }
 
                         if (builder.Length >
-                            MaxCharactersPerAttachment)
+                            ScaledCharactersPerAttachment)
                         {
                             break;
                         }
@@ -1597,7 +1617,7 @@ namespace OutlookLocalAIChat.Outlook
                 // detectable and disclosed; the content boundary
                 // trims the text back to the cap.
                 var buffer = new char[
-                    MaxCharactersPerAttachment + 1];
+                    ScaledCharactersPerAttachment + 1];
                 var total = 0;
                 while (total < buffer.Length)
                 {

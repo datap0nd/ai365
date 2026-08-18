@@ -268,7 +268,9 @@ namespace OutlookLocalAIChat.Outlook
                     TextBoundary.PlainText(
                         meetingDetails +
                         SafeString(() => mail.Body),
-                        TextBoundary.MaxMessageBodyCharacters),
+                        ContextScale.Scaled(
+                            TextBoundary
+                                .MaxMessageBodyCharacters)),
                     CaptureAttachmentNames(mail),
                     CountRemoteImages(
                         SafeString(() => mail.HTMLBody)));

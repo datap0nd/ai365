@@ -479,7 +479,9 @@ namespace OutlookLocalAIChat.Outlook
             IReadOnlyList<VisionImagePayload> visionImages = null)
         {
             var json = _serializer.Serialize(payload);
-            if (json.Length > TextBoundary.MaxToolResultCharacters)
+            if (json.Length >
+                ContextScale.Scaled(
+                    TextBoundary.MaxToolResultCharacters))
             {
                 return Error(
                     callId,

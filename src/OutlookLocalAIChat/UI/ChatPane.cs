@@ -123,6 +123,7 @@ namespace OutlookLocalAIChat.UI
         {
             LastCreated = this;
             _settings = _settingsStore.Load();
+            ContextScale.Apply(_settings.UseGeminiSignIn);
             // Surface silent gateway waits (quota retries) so a slow
             // response is never a mystery.
             _client.GeminiGateway.StatusListener =
@@ -1359,14 +1360,17 @@ namespace OutlookLocalAIChat.UI
                     }
 
                     var remaining =
-                        ExternalContextDocument.MaxTotalCharacters -
+                        ContextScale.Scaled(
+                            ExternalContextDocument
+                                .MaxTotalCharacters) -
                         usedCharacters;
                     if (remaining <= 0)
                     {
                         SetStatus(
                             "Context text budget reached (" +
-                            ExternalContextDocument
-                                .MaxTotalCharacters +
+                            ContextScale.Scaled(
+                                ExternalContextDocument
+                                    .MaxTotalCharacters) +
                             " characters across files)",
                             true);
                         continue;
@@ -1391,8 +1395,9 @@ namespace OutlookLocalAIChat.UI
                     {
                         warn = true;
                         subtitle = "Over the text cap - first " +
-                            ExternalContextDocument
-                                .MaxCharactersPerDocument +
+                            ContextScale.Scaled(
+                                ExternalContextDocument
+                                    .MaxCharactersPerDocument) +
                             " characters kept";
                     }
 
@@ -1406,8 +1411,9 @@ namespace OutlookLocalAIChat.UI
                             "follows in the original file.]";
                         documentText = TextBoundary.PlainText(
                             content.Text,
-                            ExternalContextDocument
-                                .MaxCharactersPerDocument -
+                            ContextScale.Scaled(
+                                ExternalContextDocument
+                                    .MaxCharactersPerDocument) -
                             marker.Length) + marker;
                     }
 
@@ -2104,6 +2110,8 @@ namespace OutlookLocalAIChat.UI
                 {
                     _settings =
                         settingsWindow.SavedSettings;
+                    ContextScale.Apply(
+                        _settings.UseGeminiSignIn);
                     RefreshModelPicker();
                     SetStatus(
                         "Settings saved - " + _settings.Model,
