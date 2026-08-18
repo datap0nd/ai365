@@ -116,6 +116,10 @@ namespace OutlookLocalAIChat.UI
         {
             LastCreated = this;
             _settings = _settingsStore.Load();
+            // Surface silent gateway waits (quota retries) so a slow
+            // response is never a mystery.
+            _client.GeminiGateway.StatusListener =
+                message => SetStatus(message, false);
 
             Dock = DockStyle.Fill;
             BackColor = Color.FromArgb(26, 27, 30);

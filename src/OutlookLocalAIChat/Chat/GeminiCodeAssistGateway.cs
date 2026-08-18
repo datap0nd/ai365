@@ -78,6 +78,11 @@ namespace OutlookLocalAIChat.Chat
                 new Dictionary<string, string>(
                     StringComparer.Ordinal);
 
+        // Optional UI hook: called with a short human-readable note
+        // when the gateway is silently waiting (e.g. a quota reset)
+        // so slowness is never a mystery.
+        public Action<string> StatusListener { get; set; }
+
         public static string CredentialsPath
         {
             get
@@ -663,6 +668,10 @@ namespace OutlookLocalAIChat.Chat
                                 if (delaySeconds > 0 &&
                                     delaySeconds <= 90)
                                 {
+                                    StatusListener?.Invoke(
+                                        "Gemini quota reached - " +
+                                        "retrying in " +
+                                        delaySeconds + "s");
                                     await Task.Delay(
                                         TimeSpan.FromSeconds(
                                             delaySeconds + 1),
@@ -1663,6 +1672,10 @@ namespace OutlookLocalAIChat.Chat
                             if (delaySeconds > 0 &&
                                 delaySeconds <= 90)
                             {
+                                StatusListener?.Invoke(
+                                    "Gemini quota reached - " +
+                                    "retrying in " +
+                                    delaySeconds + "s");
                                 await Task.Delay(
                                     TimeSpan.FromSeconds(
                                         delaySeconds + 1),

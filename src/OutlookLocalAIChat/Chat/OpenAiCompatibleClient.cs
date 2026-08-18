@@ -33,6 +33,15 @@ namespace OutlookLocalAIChat.Chat
         public OpenAiCompatibleClient()
         {
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+            // .NET Framework HTTP latency defaults hurt every
+            // request: Expect: 100-continue adds a round trip per
+            // POST (and some proxies stall on it), Nagle delays
+            // small writes, and the 100-second idle timeout forces
+            // a fresh TLS handshake on the first message after a
+            // short pause.
+            ServicePointManager.Expect100Continue = false;
+            ServicePointManager.UseNagleAlgorithm = false;
+            ServicePointManager.MaxServicePointIdleTime = 300000;
             _httpClient = new HttpClient
             {
                 Timeout = Timeout.InfiniteTimeSpan

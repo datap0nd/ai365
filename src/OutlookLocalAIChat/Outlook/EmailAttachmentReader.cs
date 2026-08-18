@@ -65,14 +65,17 @@ namespace OutlookLocalAIChat.Outlook
         public const int MaxImageBytesPerAttachment = 25 * 1024 * 1024;
         public const int MaxCharactersPerAttachment = 20000;
         public const int MaxTotalCharacters = 48000;
-        // 1.5 MB of image bytes is ~2.1M base64 characters plus the
-        // data URL prefix; the two limits must move together.
+        // The data URL cap must stay comfortably above the encoded
+        // image byte cap (800 KB is ~1.1M base64 characters).
         public const int MaxImageDataUrlCharacters = 2200000;
         // Inline images at or under this size are treated as signature
         // graphics (logos, banners) and skipped; pasted screenshots and
         // photos are far larger and always kept.
         public const int SignatureImageMaxBytes = 64 * 1024;
-        private const int MaxImageBytesForBase64 = 1536 * 1024;
+        // Upload size drives vision latency: models tile images at
+        // around 768px internally, so 1280px keeps screenshot text
+        // legible while cutting the per-image payload several-fold.
+        private const int MaxImageBytesForBase64 = 800 * 1024;
 
         private static readonly HashSet<string> ImageExtensions =
             new HashSet<string>(
@@ -1244,7 +1247,7 @@ namespace OutlookLocalAIChat.Outlook
                     var longSide = Math.Max(
                         original.Width,
                         original.Height);
-                    var targetSide = Math.Min(longSide, 2048);
+                    var targetSide = Math.Min(longSide, 1280);
                     while (targetSide >= 256)
                     {
                         var scale = (double)targetSide / longSide;
@@ -1276,7 +1279,7 @@ namespace OutlookLocalAIChat.Outlook
                             }
 
                             foreach (var quality in
-                                new long[] { 80, 55 })
+                                new long[] { 75, 55 })
                             {
                                 var encoded = EncodeJpeg(
                                     bitmap,

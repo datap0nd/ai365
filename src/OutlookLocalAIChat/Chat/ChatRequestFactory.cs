@@ -14,6 +14,10 @@ namespace OutlookLocalAIChat.Chat
         // round trip.
         public const int InlineSelectedBodyCharacters = 6000;
 
+        // Older conversation turns are trimmed to this excerpt when
+        // building requests; the newest two turns stay full length.
+        public const int TrimmedHistoryCharacters = 1500;
+
         private const string SystemBoundary =
             "You are a mailbox chat assistant inside a local Outlook add-in. " +
             "Use the supplied read-only mailbox tools when the user's question requires " +
@@ -102,14 +106,22 @@ namespace OutlookLocalAIChat.Chat
                     continue;
                 }
 
+                // Prompt size grows with every exchange and directly
+                // slows later responses, so only the two most recent
+                // turns ride at full length; older turns keep a
+                // bounded excerpt that preserves the thread.
+                var recent = index >= history.Count - 2;
+                var limit = recent
+                    ? (turn.Role == "user"
+                        ? TextBoundary.MaxUserPromptCharacters
+                        : TextBoundary.MaxAssistantCharacters)
+                    : TrimmedHistoryCharacters;
                 messages.Add(new ChatCompletionInputMessage
                 {
                     role = turn.Role,
                     content = TextBoundary.PlainText(
                         turn.Content,
-                        turn.Role == "user"
-                            ? TextBoundary.MaxUserPromptCharacters
-                            : TextBoundary.MaxAssistantCharacters)
+                        limit)
                 });
             }
 
