@@ -93,33 +93,73 @@ namespace OutlookLocalAIChat.Configuration
                         FileName = authorizeUrl,
                         UseShellExecute = true
                     });
-                    var contextTask = listener.GetContextAsync();
-                    var finished = await Task.WhenAny(
-                        contextTask,
-                        Task.Delay(timeout)).ConfigureAwait(true);
-                    if (finished != contextTask)
+
+                    // Browsers also request favicon.ico and may
+                    // probe the port, so requests are accepted in a
+                    // loop until the one carrying the OAuth callback
+                    // (code or error query) arrives; everything else
+                    // gets a 404 and the wait continues.
+                    var deadline = DateTime.UtcNow + timeout;
+                    string error;
+                    string returnedState;
+                    while (true)
                     {
-                        throw new InvalidOperationException(
-                            "The Google sign-in timed out. Try " +
-                            "again and complete the sign-in in " +
-                            "the browser.");
+                        var remaining = deadline - DateTime.UtcNow;
+                        if (remaining <= TimeSpan.Zero)
+                        {
+                            throw new InvalidOperationException(
+                                "The Google sign-in timed out. " +
+                                "Try again and complete the " +
+                                "sign-in in the browser.");
+                        }
+
+                        var contextTask =
+                            listener.GetContextAsync();
+                        var finished = await Task.WhenAny(
+                            contextTask,
+                            Task.Delay(remaining))
+                            .ConfigureAwait(true);
+                        if (finished != contextTask)
+                        {
+                            ObserveAbandonedTask(contextTask);
+                            throw new InvalidOperationException(
+                                "The Google sign-in timed out. " +
+                                "Try again and complete the " +
+                                "sign-in in the browser.");
+                        }
+
+                        var context = contextTask.Result;
+                        var query = context.Request.QueryString;
+                        error = query["error"] ?? string.Empty;
+                        returnedState =
+                            query["state"] ?? string.Empty;
+                        code = query["code"] ?? string.Empty;
+                        if (code.Length == 0 && error.Length == 0)
+                        {
+                            try
+                            {
+                                context.Response.StatusCode = 404;
+                                context.Response.Close();
+                            }
+                            catch
+                            {
+                            }
+
+                            continue;
+                        }
+
+                        var success = error.Length == 0 &&
+                            code.Length > 0 &&
+                            string.Equals(
+                                returnedState,
+                                state,
+                                StringComparison.Ordinal);
+                        WriteBrowserResponse(
+                            context.Response,
+                            success);
+                        break;
                     }
 
-                    var context = contextTask.Result;
-                    var query = context.Request.QueryString;
-                    var error = query["error"] ?? string.Empty;
-                    var returnedState =
-                        query["state"] ?? string.Empty;
-                    code = query["code"] ?? string.Empty;
-                    var success = error.Length == 0 &&
-                        code.Length > 0 &&
-                        string.Equals(
-                            returnedState,
-                            state,
-                            StringComparison.Ordinal);
-                    WriteBrowserResponse(
-                        context.Response,
-                        success);
                     if (error.Length > 0)
                     {
                         throw new InvalidOperationException(
@@ -134,13 +174,6 @@ namespace OutlookLocalAIChat.Configuration
                         throw new InvalidOperationException(
                             "The sign-in response did not match " +
                             "this request. Try again.");
-                    }
-
-                    if (code.Length == 0)
-                    {
-                        throw new InvalidOperationException(
-                            "Google returned no authorization " +
-                            "code. Try again.");
                     }
                 }
                 finally
@@ -221,6 +254,20 @@ namespace OutlookLocalAIChat.Configuration
                         expiresIn);
                 }
             }
+        }
+
+        // A pending GetContextAsync faults when the listener stops
+        // after a timeout; observing the task keeps that expected
+        // fault away from the unobserved-exception handler.
+        private static void ObserveAbandonedTask(
+            Task<HttpListenerContext> task)
+        {
+            task.ContinueWith(
+                completed =>
+                {
+                    var ignored = completed.Exception;
+                },
+                TaskContinuationOptions.OnlyOnFaulted);
         }
 
         private static void WriteBrowserResponse(

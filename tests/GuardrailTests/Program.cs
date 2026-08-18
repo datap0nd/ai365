@@ -3279,10 +3279,16 @@ namespace GuardrailTests
                 json.Contains("maxOutputTokens"),
                 "Schema sanitizing or generation config is " +
                 "wrong: " + json);
+            Assert(
+                json.Contains("4596"),
+                "Thinking headroom was not added to the output " +
+                "token cap: " + json);
 
             var response = serializer.DeserializeObject(
                 "{\"candidates\":[{\"content\":{\"role\":" +
-                "\"model\",\"parts\":[{\"text\":\"Here is the " +
+                "\"model\",\"parts\":[{\"thought\":true," +
+                "\"text\":\"Internal reasoning summary.\"}," +
+                "{\"text\":\"Here is the " +
                 "summary.\"},{\"functionCall\":{\"name\":" +
                 "\"read_messages\",\"args\":{\"handles\":" +
                 "[\"selected\"]}}}]}}]}")
@@ -3294,6 +3300,8 @@ namespace GuardrailTests
                 message != null &&
                 message.content.Contains(
                     "Here is the summary.") &&
+                !message.content.Contains(
+                    "Internal reasoning summary.") &&
                 message.tool_calls != null &&
                 message.tool_calls.Count == 1 &&
                 message.tool_calls[0].function.name ==
@@ -3301,7 +3309,8 @@ namespace GuardrailTests
                 message.tool_calls[0].function.arguments
                     .Contains("selected"),
                 "The Gemini response did not translate back to " +
-                "the OpenAI shape.");
+                "the OpenAI shape (thought parts must be " +
+                "filtered).");
 
             var inline = GeminiCodeAssistGateway.TranslateDataUrl(
                 "data:image/png;base64,AAAA");

@@ -354,11 +354,15 @@ namespace OutlookLocalAIChat.Chat
                         responseMap?.TryGetValue(
                             "cloudaicompanionProject",
                             out projectValue);
+                        // The project arrives as {"id": ...} on
+                        // some tiers and as a plain string on
+                        // others.
                         var projectMap = projectValue
                             as IDictionary<string, object>;
                         var id = projectMap != null
                             ? ReadString(projectMap, "id")
-                            : string.Empty;
+                            : (projectValue as string ??
+                               string.Empty);
                         _cachedProject = id;
                         return id;
                     }
@@ -736,12 +740,17 @@ namespace OutlookLocalAIChat.Chat
 
             if (request.max_tokens.HasValue)
             {
+                // Gemini 2.5 models spend internal thinking tokens
+                // from the same output budget, so a tight cap (the
+                // endpoint probe, question generation) would return
+                // no visible text at all. Headroom keeps the caps
+                // meaningful while leaving room for thinking.
                 translated["generationConfig"] =
                     new Dictionary<string, object>
                     {
                         {
                             "maxOutputTokens",
-                            request.max_tokens.Value
+                            request.max_tokens.Value + 4096
                         }
                     };
             }
@@ -973,6 +982,16 @@ namespace OutlookLocalAIChat.Chat
             {
                 var part = entry as IDictionary<string, object>;
                 if (part == null)
+                {
+                    continue;
+                }
+
+                // Parts flagged as thought are the model's internal
+                // reasoning summary, not the answer.
+                object thoughtValue;
+                if (part.TryGetValue("thought", out thoughtValue) &&
+                    thoughtValue is bool &&
+                    (bool)thoughtValue)
                 {
                     continue;
                 }
