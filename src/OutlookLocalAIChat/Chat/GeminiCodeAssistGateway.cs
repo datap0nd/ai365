@@ -297,6 +297,15 @@ namespace OutlookLocalAIChat.Chat
         // Project discovery (loadCodeAssist / onboardUser).
         // ------------------------------------------------------------------
 
+        // Mirrors the Gemini CLI's project resolution: an already
+        // onboarded account (currentTier present) uses the project
+        // from loadCodeAssist or the GOOGLE_CLOUD_PROJECT
+        // environment variable (enterprise tiers designate one, the
+        // same variable Gemini CLI uses); a new account is onboarded
+        // once and its long-running operation is polled with GET.
+        // generateContent is never called with an empty project -
+        // that is exactly what Google answers with an opaque
+        // HTTP 500 "Internal error encountered".
         private async Task<string> GetProjectAsync(
             HttpClient httpClient,
             AppSettings settings,
@@ -307,73 +316,128 @@ namespace OutlookLocalAIChat.Chat
                 return _cachedProject;
             }
 
+            var environmentProject =
+                (Environment.GetEnvironmentVariable(
+                     "GOOGLE_CLOUD_PROJECT") ?? string.Empty)
+                .Trim();
+            var loadBody = new Dictionary<string, object>
+            {
+                { "metadata", ClientMetadata(environmentProject) }
+            };
+            if (environmentProject.Length > 0)
+            {
+                loadBody["cloudaicompanionProject"] =
+                    environmentProject;
+            }
+
             var load = await PostJsonAsync(
                 httpClient,
                 settings,
                 ":loadCodeAssist",
-                new Dictionary<string, object>
-                {
-                    { "metadata", ClientMetadata() }
-                },
+                loadBody,
                 cancellationToken).ConfigureAwait(true);
-            var project = ReadString(
+            var loadProject = ReadString(
                 load,
                 "cloudaicompanionProject");
-            if (project.Length > 0)
+            object tierValue = null;
+            load?.TryGetValue("currentTier", out tierValue);
+            if (tierValue is IDictionary<string, object>)
             {
-                _cachedProject = project;
-                return project;
+                var resolved = loadProject.Length > 0
+                    ? loadProject
+                    : environmentProject;
+                if (resolved.Length == 0)
+                {
+                    throw ProjectUnresolved();
+                }
+
+                _cachedProject = resolved;
+                return resolved;
             }
 
             var tierId = FindDefaultTierId(load);
-            for (var attempt = 0; attempt < 5; attempt++)
+            var onboardBody = new Dictionary<string, object>
             {
-                var onboard = await PostJsonAsync(
-                    httpClient,
-                    settings,
-                    ":onboardUser",
-                    new Dictionary<string, object>
-                    {
-                        { "tierId", tierId },
-                        { "metadata", ClientMetadata() }
-                    },
-                    cancellationToken).ConfigureAwait(true);
-                if (onboard != null)
-                {
-                    object doneValue;
-                    onboard.TryGetValue("done", out doneValue);
-                    if (doneValue is bool && (bool)doneValue)
-                    {
-                        object responseValue;
-                        onboard.TryGetValue(
-                            "response",
-                            out responseValue);
-                        var responseMap = responseValue
-                            as IDictionary<string, object>;
-                        object projectValue = null;
-                        responseMap?.TryGetValue(
-                            "cloudaicompanionProject",
-                            out projectValue);
-                        // The project arrives as {"id": ...} on
-                        // some tiers and as a plain string on
-                        // others.
-                        var projectMap = projectValue
-                            as IDictionary<string, object>;
-                        var id = projectMap != null
-                            ? ReadString(projectMap, "id")
-                            : (projectValue as string ??
-                               string.Empty);
-                        _cachedProject = id;
-                        return id;
-                    }
-                }
-
-                await Task.Delay(2000, cancellationToken)
-                    .ConfigureAwait(true);
+                { "tierId", tierId },
+                { "metadata", ClientMetadata(environmentProject) }
+            };
+            if (environmentProject.Length > 0)
+            {
+                onboardBody["cloudaicompanionProject"] =
+                    environmentProject;
             }
 
-            _cachedProject = string.Empty;
-            return string.Empty;
+            var operation = await PostJsonAsync(
+                httpClient,
+                settings,
+                ":onboardUser",
+                onboardBody,
+                cancellationToken).ConfigureAwait(true);
+            for (var attempt = 0;
+                 attempt < 15 &&
+                 operation != null &&
+                 !ReadBool(operation, "done");
+                 attempt++)
+            {
+                await Task.Delay(2000, cancellationToken)
+                    .ConfigureAwait(true);
+                var name = ReadString(operation, "name");
+                if (name.Length == 0)
+                {
+                    break;
+                }
+
+                operation = await GetJsonAsync(
+                    httpClient,
+                    settings,
+                    "/" + name,
+                    cancellationToken).ConfigureAwait(true);
+            }
+
+            var onboardedProject = string.Empty;
+            if (operation != null && ReadBool(operation, "done"))
+            {
+                object responseValue;
+                operation.TryGetValue(
+                    "response",
+                    out responseValue);
+                var responseMap = responseValue
+                    as IDictionary<string, object>;
+                object projectValue = null;
+                responseMap?.TryGetValue(
+                    "cloudaicompanionProject",
+                    out projectValue);
+                // The project arrives as {"id": ...} on some tiers
+                // and as a plain string on others.
+                var projectMap = projectValue
+                    as IDictionary<string, object>;
+                onboardedProject = projectMap != null
+                    ? ReadString(projectMap, "id")
+                    : (projectValue as string ?? string.Empty);
+            }
+
+            var final = onboardedProject.Length > 0
+                ? onboardedProject
+                : environmentProject;
+            if (final.Length == 0)
+            {
+                throw ProjectUnresolved();
+            }
+
+            _cachedProject = final;
+            return final;
+        }
+
+        private static AiEndpointException ProjectUnresolved()
+        {
+            return new AiEndpointException(
+                "GEMINI_PROJECT_UNRESOLVED",
+                "Google did not provide a Gemini project for this " +
+                "account. If your organization uses Gemini with a " +
+                "designated Google Cloud project, set the " +
+                "GOOGLE_CLOUD_PROJECT environment variable to that " +
+                "project id (the same variable Gemini CLI uses), " +
+                "restart Outlook, and try again.");
         }
 
         private static string FindDefaultTierId(
@@ -411,14 +475,32 @@ namespace OutlookLocalAIChat.Chat
             return "free-tier";
         }
 
-        private static Dictionary<string, object> ClientMetadata()
+        private static Dictionary<string, object> ClientMetadata(
+            string duetProject)
         {
-            return new Dictionary<string, object>
+            var metadata = new Dictionary<string, object>
             {
                 { "ideType", "IDE_UNSPECIFIED" },
                 { "platform", "PLATFORM_UNSPECIFIED" },
                 { "pluginType", "GEMINI" }
             };
+            if (!string.IsNullOrEmpty(duetProject))
+            {
+                metadata["duetProject"] = duetProject;
+            }
+
+            return metadata;
+        }
+
+        private static bool ReadBool(
+            IDictionary<string, object> map,
+            string key)
+        {
+            object value;
+            return map != null &&
+                   map.TryGetValue(key, out value) &&
+                   value is bool &&
+                   (bool)value;
         }
 
         // ------------------------------------------------------------------
@@ -664,6 +746,7 @@ namespace OutlookLocalAIChat.Chat
                 translated["systemInstruction"] =
                     new Dictionary<string, object>
                     {
+                        { "role", "user" },
                         {
                             "parts",
                             new List<object>
@@ -1105,6 +1188,48 @@ namespace OutlookLocalAIChat.Chat
                             "." + hint,
                             httpStatus: status,
                             responseSnippet: body);
+                    }
+
+                    return _serializer.DeserializeObject(body)
+                        as IDictionary<string, object>;
+                }
+            }
+        }
+
+        // GET against the API base; used to poll the onboarding
+        // long-running operation (path "/operations/...").
+        private async Task<IDictionary<string, object>>
+            GetJsonAsync(
+                HttpClient httpClient,
+                AppSettings settings,
+                string path,
+                CancellationToken cancellationToken)
+        {
+            var token = await GetAccessTokenAsync(
+                httpClient,
+                settings,
+                cancellationToken).ConfigureAwait(true);
+            using (var request = new HttpRequestMessage(
+                HttpMethod.Get,
+                ApiBase + path))
+            {
+                request.Headers.Authorization =
+                    new AuthenticationHeaderValue(
+                        "Bearer",
+                        token);
+                request.Headers.Accept.Add(
+                    new MediaTypeWithQualityHeaderValue(
+                        "application/json"));
+                using (var response = await httpClient
+                    .SendAsync(request, cancellationToken)
+                    .ConfigureAwait(true))
+                {
+                    var body = await ReadBodyAsync(
+                        response,
+                        cancellationToken).ConfigureAwait(true);
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        return null;
                     }
 
                     return _serializer.DeserializeObject(body)

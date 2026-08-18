@@ -308,9 +308,11 @@ where enterprise Gemini licensing resolves from the account alone. Requests
 are translated to Gemini's native format and back, so tool calling, vision,
 and every hard guardrail (read-only mailbox, one-shot unsent drafts, no send
 capability) apply unchanged. An existing Gemini CLI sign-in on the machine is
-honored automatically as a fallback. Note that with any cloud provider, email
-content leaves your machine — the local-endpoint setup keeps everything
-on-device.
+honored automatically as a fallback. If your organization's Gemini license
+designates a Google Cloud project, set the `GOOGLE_CLOUD_PROJECT` environment
+variable to that project id (the same variable Gemini CLI uses) before
+starting Outlook. Note that with any cloud provider, email content leaves
+your machine — the local-endpoint setup keeps everything on-device.
 
 If a request fails, the sidebar shows diagnostic identifiers such as:
 
