@@ -3437,21 +3437,37 @@ namespace GuardrailTests
                     2, string.Empty, 1.0) == 24,
                 "Retry policy must fast-probe (1s, 3s) then back " +
                 "off with the server hint honored.");
+            var tried = new HashSet<string>(
+                StringComparer.OrdinalIgnoreCase);
             Assert(
-                GeminiCodeAssistGateway.FallbackModelFor(
-                    "gemini-2.5-pro", 2) ==
+                GeminiCodeAssistGateway.NextFallbackModel(
+                    "gemini-3.5-flash", tried) ==
                 "gemini-2.5-flash" &&
-                GeminiCodeAssistGateway.FallbackModelFor(
-                    "gemini-3.5-flash", 2) ==
-                "gemini-2.5-flash" &&
-                GeminiCodeAssistGateway.FallbackModelFor(
-                    "gemini-2.5-pro", 1) == null &&
-                GeminiCodeAssistGateway.FallbackModelFor(
-                    "gemini-2.5-flash", 5) == null &&
-                GeminiCodeAssistGateway.FallbackModelFor(
-                    "qwen3-vl-30b", 5) == null,
-                "Any Gemini model except the fallback itself " +
-                "must fall back after the fast probes.");
+                GeminiCodeAssistGateway.NextFallbackModel(
+                    "gemini-2.5-flash", tried) ==
+                "gemini-2.5-flash-lite" &&
+                GeminiCodeAssistGateway.NextFallbackModel(
+                    "qwen3-vl-30b", tried) == null,
+                "The capacity chain must hop to the next unused " +
+                "Gemini model.");
+            tried.Add("gemini-2.5-flash");
+            tried.Add("gemini-2.5-flash-lite");
+            Assert(
+                GeminiCodeAssistGateway.NextFallbackModel(
+                    "gemini-3.5-flash", tried) ==
+                "gemini-2.5-pro" &&
+                GeminiCodeAssistGateway.NextFallbackModel(
+                    "gemini-2.5-pro",
+                    new HashSet<string>(
+                        new[]
+                        {
+                            "gemini-2.5-flash",
+                            "gemini-2.5-flash-lite"
+                        },
+                        StringComparer.OrdinalIgnoreCase)) ==
+                null,
+                "The chain must exhaust once every bucket was " +
+                "tried.");
         }
 
         private static void GeminiSignInSettingsAreModeAware()

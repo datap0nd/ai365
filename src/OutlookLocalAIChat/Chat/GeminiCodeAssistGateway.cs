@@ -100,13 +100,25 @@ namespace OutlookLocalAIChat.Chat
         // longer, and a persistent-429 fallback from pro to flash
         // that sticks for the rest of the session.
         public const int MaxRetryAttempts = 10;
-        public const string FallbackModel = "gemini-2.5-flash";
+        // The CLI never parks on an exhausted model: on capacity
+        // errors it silently hops through a chain of models, each
+        // with its own quota bucket, until one answers. This is the
+        // same chain its internal calls use.
+        public static readonly IReadOnlyList<string>
+            CapacityFallbackChain =
+                new[]
+                {
+                    "gemini-2.5-flash",
+                    "gemini-2.5-flash-lite",
+                    "gemini-2.5-pro"
+                };
         private readonly Random _retryJitter = new Random();
-        // Models this session fell back from after persistent
-        // capacity errors; requests for them route to the fallback
-        // model until Outlook restarts, matching the CLI.
-        private readonly HashSet<string> _capacityFallbacks =
-            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Session-sticky reroutes: once a model exhausts, later
+        // requests for it start directly at the model that worked.
+        private readonly Dictionary<string, string>
+            _stickyModelRoutes =
+                new Dictionary<string, string>(
+                    StringComparer.OrdinalIgnoreCase);
 
         public static int ComputeRetryDelaySeconds(
             int attempt,
@@ -135,64 +147,86 @@ namespace OutlookLocalAIChat.Chat
                       Math.Max(0.0, Math.Min(1.0, jitter01)));
         }
 
-        // The CLI falls back to its flash default from ANY model
-        // whose capacity stays exhausted after the two fast probes -
-        // including newer models a tier does not actually serve,
-        // which also answer with capacity errors. Only the fallback
-        // model itself has nowhere to go and keeps retrying.
-        public static string FallbackModelFor(
-            string model,
-            int attempt)
+        // Next model in the capacity chain that has not been tried
+        // yet this request. Any Gemini model participates; a null
+        // result means every bucket in the chain was exhausted.
+        public static string NextFallbackModel(
+            string current,
+            ICollection<string> triedModels)
         {
-            var name = NormalizeModel(model).ToLowerInvariant();
-            return attempt >= 2 &&
-                   name.IndexOf(
-                       "gemini",
-                       StringComparison.Ordinal) >= 0 &&
-                   !string.Equals(
-                       name,
-                       FallbackModel,
-                       StringComparison.Ordinal)
-                ? FallbackModel
-                : null;
+            var name = NormalizeModel(current).ToLowerInvariant();
+            if (name.IndexOf(
+                    "gemini",
+                    StringComparison.Ordinal) < 0)
+            {
+                return null;
+            }
+
+            foreach (var candidate in CapacityFallbackChain)
+            {
+                if (!string.Equals(
+                        candidate,
+                        name,
+                        StringComparison.OrdinalIgnoreCase) &&
+                    (triedModels == null ||
+                     !triedModels.Contains(candidate)))
+                {
+                    return candidate;
+                }
+            }
+
+            return null;
         }
 
         private string EffectiveModel(string model)
         {
             var normalized = NormalizeModel(model);
-            if (_capacityFallbacks.Contains(normalized))
+            string route;
+            if (_stickyModelRoutes.TryGetValue(
+                normalized,
+                out route))
             {
-                return FallbackModel;
+                return route;
             }
 
             return normalized;
         }
 
         // Central 429 policy for generateContent. Returns 1 when the
-        // caller should retry after the wait, 2 when the model was
-        // swapped for the fallback (caller restarts its attempt
-        // counter), and 0 when attempts are exhausted.
+        // caller should retry after the wait, 2 when the request
+        // hopped to the next model in the chain (caller restarts its
+        // attempt counter), and 0 when everything is exhausted.
         private async Task<int> HandleCapacityAsync(
             IDictionary<string, object> envelope,
             int attempt,
             string body,
+            string originalModel,
+            HashSet<string> triedModels,
             CancellationToken cancellationToken)
         {
+            var current = Convert.ToString(envelope["model"]);
+            if (attempt >= 2)
+            {
+                triedModels.Add(NormalizeModel(current)
+                    .ToLowerInvariant());
+                var next = NextFallbackModel(
+                    current,
+                    triedModels);
+                if (next != null)
+                {
+                    envelope["model"] = next;
+                    _stickyModelRoutes[
+                        NormalizeModel(originalModel)] = next;
+                    StatusListener?.Invoke(
+                        current + " is at capacity - trying " +
+                        next);
+                    return 2;
+                }
+            }
+
             if (attempt >= MaxRetryAttempts - 1)
             {
                 return 0;
-            }
-
-            var current = Convert.ToString(envelope["model"]);
-            var fallback = FallbackModelFor(current, attempt);
-            if (fallback != null)
-            {
-                _capacityFallbacks.Add(NormalizeModel(current));
-                envelope["model"] = fallback;
-                StatusListener?.Invoke(
-                    current + " is at capacity - switching to " +
-                    fallback + " for this session");
-                return 2;
             }
 
             var delay = ComputeRetryDelaySeconds(
@@ -695,6 +729,8 @@ namespace OutlookLocalAIChat.Chat
                 }
             };
             IDictionary<string, object> root = null;
+            var triedModels = new HashSet<string>(
+                StringComparer.OrdinalIgnoreCase);
             for (var attempt = 0;
                  attempt < MaxRetryAttempts;
                  attempt++)
@@ -716,6 +752,8 @@ namespace OutlookLocalAIChat.Chat
                         envelope,
                         attempt,
                         exception.ResponseSnippet,
+                        requestModel.model,
+                        triedModels,
                         cancellationToken).ConfigureAwait(true);
                     if (action == 0)
                     {
@@ -778,6 +816,8 @@ namespace OutlookLocalAIChat.Chat
                         _thoughtSignatures)
                 }
             };
+            var triedModels = new HashSet<string>(
+                StringComparer.OrdinalIgnoreCase);
             for (var attempt = 0;
                  attempt < MaxRetryAttempts;
                  attempt++)
@@ -825,6 +865,8 @@ namespace OutlookLocalAIChat.Chat
                                         envelope,
                                         attempt,
                                         body,
+                                        requestModel.model,
+                                        triedModels,
                                         cancellationToken)
                                         .ConfigureAwait(true);
                                 if (action == 2)
