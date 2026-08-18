@@ -337,6 +337,14 @@ namespace OutlookLocalAIChat.Outlook
             return true;
         }
 
+        private static uint ReadUInt32(byte[] data, int offset)
+        {
+            return (uint)(data[offset] |
+                (data[offset + 1] << 8) |
+                (data[offset + 2] << 16) |
+                (data[offset + 3] << 24));
+        }
+
         private static string RkToString(uint rk)
         {
             double value;
