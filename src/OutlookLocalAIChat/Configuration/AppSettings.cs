@@ -42,6 +42,11 @@ namespace OutlookLocalAIChat.Configuration
         public List<string> DiscoveredModels { get; set; } =
             new List<string>();
 
+        // User-configured MCP servers, surfaced to the model as
+        // namespaced mcp_ tools. Only Settings can add entries.
+        public List<McpServerConfig> McpServers { get; set; } =
+            new List<McpServerConfig>();
+
         public bool IsConfigured
         {
             get

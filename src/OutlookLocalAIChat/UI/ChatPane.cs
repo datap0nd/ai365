@@ -105,6 +105,7 @@ namespace OutlookLocalAIChat.UI
         private AppSettings _settings;
         private MessageSnapshot _selectedMessage;
         private DraftToolHost _draftTools;
+        private McpToolHost _mcpTools;
         private CancellationTokenSource _requestCancellation;
         private string _lastAssistantText = string.Empty;
         // Incremented when a request starts and when the user stops:
@@ -125,6 +126,7 @@ namespace OutlookLocalAIChat.UI
             LastCreated = this;
             _settings = _settingsStore.Load();
             ContextScale.Apply(_settings.UseGeminiSignIn);
+            _mcpTools = new McpToolHost(_settings.McpServers);
             // Surface silent gateway waits (quota retries) so a slow
             // response is never a mystery.
             _client.GeminiGateway.StatusListener =
@@ -2015,6 +2017,21 @@ namespace OutlookLocalAIChat.UI
                     false);
             }
 
+            // MCP definitions come from user-configured servers;
+            // connecting can spawn processes or hit the network, so
+            // it happens off the UI thread and one failed server is
+            // skipped inside the host.
+            IReadOnlyList<ChatToolDefinition> mcpTools = null;
+            var mcpHost = _mcpTools;
+            if (mcpHost != null && mcpHost.HasServers)
+            {
+                SetStatus("Connecting MCP tools...", false);
+                mcpTools = await Task.Run(
+                    () => mcpHost.GetDefinitions(),
+                    cancellationToken);
+                SetStatus("Thinking...", false);
+            }
+
             var request = ChatRequestFactory.Create(
                 activeModel,
                 selectedMessage,
@@ -2029,7 +2046,8 @@ namespace OutlookLocalAIChat.UI
                     ? _settings.ToneProfile
                     : null,
                 _settings.ToneStrength,
-                _settings.DraftRules);
+                _settings.DraftRules,
+                mcpTools);
             var mailboxTools = new MailboxToolHost(
                 _outlookApplication,
                 selectedMessage,
@@ -2108,13 +2126,31 @@ namespace OutlookLocalAIChat.UI
                     var isDraftCall =
                         DraftToolCatalog.IsDraftTool(
                             toolCall?.function?.name);
-                    var result = isDraftCall
-                        ? _draftTools.Execute(
+                    MailboxToolResult result;
+                    if (isDraftCall)
+                    {
+                        result = _draftTools.Execute(
                             toolCall,
                             mailboxTools.ResolveHandle,
                             draftAuthorization,
-                            toolCalls.Count == 1)
-                        : mailboxTools.Execute(toolCall);
+                            toolCalls.Count == 1);
+                    }
+                    else if (McpToolHost.IsMcpTool(
+                        toolCall?.function?.name))
+                    {
+                        // MCP calls run off the UI thread; the
+                        // host bounds the result and marks it
+                        // untrusted.
+                        result = await Task.Run(
+                            () => mcpHost != null
+                                ? mcpHost.Execute(toolCall)
+                                : mailboxTools.Execute(toolCall),
+                            cancellationToken);
+                    }
+                    else
+                    {
+                        result = mailboxTools.Execute(toolCall);
+                    }
                     results.Add(result);
                     if (isDraftCall)
                     {
@@ -2234,6 +2270,9 @@ namespace OutlookLocalAIChat.UI
                         settingsWindow.SavedSettings;
                     ContextScale.Apply(
                         _settings.UseGeminiSignIn);
+                    _mcpTools?.Dispose();
+                    _mcpTools = new McpToolHost(
+                        _settings.McpServers);
                     RefreshModelPicker();
                     SetStatus(
                         "Settings saved - " + _settings.Model,
@@ -2258,6 +2297,8 @@ namespace OutlookLocalAIChat.UI
             _client.Dispose();
             _draftTools?.Dispose();
             _draftTools = null;
+            _mcpTools?.Dispose();
+            _mcpTools = null;
             _outlookApplication = null;
             try
             {

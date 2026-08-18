@@ -52,6 +52,18 @@ namespace OutlookLocalAIChat.UI
         private readonly Button _supportButton =
             MakeButton("Create report email", false, 160);
         private readonly Label _supportStatus = new Label();
+        private readonly ListBox _mcpList = new ListBox();
+        private readonly TextBox _mcpName = new TextBox();
+        private readonly TextBox _mcpTarget = new TextBox();
+        private readonly TextBox _mcpArguments = new TextBox();
+        private readonly CheckBox _mcpEnabled = new CheckBox();
+        private readonly Button _mcpSave =
+            MakeButton("Add / update server", false, 150);
+        private readonly Button _mcpRemove =
+            MakeButton("Remove selected", false, 140);
+        private readonly Label _mcpStatus = new Label();
+        private readonly List<McpServerConfig> _mcpServers =
+            new List<McpServerConfig>();
         private readonly Button _save =
             MakeButton("Save", true, 96);
         private readonly OpenAiCompatibleClient _client =
@@ -119,6 +131,7 @@ namespace OutlookLocalAIChat.UI
             };
             tabs.TabPages.Add(BuildConnectionPage());
             tabs.TabPages.Add(BuildGeminiPage());
+            tabs.TabPages.Add(BuildMcpPage());
             tabs.TabPages.Add(BuildWritingStylePage());
             tabs.TabPages.Add(BuildSupportPage());
             root.Controls.Add(tabs, 0, 0);
@@ -162,6 +175,22 @@ namespace OutlookLocalAIChat.UI
             _draftRules.Text = TextBoundary.PlainText(
                 current?.DraftRules,
                 2000);
+            foreach (var server in current?.McpServers ??
+                new List<McpServerConfig>())
+            {
+                if (server == null)
+                {
+                    continue;
+                }
+
+                var sanitized = server.Sanitized();
+                if (sanitized.Target.Length > 0)
+                {
+                    _mcpServers.Add(sanitized);
+                }
+            }
+
+            RefreshMcpList();
             UpdateToneStrengthLabel();
             UpdateModelGuidance();
             UpdateTransportWarning();
@@ -610,6 +639,211 @@ namespace OutlookLocalAIChat.UI
             }
         }
 
+        private TabPage BuildMcpPage()
+        {
+            var page = new TabPage("MCP")
+            {
+                AutoScroll = true
+            };
+            var layout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 11,
+                Padding = new Padding(18, 16, 18, 12)
+            };
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            layout.RowStyles.Add(
+                new RowStyle(SizeType.Percent, 100));
+            for (var row = 2; row < 11; row++)
+            {
+                layout.RowStyles.Add(
+                    new RowStyle(SizeType.AutoSize));
+            }
+
+            var intro = SupportingText(
+                "MCP (Model Context Protocol) servers add extra " +
+                "tools to the chat - local commands or HTTP " +
+                "endpoints that you connect here yourself. They " +
+                "run with your Windows account's own permissions, " +
+                "outside this add-in's guardrails: AI365 itself " +
+                "still cannot send email or save or delete " +
+                "documents, but a server you add acts with " +
+                "whatever powers it has. Only add servers you " +
+                "trust, prefer read-only ones, and remember their " +
+                "results are treated as untrusted data.");
+            intro.ForeColor = SystemColors.ControlText;
+            layout.Controls.Add(intro, 0, 0);
+
+            _mcpList.Dock = DockStyle.Fill;
+            _mcpList.MinimumSize = new Size(0, 110);
+            _mcpList.AccessibleName = "Configured MCP servers";
+            _mcpList.SelectedIndexChanged += McpSelectionChanged;
+            layout.Controls.Add(_mcpList, 0, 1);
+
+            layout.Controls.Add(
+                FieldLabel("Server name (short, letters and digits)"),
+                0,
+                2);
+            _mcpName.Dock = DockStyle.Fill;
+            _mcpName.MaxLength = 24;
+            _mcpName.AccessibleName = "MCP server name";
+            layout.Controls.Add(_mcpName, 0, 3);
+
+            layout.Controls.Add(
+                FieldLabel(
+                    "Command path or HTTP(S) endpoint URL"),
+                0,
+                4);
+            _mcpTarget.Dock = DockStyle.Fill;
+            _mcpTarget.MaxLength = 400;
+            _mcpTarget.AccessibleName =
+                "MCP server command or URL";
+            layout.Controls.Add(_mcpTarget, 0, 5);
+
+            layout.Controls.Add(
+                FieldLabel(
+                    "Command-line arguments (local commands only)"),
+                0,
+                6);
+            _mcpArguments.Dock = DockStyle.Fill;
+            _mcpArguments.MaxLength = 1000;
+            _mcpArguments.AccessibleName =
+                "MCP server arguments";
+            layout.Controls.Add(_mcpArguments, 0, 7);
+
+            _mcpEnabled.AutoSize = true;
+            _mcpEnabled.Checked = true;
+            _mcpEnabled.Text = "Enabled";
+            _mcpEnabled.AccessibleName =
+                "MCP server enabled";
+            layout.Controls.Add(_mcpEnabled, 0, 8);
+
+            var buttons = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.LeftToRight,
+                Padding = new Padding(0, 8, 0, 0),
+                Margin = new Padding(0)
+            };
+            _mcpSave.Click += McpSaveClick;
+            _mcpRemove.Click += McpRemoveClick;
+            buttons.Controls.Add(_mcpSave);
+            buttons.Controls.Add(_mcpRemove);
+            layout.Controls.Add(buttons, 0, 9);
+
+            ConfigureSupportingLabel(_mcpStatus);
+            _mcpStatus.Text =
+                "Changes apply after you press Save. Up to " +
+                McpServerConfig.MaxServers +
+                " servers; their tools appear to the model as " +
+                "mcp_<server>_<tool>.";
+            layout.Controls.Add(_mcpStatus, 0, 10);
+            page.Controls.Add(layout);
+            return page;
+        }
+
+        private void RefreshMcpList()
+        {
+            _mcpList.Items.Clear();
+            foreach (var server in _mcpServers)
+            {
+                _mcpList.Items.Add(
+                    server.Name +
+                    (server.Enabled ? string.Empty : " (off)") +
+                    "  -  " +
+                    TextBoundary.SingleLine(server.Target, 80));
+            }
+        }
+
+        private void McpSelectionChanged(
+            object sender,
+            EventArgs eventArgs)
+        {
+            var index = _mcpList.SelectedIndex;
+            if (index < 0 || index >= _mcpServers.Count)
+            {
+                return;
+            }
+
+            var server = _mcpServers[index];
+            _mcpName.Text = server.Name;
+            _mcpTarget.Text = server.Target;
+            _mcpArguments.Text = server.Arguments;
+            _mcpEnabled.Checked = server.Enabled;
+        }
+
+        private void McpSaveClick(
+            object sender,
+            EventArgs eventArgs)
+        {
+            var server = new McpServerConfig
+            {
+                Name = _mcpName.Text,
+                Target = _mcpTarget.Text,
+                Arguments = _mcpArguments.Text,
+                Enabled = _mcpEnabled.Checked
+            }.Sanitized();
+            if (server.Target.Length == 0)
+            {
+                _mcpStatus.Text =
+                    "Enter a command path or an HTTP(S) URL " +
+                    "for the server.";
+                return;
+            }
+
+            var existing = _mcpServers.FindIndex(entry =>
+                string.Equals(
+                    entry.Name,
+                    server.Name,
+                    StringComparison.Ordinal));
+            if (existing >= 0)
+            {
+                _mcpServers[existing] = server;
+                _mcpStatus.Text =
+                    "Updated " + server.Name +
+                    ". Press Save to apply.";
+            }
+            else if (_mcpServers.Count >=
+                     McpServerConfig.MaxServers)
+            {
+                _mcpStatus.Text =
+                    "Server limit reached (" +
+                    McpServerConfig.MaxServers +
+                    "). Remove one first.";
+                return;
+            }
+            else
+            {
+                _mcpServers.Add(server);
+                _mcpStatus.Text =
+                    "Added " + server.Name +
+                    ". Press Save to apply.";
+            }
+
+            RefreshMcpList();
+        }
+
+        private void McpRemoveClick(
+            object sender,
+            EventArgs eventArgs)
+        {
+            var index = _mcpList.SelectedIndex;
+            if (index < 0 || index >= _mcpServers.Count)
+            {
+                _mcpStatus.Text =
+                    "Select a server in the list first.";
+                return;
+            }
+
+            var name = _mcpServers[index].Name;
+            _mcpServers.RemoveAt(index);
+            RefreshMcpList();
+            _mcpStatus.Text =
+                "Removed " + name + ". Press Save to apply.";
+        }
+
         private TabPage BuildSupportPage()
         {
             var page = new TabPage("Support")
@@ -680,11 +914,43 @@ namespace OutlookLocalAIChat.UI
             EventArgs eventArgs)
         {
             _error.Text = string.Empty;
-            if (_outlookApplication == null)
+            // From the Excel/PowerPoint panes there is no Outlook
+            // host object, so the running Outlook (or a fresh
+            // instance) is used to open the report draft.
+            var outlookApplication = _outlookApplication;
+            if (outlookApplication == null)
+            {
+                try
+                {
+                    outlookApplication =
+                        System.Runtime.InteropServices.Marshal
+                            .GetActiveObject(
+                                "Outlook.Application");
+                }
+                catch
+                {
+                    var outlookType = Type.GetTypeFromProgID(
+                        "Outlook.Application");
+                    if (outlookType != null)
+                    {
+                        try
+                        {
+                            outlookApplication =
+                                Activator.CreateInstance(
+                                    outlookType);
+                        }
+                        catch
+                        {
+                        }
+                    }
+                }
+            }
+
+            if (outlookApplication == null)
             {
                 _error.Text =
-                    "[OUTLOOK_NOT_READY] Open MetoAI from Outlook " +
-                    "before creating a report.";
+                    "[OUTLOOK_NOT_READY] Outlook is not " +
+                    "available to open the report email.";
                 return;
             }
 
@@ -693,7 +959,7 @@ namespace OutlookLocalAIChat.UI
                 var description = TextBoundary.PlainText(
                     _supportText.Text,
                     4000);
-                dynamic application = _outlookApplication;
+                dynamic application = outlookApplication;
                 dynamic mail = application.CreateItem(0);
                 mail.To = "r.cunha@samsung.com";
                 mail.Subject =
@@ -1051,7 +1317,10 @@ namespace OutlookLocalAIChat.UI
                     2000),
                 SwitchToVisionModelForImages =
                     _switchVisionForImages.Checked,
-                DiscoveredModels = CollectDiscoveredModels()
+                DiscoveredModels = CollectDiscoveredModels(),
+                McpServers = _mcpServers
+                    .Select(server => server.Sanitized())
+                    .ToList()
             };
         }
 

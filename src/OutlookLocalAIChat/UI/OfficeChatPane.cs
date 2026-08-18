@@ -97,6 +97,7 @@ namespace OutlookLocalAIChat.UI
         private string _hostKind = string.Empty;
         private AppSettings _settings;
         private DocumentDraftHost _draftHost;
+        private McpToolHost _mcpTools;
         private CancellationTokenSource _requestCancellation;
         private int _requestGeneration;
         private string _lastAssistantText = string.Empty;
@@ -111,6 +112,7 @@ namespace OutlookLocalAIChat.UI
             LastCreated = this;
             _settings = _settingsStore.Load();
             ContextScale.Apply(_settings.UseGeminiSignIn);
+            _mcpTools = new McpToolHost(_settings.McpServers);
             _client.GeminiGateway.StatusListener =
                 message => SetStatus(message, false);
             _elapsedTimer.Tick += ElapsedTick;
@@ -1278,6 +1280,20 @@ namespace OutlookLocalAIChat.UI
                     presentationTools.DescribeActiveContext();
             }
 
+            // MCP definitions come from user-configured servers;
+            // connecting can spawn processes or hit the network, so
+            // it happens off the UI thread.
+            IReadOnlyList<ChatToolDefinition> mcpTools = null;
+            var mcpHost = _mcpTools;
+            if (mcpHost != null && mcpHost.HasServers)
+            {
+                SetStatus("Connecting MCP tools...", false);
+                mcpTools = await Task.Run(
+                    () => mcpHost.GetDefinitions(),
+                    cancellationToken);
+                SetStatus("Thinking...", false);
+            }
+
             var request = DocumentChatRequestFactory.Create(
                 activeModel,
                 _hostKind,
@@ -1285,7 +1301,8 @@ namespace OutlookLocalAIChat.UI
                 _history,
                 prompt,
                 draftAuthorization.CanCreate,
-                externalContext);
+                externalContext,
+                mcpTools);
             if (externalImages.Count > 0)
             {
                 VisionAttachmentExchange.AppendVisionContext(
@@ -1356,6 +1373,16 @@ namespace OutlookLocalAIChat.UI
                             toolCall,
                             draftAuthorization,
                             toolCalls.Count == 1);
+                    }
+                    else if (McpToolHost.IsMcpTool(name) &&
+                             mcpHost != null)
+                    {
+                        // MCP calls run off the UI thread; the
+                        // host bounds the result and marks it
+                        // untrusted.
+                        result = await Task.Run(
+                            () => mcpHost.Execute(toolCall),
+                            cancellationToken);
                     }
                     else if (workbookTools != null)
                     {
@@ -1470,6 +1497,9 @@ namespace OutlookLocalAIChat.UI
                         settingsWindow.SavedSettings;
                     ContextScale.Apply(
                         _settings.UseGeminiSignIn);
+                    _mcpTools?.Dispose();
+                    _mcpTools = new McpToolHost(
+                        _settings.McpServers);
                     RefreshModelPicker();
                     SetStatus(
                         "Settings saved - " + _settings.Model,
@@ -1494,6 +1524,8 @@ namespace OutlookLocalAIChat.UI
             _client.Dispose();
             _draftHost?.Dispose();
             _draftHost = null;
+            _mcpTools?.Dispose();
+            _mcpTools = null;
             _hostApplication = null;
             try
             {

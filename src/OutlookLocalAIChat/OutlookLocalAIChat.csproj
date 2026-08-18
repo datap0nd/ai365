@@ -81,6 +81,9 @@
     <Compile Include="Office\PresentationToolHost.cs" />
     <Compile Include="Office\PresentationDraftWriter.cs" />
     <Compile Include="Office\DocumentDraftHost.cs" />
+    <Compile Include="Chat\McpConnection.cs" />
+    <Compile Include="Chat\McpToolHost.cs" />
+    <Compile Include="Configuration\McpServerConfig.cs" />
     <Compile Include="Configuration\GoogleSignInFlow.cs" />
     <Compile Include="Configuration\AppSettings.cs" />
     <Compile Include="Chat\VisionImagePrefetch.cs" />

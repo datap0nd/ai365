@@ -72,7 +72,9 @@ namespace OutlookLocalAIChat.Configuration
                     SwitchToVisionModelForImages =
                         stored.SwitchToVisionModelForImages,
                     DiscoveredModels = NormalizeDiscoveredModels(
-                        stored.DiscoveredModels)
+                        stored.DiscoveredModels),
+                    McpServers = NormalizeMcpServers(
+                        stored.McpServers)
                 };
             }
             catch
@@ -146,7 +148,9 @@ namespace OutlookLocalAIChat.Configuration
                 SwitchToVisionModelForImages =
                     settings.SwitchToVisionModelForImages,
                 DiscoveredModels = NormalizeDiscoveredModels(
-                    settings.DiscoveredModels)
+                    settings.DiscoveredModels),
+                McpServers = StoreMcpServers(
+                    settings.McpServers)
             };
 
             File.WriteAllText(
@@ -178,6 +182,74 @@ namespace OutlookLocalAIChat.Configuration
                 Entropy,
                 DataProtectionScope.CurrentUser);
             return Encoding.UTF8.GetString(clearBytes);
+        }
+
+        private static List<McpServerConfig> NormalizeMcpServers(
+            IEnumerable<StoredMcpServer> servers)
+        {
+            var result = new List<McpServerConfig>();
+            foreach (var server in servers ??
+                Enumerable.Empty<StoredMcpServer>())
+            {
+                if (server == null)
+                {
+                    continue;
+                }
+
+                var config = new McpServerConfig
+                {
+                    Name = server.Name,
+                    Target = server.Target,
+                    Arguments = server.Arguments,
+                    Enabled = server.Enabled
+                }.Sanitized();
+                if (config.Target.Length == 0)
+                {
+                    continue;
+                }
+
+                result.Add(config);
+                if (result.Count == McpServerConfig.MaxServers)
+                {
+                    break;
+                }
+            }
+
+            return result;
+        }
+
+        private static List<StoredMcpServer> StoreMcpServers(
+            IEnumerable<McpServerConfig> servers)
+        {
+            var result = new List<StoredMcpServer>();
+            foreach (var server in servers ??
+                Enumerable.Empty<McpServerConfig>())
+            {
+                if (server == null)
+                {
+                    continue;
+                }
+
+                var config = server.Sanitized();
+                if (config.Target.Length == 0)
+                {
+                    continue;
+                }
+
+                result.Add(new StoredMcpServer
+                {
+                    Name = config.Name,
+                    Target = config.Target,
+                    Arguments = config.Arguments,
+                    Enabled = config.Enabled
+                });
+                if (result.Count == McpServerConfig.MaxServers)
+                {
+                    break;
+                }
+            }
+
+            return result;
         }
 
         private static List<string> NormalizeDiscoveredModels(
@@ -218,6 +290,19 @@ namespace OutlookLocalAIChat.Configuration
             public bool SwitchToVisionModelForImages { get; set; }
 
             public List<string> DiscoveredModels { get; set; }
+
+            public List<StoredMcpServer> McpServers { get; set; }
+        }
+
+        private sealed class StoredMcpServer
+        {
+            public string Name { get; set; }
+
+            public string Target { get; set; }
+
+            public string Arguments { get; set; }
+
+            public bool Enabled { get; set; }
         }
     }
 }
