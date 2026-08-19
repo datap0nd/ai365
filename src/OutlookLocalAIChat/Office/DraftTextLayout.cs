@@ -51,63 +51,194 @@ namespace OutlookLocalAIChat.Office
             public int Length { get; }
         }
 
+        // A block of consecutive | cell | cell | lines, ready to
+        // become a real table in the target application. The first
+        // row is the header; a | --- | separator row is dropped.
+        public sealed class Table
+        {
+            internal Table(
+                IReadOnlyList<IReadOnlyList<string>> rows)
+            {
+                Rows = rows ?? new IReadOnlyList<string>[0];
+            }
+
+            public IReadOnlyList<IReadOnlyList<string>> Rows
+            {
+                get;
+            }
+        }
+
+        public const int MaxTableRows = 30;
+        public const int MaxTableColumns = 10;
+
         public static IReadOnlyList<Paragraph> Parse(string body)
         {
             var paragraphs = new List<Paragraph>();
-            if (body == null)
+            foreach (var raw in SplitBodyLines(body))
             {
-                return paragraphs;
-            }
-
-            var lines = body
-                .Replace("\r\n", "\n")
-                .Replace('\r', '\n')
-                .Split('\n');
-            foreach (var raw in lines)
-            {
-                var line = raw.TrimEnd();
-                var kind = KindNormal;
-                var content = line;
-                if (line.StartsWith("### ", StringComparison.Ordinal))
-                {
-                    kind = KindHeading3;
-                    content = line.Substring(4);
-                }
-                else if (line.StartsWith("## ", StringComparison.Ordinal))
-                {
-                    kind = KindHeading2;
-                    content = line.Substring(3);
-                }
-                else if (line.StartsWith("# ", StringComparison.Ordinal))
-                {
-                    kind = KindHeading1;
-                    content = line.Substring(2);
-                }
-                else if (
-                    line.StartsWith("- ", StringComparison.Ordinal) ||
-                    line.StartsWith("* ", StringComparison.Ordinal))
-                {
-                    kind = KindBullet;
-                    content = line.Substring(2);
-                }
-                else if (line == "---")
-                {
-                    content = string.Empty;
-                }
-                else
-                {
-                    var prefix = NumberedPrefixLength(line);
-                    if (prefix > 0)
-                    {
-                        kind = KindNumbered;
-                        content = line.Substring(prefix);
-                    }
-                }
-
-                paragraphs.Add(BuildParagraph(content, kind));
+                paragraphs.Add(ParseLine(raw));
             }
 
             return paragraphs;
+        }
+
+        // Like Parse, but consecutive table lines group into Table
+        // blocks; every other entry is a Paragraph. Items are only
+        // ever Paragraph or Table.
+        public static IReadOnlyList<object> ParseBlocks(string body)
+        {
+            var blocks = new List<object>();
+            List<IReadOnlyList<string>> tableRows = null;
+            foreach (var raw in SplitBodyLines(body))
+            {
+                var cells = SplitTableCells(raw);
+                if (cells != null)
+                {
+                    if (IsSeparatorRow(cells))
+                    {
+                        continue;
+                    }
+
+                    if (tableRows == null)
+                    {
+                        tableRows =
+                            new List<IReadOnlyList<string>>();
+                    }
+
+                    if (tableRows.Count < MaxTableRows)
+                    {
+                        tableRows.Add(cells);
+                    }
+
+                    continue;
+                }
+
+                if (tableRows != null)
+                {
+                    blocks.Add(new Table(tableRows));
+                    tableRows = null;
+                }
+
+                blocks.Add(ParseLine(raw));
+            }
+
+            if (tableRows != null)
+            {
+                blocks.Add(new Table(tableRows));
+            }
+
+            return blocks;
+        }
+
+        // Splits one | a | b | line into trimmed cell texts, or
+        // null when the line is not shaped like a table row.
+        public static IReadOnlyList<string> SplitTableCells(
+            string line)
+        {
+            var trimmed = (line ?? string.Empty).Trim();
+            if (trimmed.Length < 2 ||
+                trimmed[0] != '|' ||
+                trimmed[trimmed.Length - 1] != '|')
+            {
+                return null;
+            }
+
+            var cells = new List<string>();
+            var start = 1;
+            for (var position = 1;
+                 position < trimmed.Length &&
+                 cells.Count < MaxTableColumns;
+                 position++)
+            {
+                if (trimmed[position] == '|')
+                {
+                    cells.Add(trimmed
+                        .Substring(start, position - start)
+                        .Trim());
+                    start = position + 1;
+                }
+            }
+
+            return cells.Count > 0 ? cells : null;
+        }
+
+        private static bool IsSeparatorRow(
+            IReadOnlyList<string> cells)
+        {
+            foreach (var cell in cells)
+            {
+                var dashes = 0;
+                foreach (var character in cell)
+                {
+                    if (character == '-')
+                    {
+                        dashes++;
+                    }
+                    else if (character != ':')
+                    {
+                        return false;
+                    }
+                }
+
+                if (dashes == 0)
+                {
+                    return false;
+                }
+            }
+
+            return cells.Count > 0;
+        }
+
+        private static string[] SplitBodyLines(string body)
+        {
+            return (body ?? string.Empty)
+                .Replace("\r\n", "\n")
+                .Replace('\r', '\n')
+                .Split('\n');
+        }
+
+        private static Paragraph ParseLine(string raw)
+        {
+            var line = (raw ?? string.Empty).TrimEnd();
+            var kind = KindNormal;
+            var content = line;
+            if (line.StartsWith("### ", StringComparison.Ordinal))
+            {
+                kind = KindHeading3;
+                content = line.Substring(4);
+            }
+            else if (line.StartsWith("## ", StringComparison.Ordinal))
+            {
+                kind = KindHeading2;
+                content = line.Substring(3);
+            }
+            else if (line.StartsWith("# ", StringComparison.Ordinal))
+            {
+                kind = KindHeading1;
+                content = line.Substring(2);
+            }
+            else if (
+                line.StartsWith("- ", StringComparison.Ordinal) ||
+                line.StartsWith("* ", StringComparison.Ordinal))
+            {
+                kind = KindBullet;
+                content = line.Substring(2);
+            }
+            else if (line == "---")
+            {
+                content = string.Empty;
+            }
+            else
+            {
+                var prefix = NumberedPrefixLength(line);
+                if (prefix > 0)
+                {
+                    kind = KindNumbered;
+                    content = line.Substring(prefix);
+                }
+            }
+
+            return BuildParagraph(content, kind);
         }
 
         private static int NumberedPrefixLength(string line)

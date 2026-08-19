@@ -219,26 +219,38 @@ document-shaped and read-only:
   in Outlook.
 
 Writes exist only as clearly marked drafts, and only when your own latest
-message contains an explicit request ("put this in a draft sheet", "add
-slides about ...", "fix the formula in column B", "email this to ...").
-Asking to edit or fix document content also counts - the revision lands in
-the marked draft surface, never in your original file. One draft attempt
-per request, as in Outlook:
+message asks to produce something ("put this in a draft sheet", "build a
+slide with this", "do a bar chart with this in a slide", "put this table
+into word", "fix the formula in column B", "email this to ..."). Asking to
+edit, fix, chart, or move content all count - no confirmation round-trips.
+The revision always lands in the marked draft surface, never in your
+original file, and one draft call carries the complete deliverable (table
+plus formulas plus chart, or a full document with tables and analysis):
 
 - `write_draft_sheet` fills the dedicated **AI365 Draft** worksheet
   (created at the end of the workbook; other sheets are never touched).
-  Cells starting with `=` become **live Excel formulas** that may reference
-  other sheets of the same workbook (`=SUM(Data!B2:B9)`); numbers and dates
-  are typed automatically, the title and header row are styled, and columns
-  autofit. Formulas that could reach the network, native code, or other
-  files (`WEBSERVICE`, `RTD`, `CALL`, `HYPERLINK`, external `[Book]`
-  references) are rejected and land as visible text instead.
+  The table always lands at **A3** (title in A1) so formulas can reference
+  it deterministically. Cells starting with `=` become **live Excel
+  formulas** that may reference other sheets of the same workbook
+  (`=SUM(Data!B2:B9)`) or the draft table itself; locale-style formulas
+  fall back through `FormulaLocal`, numbers and dates are typed
+  automatically, the title and header row are styled, and columns autofit.
+  Ask for a chart and a **native Excel chart** is drawn below the table,
+  sourced live from it (column, bar, line, pie, area, scatter). Formulas
+  that could reach the network, native code, or other files (`WEBSERVICE`,
+  `RTD`, `CALL`, `HYPERLINK`, external `[Book]` references) are rejected
+  and land as visible text instead.
 - `add_draft_slides` appends slides whose titles carry the
   **[AI365 draft]** marker; existing slides are never modified. Sub-bullets
-  indent with two leading spaces per level.
+  indent with two leading spaces per level, and a slide can carry a
+  **native chart** built from data the model supplies - "do a bar chart
+  with this in a slide" draws a real PowerPoint chart, not a picture or a
+  text list.
 - `write_draft_document` opens a brand-new, unsaved Word document headed
   **[AI365 draft]**; the open document is never modified. `#`/`##`/`###`
-  headings, `-`/`1.` lists, and `**bold**` render as real Word styles.
+  headings, `-`/`1.` lists, and `**bold**` render as real Word styles, and
+  `| cell | cell |` rows become **real formatted Word tables** - "put this
+  table into word with an analysis" produces a styled table plus prose.
 - `create_email_draft` opens an unsent Outlook draft for review - Outlook
   starts if needed, the draft can attach the current file when it is saved
   on disk, and sending stays impossible. When the model picks a recipient

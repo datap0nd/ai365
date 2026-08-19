@@ -109,9 +109,14 @@ namespace OutlookLocalAIChat.Chat
                                         WorkbookDraftWriter.MaxDraftRows +
                                         " rows of " +
                                         WorkbookDraftWriter.MaxDraftColumns +
-                                        " cells. A cell starting with = becomes a " +
-                                        "live Excel formula and may reference other " +
-                                        "sheets of this workbook (e.g. =SUM(Data!B2:B9)); " +
+                                        " cells. The table is always written with " +
+                                        "its header in row 3 starting at cell A3 " +
+                                        "(the title goes in A1), so formulas can " +
+                                        "reference the draft table itself: the " +
+                                        "first data row is row 4. A cell starting " +
+                                        "with = becomes a live Excel formula and " +
+                                        "may reference other sheets of this " +
+                                        "workbook (e.g. =SUM(Data!B2:B9)); " +
                                         "functions that reach the network or other " +
                                         "files are rejected and land as text. Plain " +
                                         "numbers and dates are typed automatically."
@@ -128,6 +133,43 @@ namespace OutlookLocalAIChat.Chat
                                             }
                                         }
                                     }
+                                }
+                            },
+                            {
+                                "chart",
+                                new Dictionary<string, object>
+                                {
+                                    { "type", "object" },
+                                    {
+                                        "description",
+                                        "Optional native Excel chart drawn " +
+                                        "below the table, sourced live from " +
+                                        "the whole table (header row = " +
+                                        "series names, first column = " +
+                                        "categories). Include it whenever " +
+                                        "the user asks for a chart, graph, " +
+                                        "or visualization."
+                                    },
+                                    {
+                                        "properties",
+                                        new Dictionary<string, object>
+                                        {
+                                            {
+                                                "type",
+                                                ToolSchema.String(
+                                                    "Chart kind: column, " +
+                                                    "bar, line, pie, area, " +
+                                                    "or scatter.")
+                                            },
+                                            {
+                                                "title",
+                                                ToolSchema.String(
+                                                    "Chart title.")
+                                            }
+                                        }
+                                    },
+                                    { "required", new string[0] },
+                                    { "additionalProperties", false }
                                 }
                             }
                         },

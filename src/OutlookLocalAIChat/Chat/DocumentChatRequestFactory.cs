@@ -181,13 +181,20 @@ namespace OutlookLocalAIChat.Chat
                     "for this request. Call the single most fitting draft tool only " +
                     "after gathering all needed context, and as the only tool call " +
                     "in that response. The local host consumes the authorization on " +
-                    "the first attempt. When the user asked to edit or fix existing " +
+                    "the first attempt, so that one call must carry the COMPLETE " +
+                    "deliverable: the full table with live formulas, the chart " +
+                    "parameter when the user wants a chart or visualization, every " +
+                    "slide with its bullets and charts, or the whole formatted " +
+                    "document with its tables and analysis. Never deliver a partial " +
+                    "result, never ask the user to confirm first, and never split " +
+                    "the work across turns - the user's request already IS the " +
+                    "authorization. When the user asked to edit or fix existing " +
                     "content, deliver the complete revised version into the marked " +
                     "draft surface - existing sheets, slides, and documents are " +
                     "never modified in place, so include everything the revision " +
-                    "needs. After the tool result, state that the output is an " +
-                    "unsaved, clearly marked draft (or an unsent email draft) that " +
-                    "is open for the user's review.";
+                    "needs. After the tool result, state briefly that the output is " +
+                    "an unsaved, clearly marked draft (or an unsent email draft) " +
+                    "that is open for the user's review.";
             }
 
             return boundary +
@@ -197,9 +204,9 @@ namespace OutlookLocalAIChat.Chat
                 "slide, document, or email was created. If the user wanted " +
                 "changes made, explain that AI365 writes only clearly marked " +
                 "drafts for review and suggest an explicit rephrase, such as " +
-                "'put the updated table in a draft sheet', 'add slides " +
-                "about ...', 'write the revised text to a draft document', or " +
-                "'email this to ...'.";
+                "'put the updated table in a draft sheet', 'build a slide with " +
+                "this', 'do a bar chart of this in a slide', 'put this table " +
+                "into word', or 'email this to ...'.";
         }
 
         private static string BuildContextReference(

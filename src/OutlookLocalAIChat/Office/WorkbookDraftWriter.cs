@@ -25,6 +25,19 @@ namespace OutlookLocalAIChat.Office
             string title,
             IReadOnlyList<IReadOnlyList<string>> rows)
         {
+            return WriteDraftSheet(
+                excelApplication,
+                title,
+                rows,
+                null);
+        }
+
+        internal static string WriteDraftSheet(
+            object excelApplication,
+            string title,
+            IReadOnlyList<IReadOnlyList<string>> rows,
+            DraftSheetChart chart)
+        {
             if (rows == null || rows.Count == 0)
             {
                 throw new InvalidOperationException(
@@ -64,14 +77,17 @@ namespace OutlookLocalAIChat.Office
                 sheet.UsedRange.ClearContents();
             }
 
+            // The layout is deterministic so model formulas can
+            // reference the draft table itself: title in A1, table
+            // always starting at A3 (header row 3, first data row
+            // 4).
             var boundedTitle = TextBoundary.SingleLine(
                 title,
                 180);
-            var startRow = 1;
+            const int startRow = 3;
             if (boundedTitle.Length > 0)
             {
                 sheet.Cells[1, 1].Value2 = boundedTitle;
-                startRow = 3;
             }
 
             var rowCount = Math.Min(rows.Count, MaxDraftRows);
@@ -137,25 +153,34 @@ namespace OutlookLocalAIChat.Office
             var formulaCount = 0;
             foreach (var formula in formulas)
             {
+                dynamic cell = sheet.Cells[
+                    startRow + formula.Key[0],
+                    formula.Key[1] + 1];
                 try
                 {
-                    sheet.Cells[
-                        startRow + formula.Key[0],
-                        formula.Key[1] + 1].Formula =
-                        formula.Value;
+                    cell.Formula = formula.Value;
                     formulaCount++;
                 }
                 catch
                 {
+                    // Models sometimes emit locale-style formulas
+                    // (semicolon argument separators); FormulaLocal
+                    // accepts the current locale's syntax before
+                    // the final degrade-to-text fallback.
                     try
                     {
-                        sheet.Cells[
-                            startRow + formula.Key[0],
-                            formula.Key[1] + 1].Value2 =
-                            "'" + formula.Value;
+                        cell.FormulaLocal = formula.Value;
+                        formulaCount++;
                     }
                     catch
                     {
+                        try
+                        {
+                            cell.Value2 = "'" + formula.Value;
+                        }
+                        catch
+                        {
+                        }
                     }
                 }
             }
@@ -166,6 +191,14 @@ namespace OutlookLocalAIChat.Office
                 startRow,
                 rowCount,
                 target);
+            var chartAdded =
+                chart != null &&
+                AddDraftChart(
+                    sheet,
+                    chart,
+                    startRow,
+                    rowCount,
+                    target);
             try
             {
                 sheet.Activate();
@@ -180,9 +213,93 @@ namespace OutlookLocalAIChat.Office
                     ? " including " + formulaCount +
                       " live formulas"
                     : string.Empty) +
+                (chartAdded
+                    ? " and a native chart"
+                    : string.Empty) +
                 " to the '" +
                 DraftSheetName +
                 "' sheet. Nothing was saved.";
+        }
+
+        // The chart definition for the draft sheet: it always uses
+        // the just-written table as its source (header row = series
+        // names, first column = categories).
+        internal sealed class DraftSheetChart
+        {
+            internal DraftSheetChart(int typeCode, string title)
+            {
+                TypeCode = typeCode;
+                Title = title ?? string.Empty;
+            }
+
+            internal int TypeCode { get; }
+
+            internal string Title { get; }
+        }
+
+        // Reads the optional chart argument of write_draft_sheet;
+        // anything malformed simply yields no chart.
+        internal static DraftSheetChart ParseChart(object value)
+        {
+            var map = value as IDictionary<string, object>;
+            if (map == null)
+            {
+                return null;
+            }
+
+            object typeValue;
+            object titleValue;
+            map.TryGetValue("type", out typeValue);
+            map.TryGetValue("title", out titleValue);
+            return new DraftSheetChart(
+                DraftChartTypes.Resolve(
+                    Convert.ToString(typeValue)),
+                TextBoundary.SingleLine(
+                    Convert.ToString(titleValue),
+                    180));
+        }
+
+        // Draws a native chart below the table on the draft sheet,
+        // sourced live from the table range. Chart failures never
+        // fail the draft - the table is the primary deliverable.
+        private static bool AddDraftChart(
+            dynamic sheet,
+            DraftSheetChart chart,
+            int startRow,
+            int rowCount,
+            dynamic target)
+        {
+            try
+            {
+                dynamic anchor = sheet.Cells[
+                    startRow + rowCount + 2,
+                    1];
+                dynamic chartObject = sheet.ChartObjects().Add(
+                    (double)anchor.Left,
+                    (double)anchor.Top,
+                    440.0,
+                    270.0);
+                chartObject.Chart.SetSourceData(target);
+                chartObject.Chart.ChartType = chart.TypeCode;
+                if (chart.Title.Length > 0)
+                {
+                    try
+                    {
+                        chartObject.Chart.HasTitle = true;
+                        chartObject.Chart.ChartTitle.Text =
+                            chart.Title;
+                    }
+                    catch
+                    {
+                    }
+                }
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         // Cosmetic polish for the draft sheet: bold title, bold

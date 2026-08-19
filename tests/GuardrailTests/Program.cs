@@ -4110,6 +4110,40 @@ namespace GuardrailTests
                 unmatched[0].Text == "a **b" &&
                 unmatched[0].BoldRanges.Count == 0,
                 "Unmatched bold markers must stay literal.");
+
+            var blocks = DraftTextLayout.ParseBlocks(
+                "Intro\n| Region | Sales |\n| --- | --- |\n" +
+                "| North | 100 |\n| South | 80 |\nOutro");
+            Assert(
+                blocks.Count == 3 &&
+                blocks[0] is DraftTextLayout.Paragraph &&
+                blocks[1] is DraftTextLayout.Table &&
+                blocks[2] is DraftTextLayout.Paragraph,
+                "Table blocks were not grouped from pipe rows.");
+            var parsedTable = (DraftTextLayout.Table)blocks[1];
+            Assert(
+                parsedTable.Rows.Count == 3 &&
+                parsedTable.Rows[0][0] == "Region" &&
+                parsedTable.Rows[1][1] == "100" &&
+                parsedTable.Rows[2][0] == "South",
+                "Table cells were not parsed correctly.");
+            Assert(
+                DraftTextLayout.SplitTableCells(
+                    "| a | b |")[1] == "b" &&
+                DraftTextLayout.SplitTableCells(
+                    "no pipes here") == null,
+                "Table cell splitting failed.");
+
+            Assert(
+                DraftChartTypes.Resolve("bar") ==
+                    DraftChartTypes.BarClustered &&
+                DraftChartTypes.Resolve("PIE") ==
+                    DraftChartTypes.Pie &&
+                DraftChartTypes.Resolve("nonsense") ==
+                    DraftChartTypes.ColumnClustered &&
+                DraftChartTypes.Resolve(null) ==
+                    DraftChartTypes.ColumnClustered,
+                "Chart type resolution must be total and bounded.");
         }
 
         private static void DraftHtmlRendersTables()
@@ -4254,6 +4288,18 @@ namespace GuardrailTests
                 DocumentDraftIntentPolicy.AllowsDraft(
                     "fix the formula in column B"),
                 "A fix request on document content must authorize a draft.");
+            Assert(
+                DocumentDraftIntentPolicy.AllowsDraft(
+                    "build a slide with this"),
+                "A build-a-slide request must authorize a draft.");
+            Assert(
+                DocumentDraftIntentPolicy.AllowsDraft(
+                    "do a bar chart with this in a slide"),
+                "A chart request must authorize a draft.");
+            Assert(
+                DocumentDraftIntentPolicy.AllowsDraft(
+                    "put this table into word and format it properly"),
+                "A put-into-word request must authorize a draft.");
             Assert(
                 !DocumentDraftIntentPolicy.AllowsDraft(
                     "give me an overview of the project"),

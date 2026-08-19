@@ -88,9 +88,15 @@ namespace OutlookLocalAIChat.Chat
                                     "structure use only these layout " +
                                     "lines: # heading, ## subheading, " +
                                     "### minor heading, - bullet item, " +
-                                    "1. numbered item, and **bold** " +
-                                    "for inline emphasis - they render " +
-                                    "as real Word styles.")
+                                    "1. numbered item, **bold** for " +
+                                    "inline emphasis, and " +
+                                    "| cell | cell | rows that become " +
+                                    "real formatted Word tables - all " +
+                                    "render as native Word styles. " +
+                                    "When asked to move a table into " +
+                                    "Word, always write it as " +
+                                    "| cell | cell | rows plus your " +
+                                    "analysis as normal paragraphs.")
                             }
                         },
                         "body")

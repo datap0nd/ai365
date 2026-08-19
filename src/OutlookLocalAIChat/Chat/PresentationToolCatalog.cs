@@ -78,7 +78,9 @@ namespace OutlookLocalAIChat.Chat
                         "presentation for the user to review. Each added " +
                         "slide title is prefixed with [AI365 draft]. " +
                         "Existing slides are never modified and the file is " +
-                        "never saved. At most " +
+                        "never saved. A slide can carry bullet text, a " +
+                        "native chart built from data you supply, or both. " +
+                        "At most " +
                         PresentationDraftWriter.MaxDraftSlides +
                         " slides per call. Call it only after gathering " +
                         "the needed context, as the only tool call in that " +
@@ -124,6 +126,10 @@ namespace OutlookLocalAIChat.Chat
                                                                 "One bullet line.")
                                                         }
                                                     }
+                                                },
+                                                {
+                                                    "chart",
+                                                    ChartSchema()
                                                 }
                                             },
                                             "title")
@@ -133,6 +139,123 @@ namespace OutlookLocalAIChat.Chat
                         },
                         "slides")
                 }
+            };
+        }
+
+        // Schema of the optional native chart on one slide. Kept as
+        // a method so the cross-app send_to_powerpoint definition
+        // shares the exact same contract.
+        private static Dictionary<string, object> ChartSchema()
+        {
+            return new Dictionary<string, object>
+            {
+                { "type", "object" },
+                {
+                    "description",
+                    "Optional native chart drawn on the slide. " +
+                    "Include it whenever the user asks for a " +
+                    "chart, graph, or visualization of data - " +
+                    "e.g. 'do a bar chart with this in a slide'. " +
+                    "At most " +
+                    PresentationDraftWriter.MaxChartCategories +
+                    " categories and " +
+                    PresentationDraftWriter.MaxChartSeries +
+                    " series."
+                },
+                {
+                    "properties",
+                    new Dictionary<string, object>
+                    {
+                        {
+                            "type",
+                            ToolSchema.String(
+                                "Chart kind: column, bar, line, " +
+                                "pie, area, or scatter.")
+                        },
+                        {
+                            "title",
+                            ToolSchema.String("Chart title.")
+                        },
+                        {
+                            "categories",
+                            new Dictionary<string, object>
+                            {
+                                { "type", "array" },
+                                {
+                                    "description",
+                                    "Category labels, one per data " +
+                                    "point."
+                                },
+                                {
+                                    "items",
+                                    ToolSchema.String(
+                                        "One category label.")
+                                }
+                            }
+                        },
+                        {
+                            "series",
+                            new Dictionary<string, object>
+                            {
+                                { "type", "array" },
+                                {
+                                    "description",
+                                    "Named series of numbers, one " +
+                                    "value per category."
+                                },
+                                {
+                                    "items",
+                                    new Dictionary<string, object>
+                                    {
+                                        { "type", "object" },
+                                        {
+                                            "properties",
+                                            new Dictionary<string, object>
+                                            {
+                                                {
+                                                    "name",
+                                                    ToolSchema.String(
+                                                        "Series name.")
+                                                },
+                                                {
+                                                    "values",
+                                                    new Dictionary<string, object>
+                                                    {
+                                                        { "type", "array" },
+                                                        {
+                                                            "items",
+                                                            new Dictionary<string, object>
+                                                            {
+                                                                { "type", "number" }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        {
+                                            "required",
+                                            new[]
+                                            {
+                                                "name",
+                                                "values"
+                                            }
+                                        },
+                                        {
+                                            "additionalProperties",
+                                            false
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "required",
+                    new[] { "categories", "series" }
+                },
+                { "additionalProperties", false }
             };
         }
 

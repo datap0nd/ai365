@@ -18,19 +18,70 @@ namespace OutlookLocalAIChat.Office
         internal const int MaxTitleCharacters = 200;
         internal const int MaxBulletCharacters = 300;
 
+        internal const int MaxChartCategories = 24;
+        internal const int MaxChartSeries = 5;
+
         internal sealed class DraftSlide
         {
             internal DraftSlide(
                 string title,
-                IReadOnlyList<DraftBullet> bullets)
+                IReadOnlyList<DraftBullet> bullets,
+                DraftChart chart)
             {
                 Title = title ?? string.Empty;
                 Bullets = bullets ?? new DraftBullet[0];
+                Chart = chart;
             }
 
             internal string Title { get; }
 
             internal IReadOnlyList<DraftBullet> Bullets { get; }
+
+            internal DraftChart Chart { get; }
+        }
+
+        // A native chart drawn on the slide from bounded data the
+        // model supplies: categories down the side, one to five
+        // named series of numbers.
+        internal sealed class DraftChart
+        {
+            internal DraftChart(
+                int typeCode,
+                string title,
+                IReadOnlyList<string> categories,
+                IReadOnlyList<DraftChartSeries> series)
+            {
+                TypeCode = typeCode;
+                Title = title ?? string.Empty;
+                Categories = categories ?? new string[0];
+                Series = series ?? new DraftChartSeries[0];
+            }
+
+            internal int TypeCode { get; }
+
+            internal string Title { get; }
+
+            internal IReadOnlyList<string> Categories { get; }
+
+            internal IReadOnlyList<DraftChartSeries> Series
+            {
+                get;
+            }
+        }
+
+        internal sealed class DraftChartSeries
+        {
+            internal DraftChartSeries(
+                string name,
+                IReadOnlyList<double> values)
+            {
+                Name = name ?? string.Empty;
+                Values = values ?? new double[0];
+            }
+
+            internal string Name { get; }
+
+            internal IReadOnlyList<double> Values { get; }
         }
 
         // A bullet line with its outline level (1-5). Sub-bullets
@@ -75,6 +126,7 @@ namespace OutlookLocalAIChat.Office
             }
 
             var added = 0;
+            var charts = 0;
             foreach (var slide in slides)
             {
                 if (added == MaxDraftSlides)
@@ -83,10 +135,15 @@ namespace OutlookLocalAIChat.Office
                 }
 
                 var index = (int)presentation.Slides.Count + 1;
-                // 2 = ppLayoutText: title plus body placeholder.
+                // 2 = ppLayoutText (title plus body placeholder);
+                // 11 = ppLayoutTitleOnly for chart-only slides so
+                // the chart gets the full body area.
                 dynamic created = presentation.Slides.Add(
                     index,
-                    2);
+                    slide.Chart != null &&
+                    slide.Bullets.Count == 0
+                        ? 11
+                        : 2);
                 var titleText = DraftMarker + " " +
                     TextBoundary.SingleLine(
                         slide.Title,
@@ -156,12 +213,151 @@ namespace OutlookLocalAIChat.Office
                     }
                 }
 
+                if (slide.Chart != null)
+                {
+                    if (AddChartToSlide(
+                        created,
+                        presentation,
+                        slide.Chart,
+                        slide.Bullets.Count > 0))
+                    {
+                        charts++;
+                    }
+                }
+
                 added++;
             }
 
             return "Appended " + added +
-                " marked draft slides at the end of the " +
-                "presentation. Nothing was saved.";
+                " marked draft slides" +
+                (charts > 0
+                    ? " with " + charts +
+                      (charts == 1
+                          ? " native chart"
+                          : " native charts")
+                    : string.Empty) +
+                " at the end of the presentation. Nothing was " +
+                "saved.";
+        }
+
+        // Draws one native chart on the slide and fills its data
+        // grid from the bounded model-supplied numbers. The data
+        // grid workbook is the chart's own embedded store inside
+        // the unsaved draft presentation - closing it only closes
+        // the editing grid; no user file is touched or saved.
+        private static bool AddChartToSlide(
+            dynamic slide,
+            dynamic presentation,
+            DraftChart chart,
+            bool hasBullets)
+        {
+            try
+            {
+                double slideWidth =
+                    presentation.PageSetup.SlideWidth;
+                double slideHeight =
+                    presentation.PageSetup.SlideHeight;
+                var left = hasBullets
+                    ? slideWidth * 0.52
+                    : slideWidth * 0.08;
+                var width = hasBullets
+                    ? slideWidth * 0.42
+                    : slideWidth * 0.84;
+                var top = slideHeight * 0.24;
+                var height = slideHeight * 0.62;
+                dynamic shape = slide.Shapes.AddChart2(
+                    -1,
+                    chart.TypeCode,
+                    (float)left,
+                    (float)top,
+                    (float)width,
+                    (float)height,
+                    true);
+                dynamic slideChart = shape.Chart;
+                slideChart.ChartData.Activate();
+                dynamic dataWorkbook =
+                    slideChart.ChartData.Workbook;
+                dynamic dataSheet =
+                    dataWorkbook.Worksheets[1];
+                dataSheet.Cells[1, 1].Value2 = " ";
+                for (var series = 0;
+                     series < chart.Series.Count;
+                     series++)
+                {
+                    dataSheet.Cells[1, series + 2].Value2 =
+                        TextBoundary.SingleLine(
+                            chart.Series[series].Name,
+                            80);
+                }
+
+                for (var category = 0;
+                     category < chart.Categories.Count;
+                     category++)
+                {
+                    dataSheet.Cells[category + 2, 1].Value2 =
+                        TextBoundary.SingleLine(
+                            chart.Categories[category],
+                            80);
+                    for (var series = 0;
+                         series < chart.Series.Count;
+                         series++)
+                    {
+                        var values =
+                            chart.Series[series].Values;
+                        dataSheet.Cells[
+                            category + 2,
+                            series + 2].Value2 =
+                            category < values.Count
+                                ? values[category]
+                                : 0d;
+                    }
+                }
+
+                try
+                {
+                    dataSheet.ListObjects["Table1"].Resize(
+                        dataSheet.Range(
+                            dataSheet.Cells[1, 1],
+                            dataSheet.Cells[
+                                chart.Categories.Count + 1,
+                                chart.Series.Count + 1]));
+                }
+                catch
+                {
+                }
+
+                try
+                {
+                    if (chart.Title.Length > 0)
+                    {
+                        slideChart.HasTitle = true;
+                        slideChart.ChartTitle.Text =
+                            TextBoundary.SingleLine(
+                                chart.Title,
+                                180);
+                    }
+                }
+                catch
+                {
+                }
+
+                try
+                {
+                    dataWorkbook.Close(true);
+                }
+                catch
+                {
+                    // Leaving the data grid window open is only
+                    // cosmetic; the chart itself already holds the
+                    // data.
+                }
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         // Converts the model-supplied JSON slides value into bounded
@@ -236,10 +432,136 @@ namespace OutlookLocalAIChat.Office
                     }
                 }
 
-                slides.Add(new DraftSlide(title, bullets));
+                slides.Add(new DraftSlide(
+                    title,
+                    bullets,
+                    ParseChart(map)));
             }
 
             return slides;
+        }
+
+        // Reads the optional chart object of one slide; anything
+        // malformed simply yields no chart rather than failing the
+        // whole draft.
+        private static DraftChart ParseChart(
+            IDictionary<string, object> slideMap)
+        {
+            object chartValue;
+            if (!slideMap.TryGetValue("chart", out chartValue))
+            {
+                return null;
+            }
+
+            var map = chartValue as IDictionary<string, object>;
+            if (map == null)
+            {
+                return null;
+            }
+
+            object typeValue;
+            object titleValue;
+            object categoriesValue;
+            object seriesValue;
+            map.TryGetValue("type", out typeValue);
+            map.TryGetValue("title", out titleValue);
+            map.TryGetValue("categories", out categoriesValue);
+            map.TryGetValue("series", out seriesValue);
+
+            var categories = new List<string>();
+            var categoryList = categoriesValue as IEnumerable;
+            if (categoryList != null &&
+                !(categoriesValue is string))
+            {
+                foreach (var category in categoryList)
+                {
+                    if (categories.Count == MaxChartCategories)
+                    {
+                        break;
+                    }
+
+                    categories.Add(TextBoundary.SingleLine(
+                        Convert.ToString(category),
+                        80));
+                }
+            }
+
+            var series = new List<DraftChartSeries>();
+            var seriesList = seriesValue as IEnumerable;
+            if (seriesList != null && !(seriesValue is string))
+            {
+                foreach (var entry in seriesList)
+                {
+                    if (series.Count == MaxChartSeries)
+                    {
+                        break;
+                    }
+
+                    var entryMap = entry as
+                        IDictionary<string, object>;
+                    if (entryMap == null)
+                    {
+                        continue;
+                    }
+
+                    object nameValue;
+                    object valuesValue;
+                    entryMap.TryGetValue("name", out nameValue);
+                    entryMap.TryGetValue(
+                        "values",
+                        out valuesValue);
+                    var values = new List<double>();
+                    var valueList = valuesValue as IEnumerable;
+                    if (valueList != null &&
+                        !(valuesValue is string))
+                    {
+                        foreach (var value in valueList)
+                        {
+                            if (values.Count ==
+                                MaxChartCategories)
+                            {
+                                break;
+                            }
+
+                            double parsed;
+                            values.Add(double.TryParse(
+                                Convert.ToString(
+                                    value,
+                                    System.Globalization
+                                        .CultureInfo
+                                        .InvariantCulture),
+                                System.Globalization
+                                    .NumberStyles.Any,
+                                System.Globalization
+                                    .CultureInfo
+                                    .InvariantCulture,
+                                out parsed)
+                                ? parsed
+                                : 0d);
+                        }
+                    }
+
+                    series.Add(new DraftChartSeries(
+                        TextBoundary.SingleLine(
+                            Convert.ToString(nameValue),
+                            80),
+                        values));
+                }
+            }
+
+            if (categories.Count == 0 || series.Count == 0)
+            {
+                return null;
+            }
+
+            return new DraftChart(
+                DraftChartTypes.Resolve(
+                    Convert.ToString(typeValue)),
+                TextBoundary.SingleLine(
+                    Convert.ToString(titleValue),
+                    180),
+                categories,
+                series);
         }
     }
 }

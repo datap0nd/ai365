@@ -34,7 +34,8 @@ namespace OutlookLocalAIChat.Office
             new HashSet<string>(StringComparer.Ordinal)
             {
                 "title",
-                "rows"
+                "rows",
+                "chart"
             };
 
         private static readonly HashSet<string> SlideArguments =
@@ -200,7 +201,8 @@ namespace OutlookLocalAIChat.Office
                             arguments,
                             "title",
                             string.Empty),
-                        ParsedRows(arguments));
+                        ParsedRows(arguments),
+                        ParsedChart(arguments));
                 }
                 else if (string.Equals(
                              name,
@@ -233,7 +235,8 @@ namespace OutlookLocalAIChat.Office
                             arguments,
                             "title",
                             string.Empty),
-                        ParsedRows(arguments));
+                        ParsedRows(arguments),
+                        ParsedChart(arguments));
                 }
                 else if (string.Equals(
                              name,
@@ -324,6 +327,14 @@ namespace OutlookLocalAIChat.Office
             object rowsValue;
             arguments.TryGetValue("rows", out rowsValue);
             return WorkbookDraftWriter.ParseRows(rowsValue);
+        }
+
+        private static WorkbookDraftWriter.DraftSheetChart
+            ParsedChart(IDictionary<string, object> arguments)
+        {
+            object chartValue;
+            arguments.TryGetValue("chart", out chartValue);
+            return WorkbookDraftWriter.ParseChart(chartValue);
         }
 
         private static

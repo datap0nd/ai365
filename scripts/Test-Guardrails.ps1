@@ -271,6 +271,7 @@ $officeGuardedFiles = @(
     (Join-Path $sourceRoot "Office\WordToolHost.cs"),
     (Join-Path $sourceRoot "Office\WordDraftWriter.cs"),
     (Join-Path $sourceRoot "Office\DraftTextLayout.cs"),
+    (Join-Path $sourceRoot "Office\DraftChartTypes.cs"),
     (Join-Path $sourceRoot "Office\DocumentDraftHost.cs"),
     (Join-Path $sourceRoot "ExcelAddIn.cs"),
     (Join-Path $sourceRoot "PowerPointAddIn.cs"),
@@ -279,10 +280,14 @@ $officeGuardedFiles = @(
 )
 foreach ($guardedFile in $officeGuardedFiles) {
     foreach ($pattern in $officeForbidden) {
+        # dataWorkbook.Close closes only a chart's own embedded
+        # data-grid workbook inside an unsaved draft presentation,
+        # never a user file.
         $hits = Select-String -Path $guardedFile -Pattern $pattern |
             Where-Object {
                 $_.Line -notmatch '_settingsStore\.Save' -and
-                $_.Line -notmatch 'SuiteExchange\.Save'
+                $_.Line -notmatch 'SuiteExchange\.Save' -and
+                $_.Line -notmatch 'dataWorkbook\.Close'
             }
         if ($hits) {
             throw "Forbidden document capability $pattern in $guardedFile."
