@@ -128,10 +128,10 @@ the tool-call probe allows up to 90 seconds.
    same extractors as email attachments (PDF, Office, text formats), and
    images become vision input with a tray thumbnail. HTML files are read as
    inert text, not rendered. Each file may be up to 25 MB on disk; extracted
-   text is bounded to 20,000 characters per document and 48,000 characters
+   text is bounded to 48,000 characters per document and 120,000 characters
    total. A file that exceeds a cap still appears in the tray as an amber
    warning chip explaining what was kept — oversized files are noted, and
-   over-length text keeps its first 20,000 characters with a truncation
+   over-length text keeps its first 48,000 characters with a truncation
    notice the model can see.
 6. Ask a normal mailbox question. When a working set exists, the model can read
    only those emails. Without one, it may perform one bounded mailbox search
@@ -153,7 +153,7 @@ the tool-call probe allows up to 90 seconds.
    binary Office files get best-effort extraction. Every attachment is
    listed; anything unreadable is noted rather than silently skipped.
    Attachments up to 25 MB are read; extraction is streamed and bounded
-   to 20,000 characters per attachment and 48,000 characters per
+   to 48,000 characters per attachment and 120,000 characters per
    message, with an explicit truncation notice when more content
    remains.
    Small inline images embedded in the body (64 KB or less) are treated

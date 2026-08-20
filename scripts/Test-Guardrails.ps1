@@ -202,7 +202,7 @@ if (-not $factorySource.Contains("user-approved writing profile") -or
 $externalContextSource = Get-Content $externalContextPath -Raw
 foreach ($requiredExternalBoundary in @(
     "public const int MaxDocuments = 3",
-    "public const int MaxTotalCharacters = 48000",
+    "public const int MaxTotalCharacters = 120000",
     "SupportedExtensions",
     "file.Length > 2 * 1024 * 1024"
 )) {
