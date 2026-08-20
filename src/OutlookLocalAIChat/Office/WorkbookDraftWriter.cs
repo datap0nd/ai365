@@ -5,14 +5,14 @@ using OutlookLocalAIChat.Security;
 
 namespace OutlookLocalAIChat.Office
 {
-    // The single Excel write surface of the suite. All writes land
-    // on the dedicated "AI365 Draft" worksheet: it is created at the
-    // end of the workbook when missing, its previous draft content
-    // is replaced, no other sheet is ever touched, and the workbook
-    // is never saved - saving stays a human action. Cells starting
-    // with '=' become live formulas only when DraftFormulaPolicy
-    // allows them (no network, native-code, or external-workbook
-    // functions); everything else lands as text.
+    // The Excel draft write surface of the suite. Every draft call
+    // lands on its own numbered "AI365 Draft" worksheet appended at
+    // the end of the workbook; earlier drafts and the user's own
+    // sheets are never touched, and the workbook is never saved -
+    // saving stays a human action. Cells starting with '=' become
+    // live formulas only when DraftFormulaPolicy allows them (no
+    // network, native-code, or external-workbook functions);
+    // everything else lands as text.
     internal static class WorkbookDraftWriter
     {
         internal const string DraftSheetName = "AI365 Draft";
@@ -84,31 +84,41 @@ namespace OutlookLocalAIChat.Office
                 }
             }
 
-            dynamic sheet = null;
+            // Every draft call gets its own numbered sheet
+            // ('AI365 Draft', 'AI365 Draft 2', ...): an earlier
+            // draft is NEVER overwritten, so a follow-up request
+            // ("now a summary table with charts") can never destroy
+            // the previous result - Excel cannot undo add-in
+            // writes, so keeping every draft is the undo.
+            var existingNames = new HashSet<string>(
+                StringComparer.OrdinalIgnoreCase);
             foreach (dynamic candidate in workbook.Worksheets)
             {
-                if (string.Equals(
-                    Convert.ToString(candidate.Name),
-                    DraftSheetName,
-                    StringComparison.OrdinalIgnoreCase))
-                {
-                    sheet = candidate;
-                    break;
-                }
+                existingNames.Add(
+                    Convert.ToString(candidate.Name) ??
+                    string.Empty);
             }
 
-            if (sheet == null)
+            var sheetName = DraftSheetName;
+            var suffix = 2;
+            while (existingNames.Contains(sheetName))
             {
-                dynamic sheets = workbook.Worksheets;
-                sheet = sheets.Add(
-                    Type.Missing,
-                    sheets[sheets.Count]);
-                sheet.Name = DraftSheetName;
+                if (suffix > 99)
+                {
+                    throw new InvalidOperationException(
+                        "Too many AI365 Draft sheets - delete " +
+                        "some drafts and try again.");
+                }
+
+                sheetName = DraftSheetName + " " + suffix;
+                suffix++;
             }
-            else
-            {
-                sheet.UsedRange.ClearContents();
-            }
+
+            dynamic sheets = workbook.Worksheets;
+            dynamic sheet = sheets.Add(
+                Type.Missing,
+                sheets[sheets.Count]);
+            sheet.Name = sheetName;
 
             // The layout is deterministic so model formulas can
             // reference the draft table itself: title in A1, table
@@ -309,13 +319,13 @@ namespace OutlookLocalAIChat.Office
                 (chartAdded
                     ? " and a native chart"
                     : string.Empty) +
-                " to the '" +
-                DraftSheetName +
+                " to the new '" +
+                sheetName +
                 "' sheet" +
                 (inNewWorkbook
                     ? " of a new unsaved draft workbook"
                     : string.Empty) +
-                "." +
+                ". Earlier draft sheets were left untouched." +
                 (brokenFormulas > 0
                     ? " " + brokenFormulas +
                       (brokenFormulas == 1

@@ -84,11 +84,15 @@ namespace OutlookLocalAIChat.Chat
                 {
                     name = WriteDraftSheet,
                     description =
-                        "Write a table of values into the dedicated " +
-                        "'AI365 Draft' worksheet for the user to review. The " +
-                        "sheet is created at the end of the workbook if " +
-                        "missing and its previous draft content is replaced. " +
-                        "No other sheet is ever touched and the workbook is " +
+                        "Write a table of values into a brand-new numbered " +
+                        "'AI365 Draft' worksheet (AI365 Draft, AI365 Draft " +
+                        "2, ...) added at the end of the workbook for the " +
+                        "user to review. Earlier draft sheets and the " +
+                        "user's own sheets are NEVER modified, so a " +
+                        "follow-up draft never destroys a previous one - " +
+                        "formulas may reference an earlier draft's cells " +
+                        "by its sheet name (e.g. ='AI365 Draft'!B4) to " +
+                        "build a summary on top of it. The workbook is " +
                         "never saved. Call it only after gathering the " +
                         "needed context, as the only tool call in that " +
                         "response.",

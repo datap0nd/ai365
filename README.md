@@ -235,8 +235,11 @@ clearly marked draft surface; when you explicitly ask to change the file
 you are working on ("fill in the missing totals on my sheet", "continue
 this document"), it goes there instead - still unsaved:
 
-- `write_draft_sheet` fills the dedicated **AI365 Draft** worksheet
-  (created at the end of the workbook; other sheets are never touched).
+- `write_draft_sheet` fills a brand-new numbered **AI365 Draft** worksheet
+  (AI365 Draft, AI365 Draft 2, ... at the end of the workbook). Earlier
+  drafts and your own sheets are never touched, so a follow-up draft can
+  never destroy a previous one - delete draft sheets you no longer want,
+  or close without saving to discard everything.
   The table always lands at **A3** (title in A1) so formulas can reference
   it deterministically. Cells starting with `=` become **live Excel
   formulas** that may reference other sheets of the same workbook
