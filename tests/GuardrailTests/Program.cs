@@ -4901,12 +4901,20 @@ namespace GuardrailTests
                     authorized.messages[0]).content);
             Assert(
                 authorizedSystem.Contains(
-                    "authorized at most one draft attempt") &&
+                    "authorized ONE deliverable") &&
                 authorizedSystem.Contains("AI365 Draft") &&
                 authorizedSystem.Contains("[AI365 draft]") &&
                 authorizedSystem.Contains(
                     "Never claim content was saved"),
                 "The authorized document boundary is incomplete.");
+            // The density contract is what keeps a small model from
+            // returning a thin outline of a rich source.
+            Assert(
+                authorizedSystem.Contains("read it to the END") &&
+                authorizedSystem.Contains(
+                    "must carry a table, a chart, or a numbered card") &&
+                authorizedSystem.Contains("never invent"),
+                "The authorized boundary lost its density contract.");
 
             var wordAuthorized = DocumentChatRequestFactory.Create(
                 "test-model",
