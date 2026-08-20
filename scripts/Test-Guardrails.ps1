@@ -421,6 +421,27 @@ if (-not $officePaneSource.Contains(
     throw "Document drafts are not gated by the local intent policy."
 }
 
+# User-adjustable limits stay clamped and never touch capability
+# caps; the panes must push settings limits into the effective
+# values.
+$textBoundarySource = Get-Content (
+    Join-Path $sourceRoot "Security\TextBoundary.cs") -Raw
+foreach ($requiredLimitBoundary in @(
+    "MaxPromptCharacters = 16000",
+    "MaxAssistantCharactersLimit = 48000",
+    "MaxToolRoundsLimit = 8",
+    "MaxUserMultiplier = 8",
+    "if (useRecommended)"
+)) {
+    if (-not $textBoundarySource.Contains($requiredLimitBoundary)) {
+        throw "Limit overrides are missing clamp $requiredLimitBoundary."
+    }
+}
+if (-not $chatPaneSource.Contains("ApplyLimits()") -or
+    -not $officePaneSource.Contains("ApplyLimits()")) {
+    throw "Panes do not apply the configured limits."
+}
+
 # MCP tools stay namespaced, bounded, and separated from the draft
 # and mailbox capability surfaces.
 $mcpHostSource = Get-Content (

@@ -133,6 +133,7 @@ namespace OutlookLocalAIChat.UI
             _lastAssistantText = _memory.LastAnswer;
             _settings = _settingsStore.Load();
             ContextScale.Apply(_settings.UseGeminiSignIn);
+            _settings.ApplyLimits();
             _mcpTools = new McpToolHost(_settings.McpServers);
             // Surface silent gateway waits (quota retries) so a slow
             // response is never a mystery.
@@ -2313,6 +2314,7 @@ namespace OutlookLocalAIChat.UI
                         settingsWindow.SavedSettings;
                     ContextScale.Apply(
                         _settings.UseGeminiSignIn);
+                    _settings.ApplyLimits();
                     _mcpTools?.Dispose();
                     _mcpTools = new McpToolHost(
                         _settings.McpServers);

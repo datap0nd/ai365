@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using OutlookLocalAIChat.Security;
 
 namespace OutlookLocalAIChat.Configuration
 {
@@ -46,6 +47,47 @@ namespace OutlookLocalAIChat.Configuration
         // namespaced mcp_ tools. Only Settings can add entries.
         public List<McpServerConfig> McpServers { get; set; } =
             new List<McpServerConfig>();
+
+        // Limits tab: recommended limits by default; when the user
+        // opts out, the custom values below apply within hard
+        // clamps. Only text and loop budgets - never capability
+        // caps.
+        public bool UseRecommendedLimits { get; set; } = true;
+
+        public int LimitContextMultiplier { get; set; } = 1;
+
+        public int LimitPromptCharacters { get; set; } =
+            TextBoundary.RecommendedUserPromptCharacters;
+
+        public int LimitAssistantCharacters { get; set; } =
+            TextBoundary.RecommendedAssistantCharacters;
+
+        public int LimitHistoryTurns { get; set; } =
+            TextBoundary.RecommendedConversationTurns;
+
+        public int LimitToolRounds { get; set; } =
+            TextBoundary.RecommendedToolRounds;
+
+        public int LimitToolCallsPerRound { get; set; } =
+            TextBoundary.RecommendedToolCallsPerRound;
+
+        // Pushes this settings object's limit choices into the
+        // process-wide effective limits. Called wherever settings
+        // are loaded or saved.
+        public void ApplyLimits()
+        {
+            LimitOverrides.Apply(
+                UseRecommendedLimits,
+                LimitPromptCharacters,
+                LimitAssistantCharacters,
+                LimitHistoryTurns,
+                LimitToolRounds,
+                LimitToolCallsPerRound);
+            ContextScale.ApplyUserMultiplier(
+                UseRecommendedLimits
+                    ? 1
+                    : LimitContextMultiplier);
+        }
 
         public bool IsConfigured
         {

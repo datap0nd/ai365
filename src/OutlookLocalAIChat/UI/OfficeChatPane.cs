@@ -115,6 +115,7 @@ namespace OutlookLocalAIChat.UI
             LastCreated = this;
             _settings = _settingsStore.Load();
             ContextScale.Apply(_settings.UseGeminiSignIn);
+            _settings.ApplyLimits();
             _mcpTools = new McpToolHost(_settings.McpServers);
             _client.GeminiGateway.StatusListener =
                 message => SetStatus(message, false);
@@ -1594,6 +1595,7 @@ namespace OutlookLocalAIChat.UI
                         settingsWindow.SavedSettings;
                     ContextScale.Apply(
                         _settings.UseGeminiSignIn);
+                    _settings.ApplyLimits();
                     _mcpTools?.Dispose();
                     _mcpTools = new McpToolHost(
                         _settings.McpServers);

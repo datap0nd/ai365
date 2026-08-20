@@ -297,6 +297,22 @@ HTTP(S) servers can carry per-server request headers (one per line as
 to that server's own endpoint, never logged, and stored DPAPI-encrypted like
 the API key.
 
+## Limits tab
+
+Settings has a **Limits** tab. **Use recommended limits** stays ticked by
+default and keeps the values this README describes. Untick it to adjust,
+at your own risk: the reading-budget multiplier (email bodies, attachments,
+and documents, up to x8), your message length (up to 16,000 characters),
+answer length (up to 48,000), history turns (up to 24), tool rounds and
+tool calls per round (up to 8 each). Every slider is hard-clamped in code -
+the settings file cannot push a value past those bounds. Raising limits
+sends more text to the model and can overflow a small local model's context
+window. Capability guardrails are not adjustable from here or anywhere
+else: the ten-email working set, one draft per request, and
+never-send/never-save stay fixed. With Gemini sign-in the reading budgets
+already scale x4 automatically; the larger of that and your multiplier
+wins.
+
 ## Diagnostics and administration
 
 **+ > Copy diagnostics** in any pane copies a bounded report of the last
