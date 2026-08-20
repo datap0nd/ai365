@@ -289,6 +289,53 @@ jobs:
             & $regasm32 $installedDll /unregister
           }
 
+      - name: Smoke-test component selection
+        shell: powershell
+        run: |
+          # Reinstall with only the Excel component: the other apps'
+          # registration must be removed, Excel's must remain.
+          $installer = Resolve-Path "artifacts\AI365Setup.exe"
+          Start-Process $installer -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/COMPONENTS=excel" -Wait
+          foreach ($view in @(
+            [Microsoft.Win32.RegistryView]::Registry64,
+            [Microsoft.Win32.RegistryView]::Registry32
+          )) {
+            $root = [Microsoft.Win32.RegistryKey]::OpenBaseKey(
+              [Microsoft.Win32.RegistryHive]::CurrentUser,
+              $view)
+            try {
+              foreach ($gone in @(
+                "Software\Microsoft\Office\Outlook\Addins\OutlookLocalAIChat.AddIn",
+                "Software\Microsoft\Office\PowerPoint\Addins\AI365.PowerPointAddIn",
+                "Software\Microsoft\Office\Word\Addins\AI365.WordAddIn"
+              )) {
+                $key = $root.OpenSubKey($gone)
+                if ($null -ne $key) {
+                  $key.Dispose()
+                  throw "Deselected component registration $gone survived in $view."
+                }
+              }
+              $excel = $root.OpenSubKey(
+                "Software\Microsoft\Office\Excel\Addins\AI365.ExcelAddIn")
+              if ($null -eq $excel -or $excel.GetValue("LoadBehavior") -ne 3) {
+                throw "Excel-only install lost the Excel registration in $view."
+              }
+              $excel.Dispose()
+              $pane = $root.OpenSubKey(
+                "Software\Classes\CLSID\{BC9047E7-9AFE-4F75-BBBC-27241B1DE2FA}\InprocServer32")
+              if ($null -eq $pane) {
+                throw "Excel-only install lost the shared sidebar COM class in $view."
+              }
+              $pane.Dispose()
+            }
+            finally {
+              $root.Dispose()
+            }
+          }
+          # Restore the full install so later steps and artifacts
+          # reflect the default everything-selected state.
+          Start-Process $installer -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/COMPONENTS=outlook,excel,powerpoint,word" -Wait
+
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:

@@ -36,8 +36,11 @@ Entra ID.
    [AI365Setup.exe](https://github.com/datap0nd/ai365/releases/latest/download/AI365Setup.exe).
    This link tracks the **Latest** release, which is rebuilt automatically on
    every push to `main`.
-3. Run the installer for your Windows account. It registers the add-in for
-   all four Office apps at once.
+3. Run the installer for your Windows account. It asks which Office apps
+   get AI365 - all four are selected by default; untick any you do not
+   want. Re-running the installer later lets you change the selection, and
+   deselected apps are cleanly unregistered. Silent installs (and the
+   in-app updater) keep your previous selection.
 4. Start classic Outlook, Excel, PowerPoint, or Word.
 5. In Outlook choose **AI365 > AI365** on the ribbon; in Excel, PowerPoint,
    and Word the **AI365** button sits on the **Home** tab.

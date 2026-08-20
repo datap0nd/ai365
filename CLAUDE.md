@@ -1,14 +1,18 @@
 # AI365 (ai365)
 
 Windows Office COM add-in suite (.NET Framework 4.8, C# 7.3, classic
-csproj): one assembly hosts three add-ins — Outlook (`AddIn.cs`), Excel
-(`ExcelAddIn.cs`), and PowerPoint (`PowerPointAddIn.cs`) — sharing the chat
+csproj): one assembly hosts four add-ins — Outlook (`AddIn.cs`), Excel
+(`ExcelAddIn.cs`), PowerPoint (`PowerPointAddIn.cs`), and Word
+(`WordAddIn.cs`) — sharing the chat
 stack, Gemini/local-model client, MCP client, and guardrails. It cannot be
 built or run on Linux — the Windows CI workflow
 (`.github/workflows/build.yml`) is the compile/test gate.
 
 ## Git workflow
 
+- **This is the only actively developed repository** — its predecessor
+  `outlook-local-ai-chat` (MetoAI) is frozen; do not port changes there
+  unless explicitly asked.
 - This is a personal dev repository. **Always commit directly to `main` and
   push immediately after each change set.** The user pulls `main` on a work
   machine to test. Do not create side branches or pull requests unless
