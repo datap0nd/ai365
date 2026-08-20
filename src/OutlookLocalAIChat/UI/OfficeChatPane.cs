@@ -1187,10 +1187,15 @@ namespace OutlookLocalAIChat.UI
 
             // Document drafts unlock only from the user's own
             // prompt, exactly like the Outlook pane's policy gate.
+            // One deliverable, built over up to four bounded
+            // calls: a small local model cannot emit a whole dense
+            // deck or workbook in a single JSON payload, so it adds
+            // it in batches instead of thinning it out.
             var draftAuthorization =
                 new OneShotDraftAuthorization(
                     DocumentDraftIntentPolicy.AllowsDraft(prompt),
-                    false);
+                    false,
+                    4);
             _diagnostics.BeginRequest(
                 HostName,
                 _settings.Model,

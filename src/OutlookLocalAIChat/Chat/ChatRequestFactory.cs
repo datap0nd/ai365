@@ -164,7 +164,11 @@ namespace OutlookLocalAIChat.Chat
                 messages = messages,
                 stream = false,
                 tools = tools,
-                tool_choice = "auto"
+                tool_choice = "auto",
+                max_tokens = allowDraftCreate || allowDraftUpdate
+                    ? (int?)DocumentChatRequestFactory
+                        .DraftResponseTokens
+                    : null
             };
         }
 

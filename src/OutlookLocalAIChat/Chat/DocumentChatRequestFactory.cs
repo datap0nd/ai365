@@ -15,6 +15,12 @@ namespace OutlookLocalAIChat.Chat
         public const int TrimmedHistoryCharacters = 1500;
         public const int MaxActiveContextCharacters = 4000;
 
+        // Tool-call arguments count against the response budget on
+        // local servers, so a dense slide or table payload needs an
+        // explicit, generous ceiling - a small server default
+        // truncates the draft into a thin one.
+        public const int DraftResponseTokens = 4000;
+
         private const string SystemBoundary =
             "You are a document chat assistant inside a local Microsoft Office " +
             "add-in, part of the AI365 suite. Use the supplied read-only document " +
@@ -148,7 +154,10 @@ namespace OutlookLocalAIChat.Chat
                 messages = messages,
                 stream = false,
                 tools = tools,
-                tool_choice = "auto"
+                tool_choice = "auto",
+                max_tokens = allowDraftCreate
+                    ? (int?)DraftResponseTokens
+                    : null
             };
         }
 
@@ -182,26 +191,34 @@ namespace OutlookLocalAIChat.Chat
             {
                 return boundary +
                     " The local host recognized an explicit draft request in the " +
-                    "user's latest prompt and authorized at most one draft attempt " +
-                    "for this request. Call the single most fitting draft tool only " +
-                    "after gathering all needed context, and as the only tool call " +
-                    "in that response. The local host consumes the authorization on " +
-                    "the first attempt, so that one call must carry the COMPLETE " +
-                    "deliverable: the full table with live formulas, the chart " +
-                    "parameter when the user wants a chart or visualization, every " +
-                    "slide with its bullets and charts, or the whole formatted " +
-                    "document with its tables and analysis. Never deliver a partial " +
-                    "result, never ask the user to confirm first, and never split " +
-                    "the work across turns - the user's request already IS the " +
-                    "authorization. When the user asked to change their own " +
-                    "sheet or document (fill, fix, update, continue it in " +
-                    "place), write directly where they asked: write_cells in " +
-                    "Excel, or write_draft_document with placement 'end' or " +
-                    "'selection' in Word. Otherwise deliver the complete " +
-                    "result into the marked draft surface. After the tool " +
-                    "result, state briefly that nothing was saved - the " +
-                    "output is an in-memory change or unsaved marked draft " +
-                    "(or an unsent email draft) open for the user's review.";
+                    "user's latest prompt and authorized ONE deliverable for this " +
+                    "request, which you may build over several bounded draft calls " +
+                    "- each one the only tool call in its response. " +
+                    "FIRST gather everything you need: when the source is a " +
+                    "document, workbook, or presentation, read it to the END by " +
+                    "repeating the read tool with an increasing start offset until " +
+                    "you have the whole text. Never draft from a partial read. " +
+                    "THEN write the deliverable in batches (two or three slides, or " +
+                    "one table, per call) and keep calling until it is complete. " +
+                    "Make it DENSE and specific - carry the real numbers, names, " +
+                    "dates, and table rows from the source into the output; never " +
+                    "reduce a rich source to a thin outline of headings and " +
+                    "one-line bullets, and never invent filler. For slides, every " +
+                    "content slide must carry a table, a chart, or a numbered card " +
+                    "grid; bullets alone belong only on an agenda page. When the " +
+                    "user asks for tables or charts, put one on most slides, give " +
+                    "each data slide its unit indicator and source footnote, and " +
+                    "mark performance with the growth and deficit markers so the " +
+                    "theme can highlight it. Never ask the user to confirm first - " +
+                    "the request already IS the authorization. When the user asked " +
+                    "to change their own sheet or document (fill, fix, update, " +
+                    "continue it in place), write directly where they asked: " +
+                    "write_cells in Excel, or write_draft_document with placement " +
+                    "'end' or 'selection' in Word. Otherwise deliver into the " +
+                    "marked draft surface. After the final tool result, state " +
+                    "briefly that nothing was saved - the output is an in-memory " +
+                    "change or unsaved marked draft (or an unsent email draft) " +
+                    "open for the user's review.";
             }
 
             return boundary +

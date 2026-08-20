@@ -79,27 +79,44 @@ namespace OutlookLocalAIChat.Chat
                 {
                     name = AddDraftSlides,
                     description =
-                        "Add new draft slides to the presentation for " +
+                        "Add draft slides to the presentation for " +
                         "the user to review. Each added slide is " +
                         "marked [AI365 draft], existing slides are " +
-                        "never modified, and the file is never saved. " +
-                        "The corporate deck theme (fonts, colors, " +
-                        "sizes, grid, chart styling) is applied " +
-                        "automatically - supply CONTENT ONLY and never " +
-                        "mention fonts, colors, or positions. Write " +
-                        "like an executive deck: a takeaway sentence " +
-                        "as the title, dense and concrete body text, " +
-                        "standard metric abbreviations (M/S, G/R, A/R, " +
-                        "S/I, S/O, YTD, MP), and the markers " +
+                        "never modified, and the file is never " +
+                        "saved. The corporate deck theme (fonts, " +
+                        "colors, sizes, grid, chart styling) is " +
+                        "applied automatically - supply CONTENT " +
+                        "ONLY and never mention fonts, colors, or " +
+                        "positions. " +
+                        "BUILD A DENSE EXECUTIVE DECK, not an " +
+                        "outline: every content slide must carry a " +
+                        "table, a chart, or a numbered card grid, " +
+                        "and one slide can carry a table AND a " +
+                        "chart AND its takeaway bullets at once - " +
+                        "combine them, that is what a real deck " +
+                        "looks like. Bullets alone belong only on " +
+                        "an agenda page. Carry the actual numbers, " +
+                        "names, dates, and table rows from the " +
+                        "source material; never thin a rich source " +
+                        "down to headings, and never invent " +
+                        "filler. Give each data slide its unit " +
+                        "indicator and a source footnote. Write " +
+                        "takeaway sentences as titles and use the " +
+                        "standard abbreviations (M/S, G/R, A/R, " +
+                        "S/I, S/O, YTD, MP) and the markers " +
                         "\u2191 growth, \u2193 decline, " +
                         "\u25B3 negative or deficit, " +
                         "\u2192 transition - table cells carrying " +
-                        "those markers are highlighted automatically. " +
+                        "those markers are highlighted " +
+                        "automatically. " +
                         "At most " +
                         PresentationDraftWriter.MaxDraftSlides +
-                        " slides per call. Call it only after " +
-                        "gathering the needed context, as the only " +
-                        "tool call in that response.",
+                        " slides per call, and you may call this " +
+                        "again in a later response to continue the " +
+                        "same deck - prefer two or three fully " +
+                        "detailed slides per call over ten empty " +
+                        "ones. Call it as the only tool call in " +
+                        "that response.",
                     parameters = ToolSchema.Build(
                         new Dictionary<string, object>
                         {

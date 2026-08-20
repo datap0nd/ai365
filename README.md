@@ -228,9 +228,11 @@ Writes unlock only when your own latest message asks to produce something
 with this in a slide", "put this table into word", "fix the formula in
 column B", "email this to ..."). Asking to edit, fix, fill, chart, or move
 content all count - no confirmation round-trips. Every write stays in
-memory - the add-in has no save capability at all - and one draft call
-carries the complete deliverable (table plus formulas plus chart, or a
-full document with tables and analysis). By default output lands in a
+memory - the add-in has no save capability at all - and one request
+produces one complete deliverable. A deck or workbook may be built over
+a few bounded calls (a small local model cannot emit a whole dense deck
+in one payload, so it adds it in batches instead of thinning it out);
+an unsent email draft stays strictly one per request. By default output lands in a
 clearly marked draft surface; when you explicitly ask to change the file
 you are working on ("fill in the missing totals on my sheet", "continue
 this document"), it goes there instead - still unsaved:
@@ -317,6 +319,12 @@ Ask in the corporate vocabulary and it carries through: takeaway titles,
 `M/S`, `G/R`, `A/R`, `S/I`, `S/O`, `YTD`, `MP`, and arrow markers are all
 part of the drafting instructions.
 
+Decks are built to be **dense**: one slide can carry a table *and* a chart
+*and* its takeaway bullets at once, every content slide is expected to hold
+a table, chart, or card grid rather than bare bullets, and the model is
+told to read a source document to the end before drafting and to keep
+adding slides over a few calls instead of emitting one thin pass.
+
 The add-in never calls Save, SaveAs, Delete, Print, Protect, Close, or Quit
 on your documents - saving stays a human action, so even a discarded draft
 sheet or slide costs nothing.
@@ -368,8 +376,8 @@ holds per request (3 to 50, ten by default). Every slider is hard-clamped
 in code - the settings file cannot push a value past those bounds. Raising
 limits sends more mailbox text to the model and can overflow a small local
 model's context window. Drafting guardrails are not adjustable from here
-or anywhere else: one draft per request and never-send/never-save stay
-fixed. With Gemini sign-in the reading budgets already scale x4
+or anywhere else: one deliverable per request, one unsent email draft per
+request, and never-send/never-save stay fixed. With Gemini sign-in the reading budgets already scale x4
 automatically; the larger of that and your multiplier wins.
 
 ## Diagnostics and administration
@@ -405,8 +413,11 @@ scoped exception, not a general mutation permission.
 - The draft host requires `create_draft` to be the only tool call in its model
   response, validates strict arguments, and atomically consumes permission
   before creating anything.
-- One chat can link at most one draft. A user request can make at most one draft
-  creation or update attempt.
+- One chat can link at most one draft, and a request may open at most one
+  unsent email draft. Document deliverables (slides, sheets, documents) may
+  be written over a small, fixed number of bounded calls within that same
+  authorized request - the permission is granted once, by the user's own
+  wording, and every call still lands in a marked, unsaved surface.
 - The local hosts reject every other tool name and cap tool calls, tool rounds,
   result counts, message bodies, draft fields, and total returned context.
 - Search results use temporary handles. The model cannot submit arbitrary COM

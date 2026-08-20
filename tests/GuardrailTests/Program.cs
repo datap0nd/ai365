@@ -270,6 +270,9 @@ namespace GuardrailTests
                     "Corporate slide theme is hardcoded",
                     CorporateThemeIsHardcoded);
                 Run(
+                    "One request builds one deliverable",
+                    DraftBudgetBuildsOneDeliverable);
+                Run(
                     "Draft HTML renders bounded pipe tables",
                     DraftHtmlRendersTables);
                 Run(
@@ -4210,6 +4213,79 @@ namespace GuardrailTests
         // The corporate deck theme is compiled in: the model
         // supplies content, the writer supplies every font, color,
         // size, and position. These asserts pin that split.
+        // One user request authorizes ONE deliverable, which a
+        // model may build over several bounded calls - but never
+        // more than one unsent email draft.
+        private static void DraftBudgetBuildsOneDeliverable()
+        {
+            var single = new OneShotDraftAuthorization(true);
+            Assert(
+                single.CallBudget == 1 &&
+                single.TryConsume() &&
+                !single.TryConsume(),
+                "The default draft permission must stay single-shot.");
+
+            var batched =
+                new OneShotDraftAuthorization(true, false, 4);
+            Assert(
+                batched.CallBudget == 4 &&
+                batched.RemainingCalls == 4 &&
+                batched.TryConsume() &&
+                batched.TryConsume() &&
+                batched.TryConsume() &&
+                batched.TryConsume() &&
+                !batched.TryConsume() &&
+                batched.IsConsumed,
+                "A batched draft permission must spend exactly its budget.");
+
+            Assert(
+                new OneShotDraftAuthorization(true, false, 99)
+                    .CallBudget ==
+                    OneShotDraftAuthorization.MaxCallBudget &&
+                new OneShotDraftAuthorization(true, false, 0)
+                    .CallBudget == 1,
+                "The draft call budget must stay clamped.");
+
+            var denied =
+                new OneShotDraftAuthorization(false, false, 6);
+            Assert(
+                denied.CallBudget == 0 &&
+                !denied.TryConsume() &&
+                !denied.TryConsumeEmailDraft(),
+                "An unauthorized request must get no draft calls at all.");
+
+            // Recipients are the sensitive surface: batching a deck
+            // must never batch email drafts.
+            var email =
+                new OneShotDraftAuthorization(true, false, 6);
+            Assert(
+                email.TryConsumeEmailDraft() &&
+                !email.TryConsumeEmailDraft() &&
+                email.TryConsume(),
+                "Only one unsent email draft may be opened per request.");
+
+            // Tool-call JSON counts against the response budget, so
+            // drafting turns must ask for a generous ceiling.
+            var drafting = DocumentChatRequestFactory.Create(
+                "test-model",
+                "powerpoint",
+                "Presentation: Deck1",
+                new List<ChatTurn>(),
+                "build a slide with this",
+                true);
+            var reading = DocumentChatRequestFactory.Create(
+                "test-model",
+                "powerpoint",
+                "Presentation: Deck1",
+                new List<ChatTurn>(),
+                "what is on slide 2");
+            Assert(
+                drafting.max_tokens.HasValue &&
+                drafting.max_tokens.Value >= 2000 &&
+                !reading.max_tokens.HasValue,
+                "Draft turns need an explicit response budget.");
+        }
+
         private static void CorporateThemeIsHardcoded()
         {
             Assert(

@@ -1897,6 +1897,15 @@ namespace OutlookLocalAIChat.UI
                         prompt),
                     hasLinkedDraft &&
                     DraftIntentPolicy.AllowsUpdate(prompt));
+            // Separate permission for the sibling-app tools: one
+            // deliverable, up to four bounded calls, so a dense deck
+            // is not squeezed into a single JSON payload. The email
+            // permission above stays strictly single-shot.
+            var crossAppAuthorization =
+                new OneShotDraftAuthorization(
+                    draftAuthorization.CanCreate,
+                    false,
+                    4);
             _diagnostics.BeginRequest(
                 "Outlook",
                 _settings.Model,
@@ -1918,6 +1927,7 @@ namespace OutlookLocalAIChat.UI
                     requestExternalImages,
                     prompt,
                     draftAuthorization,
+                    crossAppAuthorization,
                     cancellation.Token);
                 if (generation != _requestGeneration)
                 {
@@ -1932,7 +1942,17 @@ namespace OutlookLocalAIChat.UI
                 _lastAssistantText = response;
                 _memory.LastAnswer = response;
                 AppendFormattedAssistantText(response);
-                if (draftAuthorization.IsCreated)
+                if (crossAppAuthorization.IsCreated)
+                {
+                    // Slides, a sheet, or a document were drafted
+                    // into a sibling app rather than an email.
+                    SetStatus(
+                        "Draft created - unsaved, open for review",
+                        false);
+                    _diagnostics.CompleteRequest(
+                        "Done - sibling app draft created");
+                }
+                else if (draftAuthorization.IsCreated)
                 {
                     SetStatus(
                         "Draft created - unsent, open for review",
@@ -1946,7 +1966,8 @@ namespace OutlookLocalAIChat.UI
                     _diagnostics.CompleteRequest(
                         "Done - draft updated");
                 }
-                else if (draftAuthorization.IsConsumed)
+                else if (draftAuthorization.IsConsumed ||
+                         crossAppAuthorization.IsConsumed)
                 {
                     SetStatus(
                         draftAuthorization.CanUpdate
@@ -2031,6 +2052,7 @@ namespace OutlookLocalAIChat.UI
             IReadOnlyList<VisionImagePayload> externalImages,
             string prompt,
             OneShotDraftAuthorization draftAuthorization,
+            OneShotDraftAuthorization crossAppAuthorization,
             CancellationToken cancellationToken)
         {
             var activeDraft = draftAuthorization.CanUpdate
@@ -2198,7 +2220,7 @@ namespace OutlookLocalAIChat.UI
                         // draft, on the same one-shot permission.
                         result = _crossAppTools.Execute(
                             toolCall,
-                            draftAuthorization,
+                            crossAppAuthorization,
                             toolCalls.Count == 1,
                             prompt);
                     }

@@ -186,9 +186,20 @@ namespace OutlookLocalAIChat.Office
                         "DRAFT_ARGUMENTS_INVALID"));
             }
 
-            if (authorization == null ||
-                !authorization.CanCreate ||
-                !authorization.TryConsume())
+            // A deck or workbook may be built over several bounded
+            // calls, but one request may open at most ONE unsent
+            // email draft - recipients are the sensitive surface,
+            // so that path takes its own single-use permission.
+            var isEmailDraft = string.Equals(
+                name,
+                CrossAppToolCatalog.CreateEmailDraft,
+                StringComparison.Ordinal);
+            var permitted = authorization != null &&
+                authorization.CanCreate &&
+                (isEmailDraft
+                    ? authorization.TryConsumeEmailDraft()
+                    : authorization.TryConsume());
+            if (!permitted)
             {
                 return Error(
                     call.id,

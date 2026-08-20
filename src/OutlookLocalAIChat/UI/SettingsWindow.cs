@@ -711,6 +711,9 @@ namespace OutlookLocalAIChat.UI
             };
             var layout = new TableLayoutPanel
             {
+                // Scrolls when the rows do not fit instead of
+                // squeezing them.
+                AutoScroll = true,
                 Dock = DockStyle.Fill,
                 ColumnCount = 1,
                 RowCount = 13,
@@ -933,10 +936,12 @@ namespace OutlookLocalAIChat.UI
             };
             var layout = new TableLayoutPanel
             {
-                Dock = DockStyle.Fill,
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 ColumnCount = 2,
                 Padding = new Padding(18, 16, 18, 12),
-                AutoSize = true
+                Width = 640
             };
             layout.ColumnStyles.Add(
                 new ColumnStyle(SizeType.Percent, 100));
@@ -951,9 +956,9 @@ namespace OutlookLocalAIChat.UI
                 "document text to the model and can overflow a " +
                 "small model's context window or slow requests " +
                 "down - change them at your own risk. Drafting " +
-                "guardrails are not affected: one draft per " +
-                "request and never-send/never-save stay fixed " +
-                "regardless.");
+                "guardrails are not affected: one deliverable per " +
+                "request, one unsent email draft per request, and " +
+                "never-send/never-save stay fixed regardless.");
             intro.ForeColor = SystemColors.ControlText;
             layout.Controls.Add(intro, 0, 0);
             layout.SetColumnSpan(intro, 2);
@@ -1111,6 +1116,9 @@ namespace OutlookLocalAIChat.UI
             };
             var layout = new TableLayoutPanel
             {
+                // Scrolls when the rows do not fit instead of
+                // squeezing them.
+                AutoScroll = true,
                 Dock = DockStyle.Fill,
                 ColumnCount = 1,
                 RowCount = 5,
@@ -1290,6 +1298,9 @@ namespace OutlookLocalAIChat.UI
             };
             var layout = new TableLayoutPanel
             {
+                // Scrolls when the rows do not fit instead of
+                // squeezing them.
+                AutoScroll = true,
                 Dock = DockStyle.Fill,
                 ColumnCount = 1,
                 RowCount = 12,

@@ -401,80 +401,178 @@ namespace OutlookLocalAIChat.Office
                     contentHeight,
                     width);
             }
-            else if (string.Equals(
-                draft.Layout,
-                MetoTheme.LayoutTable,
-                StringComparison.Ordinal))
+            else
+            {
+                drawn = RenderComposedContent(
+                    slide,
+                    draft,
+                    left,
+                    top,
+                    contentWidth,
+                    contentHeight,
+                    width);
+            }
+
+            RenderFootnote(slide, draft, width, height);
+            return drawn;
+        }
+
+        // Lays out whatever content blocks the slide carries. An
+        // executive slide is dense: a table and a chart and the
+        // takeaways share one slide instead of being spread thin
+        // over three. Returns bit 1 for a chart and bit 2 for a
+        // table.
+        private static int RenderComposedContent(
+            dynamic slide,
+            DraftSlide draft,
+            double left,
+            double top,
+            double width,
+            double height,
+            double slideWidth)
+        {
+            var hasTable = draft.Table != null;
+            var hasChart = draft.Chart != null;
+            var hasBullets = draft.Bullets.Count > 0;
+            var gap = slideWidth * 0.02;
+            var drawn = 0;
+
+            if (hasTable && (hasChart || hasBullets))
+            {
+                // Table leads on the left; the chart and takeaways
+                // stack down the right column.
+                var tableWidth = hasChart
+                    ? width * 0.56
+                    : width * 0.62;
+                var rightLeft = left + tableWidth + gap;
+                var rightWidth = width - tableWidth - gap;
+                if (RenderTable(
+                    slide,
+                    draft.Table,
+                    left,
+                    top,
+                    tableWidth,
+                    height))
+                {
+                    drawn |= 2;
+                }
+
+                if (hasChart && hasBullets)
+                {
+                    var chartHeight = height * 0.6;
+                    if (AddChartToSlide(
+                        slide,
+                        draft.Chart,
+                        rightLeft,
+                        top,
+                        rightWidth,
+                        chartHeight))
+                    {
+                        drawn |= 1;
+                    }
+
+                    RenderBullets(
+                        slide,
+                        draft.Bullets,
+                        rightLeft,
+                        top + chartHeight + gap,
+                        rightWidth,
+                        height - chartHeight - gap);
+                }
+                else if (hasChart)
+                {
+                    if (AddChartToSlide(
+                        slide,
+                        draft.Chart,
+                        rightLeft,
+                        top,
+                        rightWidth,
+                        height))
+                    {
+                        drawn |= 1;
+                    }
+                }
+                else
+                {
+                    RenderBullets(
+                        slide,
+                        draft.Bullets,
+                        rightLeft,
+                        top,
+                        rightWidth,
+                        height);
+                }
+
+                return drawn;
+            }
+
+            if (hasTable)
             {
                 if (RenderTable(
                     slide,
                     draft.Table,
                     left,
                     top,
-                    contentWidth,
-                    contentHeight))
+                    width,
+                    height))
                 {
                     drawn |= 2;
                 }
+
+                return drawn;
             }
-            else if (string.Equals(
-                draft.Layout,
-                MetoTheme.LayoutChart,
-                StringComparison.Ordinal))
+
+            if (hasChart && hasBullets)
             {
-                if (draft.Chart != null &&
-                    AddChartToSlide(
-                        slide,
-                        draft.Chart,
-                        left,
-                        top,
-                        contentWidth,
-                        contentHeight))
+                var textWidth = width * 0.44;
+                RenderBullets(
+                    slide,
+                    draft.Bullets,
+                    left,
+                    top,
+                    textWidth,
+                    height);
+                if (AddChartToSlide(
+                    slide,
+                    draft.Chart,
+                    left + textWidth + gap,
+                    top,
+                    width - textWidth - gap,
+                    height))
                 {
                     drawn |= 1;
                 }
+
+                return drawn;
             }
-            else
+
+            if (hasChart)
             {
-                // Bullets, optionally beside a chart. The split
-                // keeps the text column readable at body size.
-                var hasChart = draft.Chart != null;
-                var textWidth = hasChart
-                    ? contentWidth * 0.46
-                    : contentWidth;
-                if (draft.Bullets.Count > 0)
+                if (AddChartToSlide(
+                    slide,
+                    draft.Chart,
+                    left,
+                    top,
+                    width,
+                    height))
                 {
-                    RenderBullets(
-                        slide,
-                        draft.Bullets,
-                        left,
-                        top,
-                        textWidth,
-                        contentHeight);
+                    drawn |= 1;
                 }
 
-                if (hasChart)
-                {
-                    var chartLeft = draft.Bullets.Count > 0
-                        ? left + contentWidth * 0.52
-                        : left;
-                    var chartWidth = draft.Bullets.Count > 0
-                        ? contentWidth * 0.48
-                        : contentWidth;
-                    if (AddChartToSlide(
-                        slide,
-                        draft.Chart,
-                        chartLeft,
-                        top,
-                        chartWidth,
-                        contentHeight))
-                    {
-                        drawn |= 1;
-                    }
-                }
+                return drawn;
             }
 
-            RenderFootnote(slide, draft, width, height);
+            if (hasBullets)
+            {
+                RenderBullets(
+                    slide,
+                    draft.Bullets,
+                    left,
+                    top,
+                    width,
+                    height);
+            }
+
             return drawn;
         }
 
