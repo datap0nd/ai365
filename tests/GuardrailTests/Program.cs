@@ -267,6 +267,9 @@ namespace GuardrailTests
                     "Draft text layout parses structure locally",
                     DraftTextLayoutParsesStructure);
                 Run(
+                    "Corporate slide theme is hardcoded",
+                    CorporateThemeIsHardcoded);
+                Run(
                     "Draft HTML renders bounded pipe tables",
                     DraftHtmlRendersTables);
                 Run(
@@ -4202,6 +4205,117 @@ namespace GuardrailTests
                 DraftChartTypes.Resolve(null) ==
                     DraftChartTypes.ColumnClustered,
                 "Chart type resolution must be total and bounded.");
+        }
+
+        // The corporate deck theme is compiled in: the model
+        // supplies content, the writer supplies every font, color,
+        // size, and position. These asserts pin that split.
+        private static void CorporateThemeIsHardcoded()
+        {
+            Assert(
+                MetoTheme.ThemeName == "METO Executive Dense" &&
+                MetoTheme.TitleFont == "Samsung Sharp Sans Bold" &&
+                MetoTheme.BodyFont == "Calibri",
+                "The corporate font stack changed unexpectedly.");
+
+            // Office takes RGB longs in BGR order; a wrong
+            // conversion would silently paint the wrong brand color.
+            Assert(
+                MetoTheme.Rgb(MetoTheme.BrandBlueHex) ==
+                    (0x14 | (0x28 << 8) | (0xA0 << 16)) &&
+                MetoTheme.Rgb("#FFFFFF") == 0xFFFFFF &&
+                MetoTheme.Rgb("nonsense") == 0 &&
+                MetoTheme.Rgb(null) == 0,
+                "Hex to Office RGB conversion is wrong.");
+
+            Assert(
+                MetoTheme.ChartSeriesColors().Length ==
+                    PresentationToolCatalogMaxSeries() &&
+                MetoTheme.ChartSeriesColors()[0] ==
+                    MetoTheme.Rgb(MetoTheme.BrandBlueHex),
+                "The chart palette must lead with the brand blue.");
+
+            // Layout follows the content the model supplied, so a
+            // small model never has to name one.
+            Assert(
+                MetoTheme.ResolveLayout(null, true, false, false, false) ==
+                    MetoTheme.LayoutBullets &&
+                MetoTheme.ResolveLayout(null, false, true, false, false) ==
+                    MetoTheme.LayoutCards &&
+                MetoTheme.ResolveLayout(null, false, false, true, false) ==
+                    MetoTheme.LayoutTable &&
+                MetoTheme.ResolveLayout(null, false, false, false, true) ==
+                    MetoTheme.LayoutChart &&
+                MetoTheme.ResolveLayout(null, true, false, false, true) ==
+                    MetoTheme.LayoutBullets &&
+                MetoTheme.ResolveLayout("cover", false, false, false, false) ==
+                    MetoTheme.LayoutCover &&
+                MetoTheme.ResolveLayout("AGENDA", false, false, false, false) ==
+                    MetoTheme.LayoutAgenda,
+                "Slide layout inference is wrong.");
+
+            // Selective highlighting is derived from the corporate
+            // performance markers, never chosen by the model.
+            Assert(
+                MetoTheme.CellStatus("\u2191 12%") ==
+                    MetoTheme.StatusGood &&
+                MetoTheme.CellStatus("+8%") ==
+                    MetoTheme.StatusGood &&
+                MetoTheme.CellStatus("G/R \u25B35%") ==
+                    MetoTheme.StatusBad &&
+                MetoTheme.CellStatus("\u2193 3%") ==
+                    MetoTheme.StatusBad &&
+                MetoTheme.CellStatus("-8%") ==
+                    MetoTheme.StatusBad &&
+                MetoTheme.CellStatus("1,240") ==
+                    MetoTheme.StatusNone &&
+                MetoTheme.CellStatus("SEEG") ==
+                    MetoTheme.StatusNone &&
+                MetoTheme.CellStatus(null) ==
+                    MetoTheme.StatusNone,
+                "Table status highlighting is not derived from the data.");
+
+            Assert(
+                MetoTheme.FitTitleSize("Short takeaway", 40f, 46) == 40f &&
+                MetoTheme.FitTitleSize(new string('x', 200), 40f, 46) < 40f &&
+                MetoTheme.FitTitleSize(new string('x', 200), 40f, 46) >= 24f,
+                "Long titles must step down instead of overflowing.");
+
+            Assert(
+                DraftChartTypes.Resolve("stacked column") ==
+                    DraftChartTypes.ColumnStacked &&
+                DraftChartTypes.Resolve("100% stacked") ==
+                    DraftChartTypes.ColumnStacked100 &&
+                DraftChartTypes.Resolve("stacked bar") ==
+                    DraftChartTypes.BarStacked &&
+                DraftChartTypes.Resolve("line") ==
+                    DraftChartTypes.LineMarkers,
+                "The corporate chart vocabulary is incomplete.");
+
+            // The slide schema carries content only - no styling
+            // keys the model could use to go off-brand.
+            var schema = new JavaScriptSerializer().Serialize(
+                PresentationToolCatalog.DraftDefinition());
+            Assert(
+                schema.Contains("\"subtitle\"") &&
+                schema.Contains("\"cards\"") &&
+                schema.Contains("\"table\"") &&
+                schema.Contains("\"footnote\"") &&
+                schema.Contains("\"unit\"") &&
+                schema.Contains("\"after_slide\""),
+                "The slide schema lost a corporate content field.");
+            Assert(
+                !schema.Contains("\"color\"") &&
+                !schema.Contains("\"font\"") &&
+                !schema.Contains("\"position\"") &&
+                !schema.Contains("\"left\"") &&
+                !schema.Contains("\"top\""),
+                "The slide schema must never accept styling from the model.");
+        }
+
+        private static int PresentationToolCatalogMaxSeries()
+        {
+            return 5;
         }
 
         private static void DraftHtmlRendersTables()

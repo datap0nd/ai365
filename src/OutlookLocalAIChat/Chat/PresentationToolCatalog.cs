@@ -5,9 +5,14 @@ using OutlookLocalAIChat.Office;
 namespace OutlookLocalAIChat.Chat
 {
     // PowerPoint tool surface. Reads are bounded slide text; the
-    // single write surface appends clearly marked "[AI365 draft]"
-    // slides at the end of the presentation and is only offered when
-    // the user's own prompt authorized a draft.
+    // single write surface adds clearly marked "[AI365 draft]"
+    // slides, painted from the hardcoded corporate theme, and is
+    // only offered when the user's own prompt authorized a draft.
+    //
+    // The draft schema deliberately carries CONTENT only - titles,
+    // bullets, cards, tables, chart data. Fonts, colors, sizes, and
+    // positions are never model-supplied: MetoTheme owns them, so a
+    // small local model cannot produce an off-brand slide.
     public static class PresentationToolCatalog
     {
         public const string ListSlides = "list_slides";
@@ -74,17 +79,27 @@ namespace OutlookLocalAIChat.Chat
                 {
                     name = AddDraftSlides,
                     description =
-                        "Append new draft slides at the end of the active " +
-                        "presentation for the user to review. Each added " +
-                        "slide title is prefixed with [AI365 draft]. " +
-                        "Existing slides are never modified and the file is " +
-                        "never saved. A slide can carry bullet text, a " +
-                        "native chart built from data you supply, or both. " +
+                        "Add new draft slides to the presentation for " +
+                        "the user to review. Each added slide is " +
+                        "marked [AI365 draft], existing slides are " +
+                        "never modified, and the file is never saved. " +
+                        "The corporate deck theme (fonts, colors, " +
+                        "sizes, grid, chart styling) is applied " +
+                        "automatically - supply CONTENT ONLY and never " +
+                        "mention fonts, colors, or positions. Write " +
+                        "like an executive deck: a takeaway sentence " +
+                        "as the title, dense and concrete body text, " +
+                        "standard metric abbreviations (M/S, G/R, A/R, " +
+                        "S/I, S/O, YTD, MP), and the markers " +
+                        "\u2191 growth, \u2193 decline, " +
+                        "\u25B3 negative or deficit, " +
+                        "\u2192 transition - table cells carrying " +
+                        "those markers are highlighted automatically. " +
                         "At most " +
                         PresentationDraftWriter.MaxDraftSlides +
-                        " slides per call. Call it only after gathering " +
-                        "the needed context, as the only tool call in that " +
-                        "response.",
+                        " slides per call. Call it only after " +
+                        "gathering the needed context, as the only " +
+                        "tool call in that response.",
                     parameters = ToolSchema.Build(
                         new Dictionary<string, object>
                         {
@@ -95,48 +110,11 @@ namespace OutlookLocalAIChat.Chat
                                     { "type", "array" },
                                     {
                                         "description",
-                                        "Slides to append, in order."
+                                        "Slides to add, in order."
                                     },
-                                    {
-                                        "items",
-                                        ToolSchema.Build(
-                                            new Dictionary<string, object>
-                                            {
-                                                {
-                                                    "title",
-                                                    ToolSchema.String(
-                                                        "Slide title text.")
-                                                },
-                                                {
-                                                    "bullets",
-                                                    new Dictionary<string, object>
-                                                    {
-                                                        { "type", "array" },
-                                                        {
-                                                            "description",
-                                                            "Body bullet lines, at most " +
-                                                            PresentationDraftWriter
-                                                                .MaxBulletsPerSlide +
-                                                            ". Indent sub-bullets with two " +
-                                                            "leading spaces per level."
-                                                        },
-                                                        {
-                                                            "items",
-                                                            ToolSchema.String(
-                                                                "One bullet line.")
-                                                        }
-                                                    }
-                                                },
-                                                {
-                                                    "chart",
-                                                    ChartSchema()
-                                                }
-                                            },
-                                            "title")
-                                    }
+                                    { "items", SlideSchema() }
                                 }
-                            }
-                            ,
+                            },
                             {
                                 "after_slide",
                                 ToolSchema.Integer(
@@ -152,9 +130,204 @@ namespace OutlookLocalAIChat.Chat
             };
         }
 
-        // Schema of the optional native chart on one slide. Kept as
-        // a method so the cross-app send_to_powerpoint definition
-        // shares the exact same contract.
+        // Schema of one slide. Kept as a method so the cross-app
+        // send_to_powerpoint definition shares the exact same
+        // contract.
+        private static Dictionary<string, object> SlideSchema()
+        {
+            return ToolSchema.Build(
+                new Dictionary<string, object>
+                {
+                    {
+                        "title",
+                        ToolSchema.String(
+                            "Slide title - state the takeaway, not " +
+                            "a label (e.g. 'Flagship S/I recovers " +
+                            "on FE launch').")
+                    },
+                    {
+                        "subtitle",
+                        ToolSchema.String(
+                            "Optional one-line scope or metric " +
+                            "indicator shown under the title (e.g. " +
+                            "'MENA, 25 MP vs 24 YTD').")
+                    },
+                    {
+                        "layout",
+                        ToolSchema.String(
+                            "Optional layout: 'cover' for a title " +
+                            "page or 'agenda' for a contents page. " +
+                            "Omit for content slides - the layout " +
+                            "follows the content you supply " +
+                            "(cards, table, chart, or bullets).")
+                    },
+                    {
+                        "bullets",
+                        new Dictionary<string, object>
+                        {
+                            { "type", "array" },
+                            {
+                                "description",
+                                "Body bullet lines, at most " +
+                                PresentationDraftWriter
+                                    .MaxBulletsPerSlide +
+                                ". Keep them short and " +
+                                "action-oriented. Indent " +
+                                "sub-bullets with two leading " +
+                                "spaces per level. On an 'agenda' " +
+                                "slide these are the agenda items."
+                            },
+                            {
+                                "items",
+                                ToolSchema.String("One bullet line.")
+                            }
+                        }
+                    },
+                    { "cards", CardsSchema() },
+                    { "table", TableSchema() },
+                    { "chart", ChartSchema() },
+                    {
+                        "unit",
+                        ToolSchema.String(
+                            "Optional unit indicator for the data " +
+                            "on this slide (e.g. '(K unit)' or " +
+                            "'(Revenue: M $)').")
+                    },
+                    {
+                        "footnote",
+                        ToolSchema.String(
+                            "Optional small source note shown at " +
+                            "the bottom left (e.g. 'GSCM S/I Biz " +
+                            "Plan'). On a 'cover' slide this is the " +
+                            "metadata line instead (e.g. 'MENA / " +
+                            "Nov 2024').")
+                    }
+                },
+                "title");
+        }
+
+        // The three-column strategy grid: two to four numbered
+        // cards, each a heading plus sub-points.
+        private static Dictionary<string, object> CardsSchema()
+        {
+            return new Dictionary<string, object>
+            {
+                { "type", "array" },
+                {
+                    "description",
+                    "Optional strategy grid: at most " +
+                    PresentationDraftWriter.MaxCards +
+                    " side-by-side numbered cards. Use it for " +
+                    "objectives, pillars, or initiatives - e.g. " +
+                    "'3 strategy objectives to drive in 2025'."
+                },
+                {
+                    "items",
+                    ToolSchema.Build(
+                        new Dictionary<string, object>
+                        {
+                            {
+                                "heading",
+                                ToolSchema.String(
+                                    "Short card heading.")
+                            },
+                            {
+                                "points",
+                                new Dictionary<string, object>
+                                {
+                                    { "type", "array" },
+                                    {
+                                        "description",
+                                        "At most " +
+                                        PresentationDraftWriter
+                                            .MaxCardPoints +
+                                        " short sub-points."
+                                    },
+                                    {
+                                        "items",
+                                        ToolSchema.String(
+                                            "One sub-point.")
+                                    }
+                                }
+                            }
+                        },
+                        "heading")
+                }
+            };
+        }
+
+        // The dense performance matrix.
+        private static Dictionary<string, object> TableSchema()
+        {
+            return new Dictionary<string, object>
+            {
+                { "type", "object" },
+                {
+                    "description",
+                    "Optional data table, at most " +
+                    PresentationDraftWriter.MaxTableRows +
+                    " rows of " +
+                    PresentationDraftWriter.MaxTableColumns +
+                    " columns. The first column holds row labels. " +
+                    "Mark performance in the value cells with " +
+                    "\u2191, \u2193, \u25B3, or a signed number " +
+                    "(+12%, -8%): growth is highlighted green and " +
+                    "shortfall yellow automatically, capped at four " +
+                    "cells each. Never ask for colors yourself."
+                },
+                {
+                    "properties",
+                    new Dictionary<string, object>
+                    {
+                        {
+                            "headers",
+                            new Dictionary<string, object>
+                            {
+                                { "type", "array" },
+                                {
+                                    "description",
+                                    "Column headers, the first one " +
+                                    "labels the row column."
+                                },
+                                {
+                                    "items",
+                                    ToolSchema.String(
+                                        "One header cell.")
+                                }
+                            }
+                        },
+                        {
+                            "rows",
+                            new Dictionary<string, object>
+                            {
+                                { "type", "array" },
+                                {
+                                    "description",
+                                    "Data rows, each an array of " +
+                                    "short cell strings."
+                                },
+                                {
+                                    "items",
+                                    new Dictionary<string, object>
+                                    {
+                                        { "type", "array" },
+                                        {
+                                            "items",
+                                            ToolSchema.String(
+                                                "One cell value.")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                { "required", new[] { "rows" } },
+                { "additionalProperties", false }
+            };
+        }
+
+        // Schema of the optional native chart on one slide.
         private static Dictionary<string, object> ChartSchema()
         {
             return new Dictionary<string, object>
@@ -179,8 +352,13 @@ namespace OutlookLocalAIChat.Chat
                         {
                             "type",
                             ToolSchema.String(
-                                "Chart kind: column, bar, line, " +
-                                "pie, area, or scatter.")
+                                "Chart kind: column, stacked " +
+                                "column, 100% stacked, bar, " +
+                                "stacked bar, line, pie, area, " +
+                                "or scatter. Prefer stacked " +
+                                "column for volume splits over " +
+                                "time, line for trends, and 100% " +
+                                "stacked for mix shifts.")
                         },
                         {
                             "title",

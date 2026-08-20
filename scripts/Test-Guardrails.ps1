@@ -273,6 +273,7 @@ $officeGuardedFiles = @(
     (Join-Path $sourceRoot "Office\WordDraftWriter.cs"),
     (Join-Path $sourceRoot "Office\DraftTextLayout.cs"),
     (Join-Path $sourceRoot "Office\DraftChartTypes.cs"),
+    (Join-Path $sourceRoot "Office\MetoTheme.cs"),
     (Join-Path $sourceRoot "Office\DocumentDraftHost.cs"),
     (Join-Path $sourceRoot "ExcelAddIn.cs"),
     (Join-Path $sourceRoot "PowerPointAddIn.cs"),
@@ -396,6 +397,45 @@ $presentationWriterSource = Get-Content (
 if (-not $presentationWriterSource.Contains(
         'DraftMarker = "[AI365 draft]"')) {
     throw "Appended slides must stay marked as AI365 drafts."
+}
+# The marker is written by the writer onto every drafted slide, so
+# the model can never suppress it.
+if (-not $presentationWriterSource.Contains("AddDraftTag(")) {
+    throw "Every drafted slide must carry the AI365 draft marker."
+}
+
+# The corporate theme is hardcoded and owned by the writer: the
+# model supplies content, never fonts, colors, sizes, or positions.
+$themeSource = Get-Content (
+    Join-Path $sourceRoot "Office\MetoTheme.cs") -Raw
+foreach ($requiredToken in @(
+    'ThemeName = "METO Executive Dense"',
+    'TitleFont = "Samsung Sharp Sans Bold"',
+    'BodyFont = "Calibri"',
+    'BrandBlueHex = "#1428A0"',
+    'CardSlateHex = "#E7ECF0"',
+    'GoodGreenHex = "#E2EFDA"',
+    'BadYellowHex = "#FFF2CC"',
+    "MaxHighlightsPerStatus = 4"
+)) {
+    if (-not $themeSource.Contains($requiredToken)) {
+        throw "The corporate theme is missing token $requiredToken."
+    }
+}
+if (-not $presentationWriterSource.Contains("MetoTheme.")) {
+    throw "Draft slides must be painted from the corporate theme."
+}
+foreach ($styleKey in @(
+    '"color"',
+    '"font"',
+    '"font_size"',
+    '"position"',
+    '"left"',
+    '"top"'
+)) {
+    if ($presentationCatalogSource.Contains($styleKey)) {
+        throw "The slide schema must not accept styling from the model."
+    }
 }
 
 $wordWriterSource = Get-Content (

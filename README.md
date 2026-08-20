@@ -14,8 +14,8 @@ context but can never send email, save a file, or delete anything.
   only write surface is a clearly marked **AI365 Draft** worksheet that the
   add-in never saves.
 - **PowerPoint**: chat with the open presentation (bounded slide and notes
-  reads); the only write surface is appended **[AI365 draft]** slides that
-  the add-in never saves.
+  reads); the only write surface is **[AI365 draft]** slides that the add-in
+  never saves, laid out and styled by the built-in **METO corporate theme**.
 - **Word**: chat with the open document (bounded text reads); the only write
   surface is a brand-new, unsaved **[AI365 draft]** document that the add-in
   never saves.
@@ -256,13 +256,14 @@ this document"), it goes there instead - still unsaved:
   for explicit change-my-sheet requests ("fill in the missing totals",
   "fix the formulas in column D"). Same formula safety rules; nothing is
   saved, so closing without saving discards everything.
-- `add_draft_slides` adds slides whose titles carry the **[AI365 draft]**
-  marker; existing slides are never modified. By default new slides append
-  at the end, or ask for a position ("after slide 2", "at the start") and
-  they insert there. Sub-bullets indent with two leading spaces per level,
-  and a slide can carry a **native chart** built from data the model
-  supplies - "do a bar chart with this in a slide" draws a real PowerPoint
-  chart, not a picture or a text list.
+- `add_draft_slides` adds slides marked **[AI365 draft]**; existing slides
+  are never modified. Every slide is painted from the corporate theme (see
+  below). By default new slides append at the end, or ask for a position
+  ("after slide 2", "at the start") and they insert there. A slide can
+  carry bullets, a **strategy grid** of numbered cards, a **data table**
+  with automatic performance highlighting, and a **native chart** built
+  from data the model supplies - "do a bar chart with this in a slide"
+  draws a real PowerPoint chart, not a picture or a text list.
 - `write_draft_document` writes into Word with a placement you control:
   by default it **appends to the document you are working on** (Ctrl+Z
   undoes it), "replace the selection" rewrites just what you selected, and
@@ -285,6 +286,36 @@ this document"), it goes there instead - still unsaved:
   "create an excel", "create a word", "create a powerpoint", "build me a
   slide of my day", or "put these emails in excel" all work straight from
   your mailbox, first try.
+
+### Corporate slide theme
+
+Draft slides are not generic bullet pages. AI365 ships the **METO executive
+deck theme** compiled into the add-in, and the model supplies content only -
+it can never choose a font, color, size, or position, so even a small local
+model produces on-brand slides:
+
+- **Typography**: Samsung Sharp Sans Bold titles (40pt, stepped down when a
+  title runs long), Samsung Sharp Sans Medium subtitles (15pt), Calibri body
+  text (11pt), Arial chart labels (9pt), Malgun Gothic footnotes (7pt).
+- **Palette**: brand blue `#1428A0` rules and accents, charcoal titles,
+  pure white slides, slate `#E7ECF0` cards and table headers.
+- **Layouts**, picked automatically from the content supplied: a royal-blue
+  **cover**, a centered **agenda**, the three-column **strategy grid** with
+  circled numbers, the dense **performance matrix**, a full-width **chart**,
+  or bullets beside a chart.
+- **Selective highlighting**: table cells marked with the corporate
+  performance vocabulary - up/down arrows, the deficit triangle, or a signed
+  number like `+12%` / `-8%` - are filled light green (growth) or light
+  yellow (shortfall) automatically, capped at four cells each so a table
+  stays low-noise. The model never picks a color.
+- **Charts**: stacked, 100% stacked, clustered, bar, line-with-markers,
+  pie, area, and scatter, always flat (never 3-D), with fine `#D9D9D9`
+  gridlines, 9pt charcoal labels, brand-blue-led series colors, and an
+  optional unit indicator such as `(K unit)`.
+
+Ask in the corporate vocabulary and it carries through: takeaway titles,
+`M/S`, `G/R`, `A/R`, `S/I`, `S/O`, `YTD`, `MP`, and arrow markers are all
+part of the drafting instructions.
 
 The add-in never calls Save, SaveAs, Delete, Print, Protect, Close, or Quit
 on your documents - saving stays a human action, so even a discarded draft
