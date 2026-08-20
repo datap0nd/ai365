@@ -14,8 +14,10 @@ namespace OutlookLocalAIChat.Outlook
     {
         private const int MaxDirectMessageBodyCharacters = 6000;
         private const int MaxThreadMessageBodyCharacters = 2000;
-        private const int MaxThreadMessages =
-            MailboxWorkingSet.MaxMessages;
+        private static int MaxThreadMessages
+        {
+            get { return MailboxWorkingSet.MaxMessages; }
+        }
 
         private readonly MailboxContextService _mailbox;
         private readonly JavaScriptSerializer _serializer =

@@ -1,12 +1,21 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using OutlookLocalAIChat.Security;
 
 namespace OutlookLocalAIChat.Outlook
 {
     public static class MailboxWorkingSet
     {
-        public const int MaxMessages = 10;
+        // Recommended default of 10; the effective limit can be
+        // raised or lowered from the Settings Limits tab within
+        // the hard clamps in LimitOverrides.
+        public const int RecommendedMaxMessages = 10;
+
+        public static int MaxMessages
+        {
+            get { return LimitOverrides.WorkingSetMessages; }
+        }
 
         public static string HandleAt(int index)
         {

@@ -143,7 +143,8 @@ $workingSetBoundarySource =
     $workingSetSource +
     $toolHostSource
 foreach ($requiredBoundary in @(
-    "public const int MaxMessages = 10",
+    "public const int RecommendedMaxMessages = 10",
+    "LimitOverrides.WorkingSetMessages",
     "MAILBOX_WORKING_SET_LOCKED",
     "MAILBOX_CONTEXT_LIMIT_REACHED",
     "MAILBOX_SEARCH_LIMIT_REACHED",
@@ -431,6 +432,7 @@ foreach ($requiredLimitBoundary in @(
     "MaxAssistantCharactersLimit = 48000",
     "MaxToolRoundsLimit = 8",
     "MaxUserMultiplier = 8",
+    "MaxWorkingSetMessages = 50",
     "if (useRecommended)"
 )) {
     if (-not $textBoundarySource.Contains($requiredLimitBoundary)) {

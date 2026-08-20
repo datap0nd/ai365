@@ -101,7 +101,11 @@ namespace OutlookLocalAIChat.Configuration
                     LimitToolCallsPerRound = OrDefault(
                         stored.LimitToolCallsPerRound,
                         TextBoundary
-                            .RecommendedToolCallsPerRound)
+                            .RecommendedToolCallsPerRound),
+                    LimitWorkingSetMessages = OrDefault(
+                        stored.LimitWorkingSetMessages,
+                        LimitOverrides
+                            .RecommendedWorkingSetMessages)
                 };
             }
             catch
@@ -188,7 +192,9 @@ namespace OutlookLocalAIChat.Configuration
                 LimitHistoryTurns = settings.LimitHistoryTurns,
                 LimitToolRounds = settings.LimitToolRounds,
                 LimitToolCallsPerRound =
-                    settings.LimitToolCallsPerRound
+                    settings.LimitToolCallsPerRound,
+                LimitWorkingSetMessages =
+                    settings.LimitWorkingSetMessages
             };
 
             File.WriteAllText(
@@ -352,6 +358,8 @@ namespace OutlookLocalAIChat.Configuration
             public int LimitToolRounds { get; set; }
 
             public int LimitToolCallsPerRound { get; set; }
+
+            public int LimitWorkingSetMessages { get; set; }
         }
 
         private static int OrDefault(int value, int fallback)

@@ -4294,7 +4294,8 @@ namespace GuardrailTests
                     LimitAssistantCharacters = 1,
                     LimitHistoryTurns = 1000,
                     LimitToolRounds = 100,
-                    LimitToolCallsPerRound = 0
+                    LimitToolCallsPerRound = 0,
+                    LimitWorkingSetMessages = 1000
                 };
                 wild.ApplyLimits();
                 Assert(
@@ -4308,6 +4309,8 @@ namespace GuardrailTests
                     LimitOverrides.MaxToolRoundsLimit &&
                     TextBoundary.MaxToolCallsPerRound ==
                     LimitOverrides.MinToolCallsPerRound &&
+                    MailboxWorkingSet.MaxMessages ==
+                    LimitOverrides.MaxWorkingSetMessages &&
                     ContextScale.Scaled(1000) ==
                     1000 * ContextScale.MaxUserMultiplier,
                     "Custom limits must clamp to the hard bounds.");
@@ -4323,6 +4326,8 @@ namespace GuardrailTests
                     TextBoundary.MaxUserPromptCharacters ==
                     TextBoundary
                         .RecommendedUserPromptCharacters &&
+                    MailboxWorkingSet.MaxMessages ==
+                    MailboxWorkingSet.RecommendedMaxMessages &&
                     ContextScale.Scaled(1000) == 1000,
                     "Recommended mode must ignore stored custom values.");
             }

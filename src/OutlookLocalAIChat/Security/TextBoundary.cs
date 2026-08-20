@@ -7,8 +7,8 @@ namespace OutlookLocalAIChat.Security
     {
         // Recommended defaults. The effective Max* values below can
         // be adjusted by the user from the Settings Limits tab
-        // (LimitOverrides), always inside hard clamps; capability
-        // caps (message counts, drafts, send) are never adjustable.
+        // (LimitOverrides), always inside hard clamps; drafting and
+        // sending capability rules are never adjustable.
         public const int RecommendedUserPromptCharacters = 4000;
         public const int RecommendedAssistantCharacters = 12000;
         public const int RecommendedConversationTurns = 12;
@@ -141,9 +141,9 @@ namespace OutlookLocalAIChat.Security
 
     // Effective request limits, settable only from the Settings
     // Limits tab within the hard clamps below. Everything here is a
-    // text or loop budget - capability caps (the ten-email working
-    // set, one draft per request, no sending) live elsewhere and
-    // are never adjustable.
+    // text, loop, or working-set budget - drafting and sending
+    // capability rules (one draft per request, no sending, marked
+    // draft surfaces only) live elsewhere and are never adjustable.
     public static class LimitOverrides
     {
         public const int MinPromptCharacters = 2000;
@@ -156,6 +156,9 @@ namespace OutlookLocalAIChat.Security
         public const int MaxToolRoundsLimit = 8;
         public const int MinToolCallsPerRound = 2;
         public const int MaxToolCallsPerRoundLimit = 8;
+        public const int RecommendedWorkingSetMessages = 10;
+        public const int MinWorkingSetMessages = 3;
+        public const int MaxWorkingSetMessages = 50;
 
         private static int _promptCharacters =
             TextBoundary.RecommendedUserPromptCharacters;
@@ -167,6 +170,8 @@ namespace OutlookLocalAIChat.Security
             TextBoundary.RecommendedToolRounds;
         private static int _toolCallsPerRound =
             TextBoundary.RecommendedToolCallsPerRound;
+        private static int _workingSetMessages =
+            RecommendedWorkingSetMessages;
 
         public static int PromptCharacters
         {
@@ -193,13 +198,19 @@ namespace OutlookLocalAIChat.Security
             get { return _toolCallsPerRound; }
         }
 
+        public static int WorkingSetMessages
+        {
+            get { return _workingSetMessages; }
+        }
+
         public static void Apply(
             bool useRecommended,
             int promptCharacters,
             int assistantCharacters,
             int historyTurns,
             int toolRounds,
-            int toolCallsPerRound)
+            int toolCallsPerRound,
+            int workingSetMessages)
         {
             if (useRecommended)
             {
@@ -213,6 +224,8 @@ namespace OutlookLocalAIChat.Security
                     TextBoundary.RecommendedToolRounds;
                 _toolCallsPerRound =
                     TextBoundary.RecommendedToolCallsPerRound;
+                _workingSetMessages =
+                    RecommendedWorkingSetMessages;
                 return;
             }
 
@@ -236,6 +249,10 @@ namespace OutlookLocalAIChat.Security
                 toolCallsPerRound,
                 MinToolCallsPerRound,
                 MaxToolCallsPerRoundLimit);
+            _workingSetMessages = Clamp(
+                workingSetMessages,
+                MinWorkingSetMessages,
+                MaxWorkingSetMessages);
         }
 
         private static int Clamp(

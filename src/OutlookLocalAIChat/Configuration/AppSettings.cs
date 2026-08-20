@@ -71,6 +71,9 @@ namespace OutlookLocalAIChat.Configuration
         public int LimitToolCallsPerRound { get; set; } =
             TextBoundary.RecommendedToolCallsPerRound;
 
+        public int LimitWorkingSetMessages { get; set; } =
+            LimitOverrides.RecommendedWorkingSetMessages;
+
         // Pushes this settings object's limit choices into the
         // process-wide effective limits. Called wherever settings
         // are loaded or saved.
@@ -82,7 +85,8 @@ namespace OutlookLocalAIChat.Configuration
                 LimitAssistantCharacters,
                 LimitHistoryTurns,
                 LimitToolRounds,
-                LimitToolCallsPerRound);
+                LimitToolCallsPerRound,
+                LimitWorkingSetMessages);
             ContextScale.ApplyUserMultiplier(
                 UseRecommendedLimits
                     ? 1

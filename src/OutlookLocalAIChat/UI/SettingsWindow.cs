@@ -67,12 +67,14 @@ namespace OutlookLocalAIChat.UI
         private readonly TrackBar _limitTurns = new TrackBar();
         private readonly TrackBar _limitRounds = new TrackBar();
         private readonly TrackBar _limitCalls = new TrackBar();
+        private readonly TrackBar _limitEmails = new TrackBar();
         private readonly Label _limitMultiplierValue = new Label();
         private readonly Label _limitPromptValue = new Label();
         private readonly Label _limitAnswerValue = new Label();
         private readonly Label _limitTurnsValue = new Label();
         private readonly Label _limitRoundsValue = new Label();
         private readonly Label _limitCallsValue = new Label();
+        private readonly Label _limitEmailsValue = new Label();
         private readonly Button _mcpSave =
             MakeButton("Add / update server", false, 150);
         private readonly Button _mcpRemove =
@@ -235,6 +237,10 @@ namespace OutlookLocalAIChat.UI
                 _limitCalls,
                 current?.LimitToolCallsPerRound ??
                 TextBoundary.RecommendedToolCallsPerRound);
+            _limitEmails.Value = ClampTrack(
+                _limitEmails,
+                current?.LimitWorkingSetMessages ??
+                LimitOverrides.RecommendedWorkingSetMessages);
             UpdateLimitsUi();
             UpdateToneStrengthLabel();
             UpdateModelGuidance();
@@ -944,10 +950,10 @@ namespace OutlookLocalAIChat.UI
                 "windows. Raising them sends more mailbox and " +
                 "document text to the model and can overflow a " +
                 "small model's context window or slow requests " +
-                "down - change them at your own risk. Capability " +
-                "guardrails are not affected: the ten-email " +
-                "working set, one draft per request, and " +
-                "never-send/never-save stay fixed regardless.");
+                "down - change them at your own risk. Drafting " +
+                "guardrails are not affected: one draft per " +
+                "request and never-send/never-save stay fixed " +
+                "regardless.");
             intro.ForeColor = SystemColors.ControlText;
             layout.Controls.Add(intro, 0, 0);
             layout.SetColumnSpan(intro, 2);
@@ -1019,6 +1025,15 @@ namespace OutlookLocalAIChat.UI
                 LimitOverrides.MinToolCallsPerRound,
                 LimitOverrides.MaxToolCallsPerRoundLimit,
                 1);
+            AddLimitRow(
+                layout,
+                ref row,
+                "Emails in the working set (per request)",
+                _limitEmails,
+                _limitEmailsValue,
+                LimitOverrides.MinWorkingSetMessages,
+                LimitOverrides.MaxWorkingSetMessages,
+                5);
 
             var note = SupportingText(
                 "With Google Gemini sign-in the reading budgets " +
@@ -1071,6 +1086,7 @@ namespace OutlookLocalAIChat.UI
             _limitTurns.Enabled = custom;
             _limitRounds.Enabled = custom;
             _limitCalls.Enabled = custom;
+            _limitEmails.Enabled = custom;
             _limitMultiplierValue.Text =
                 "x" + _limitMultiplier.Value;
             _limitPromptValue.Text =
@@ -1083,6 +1099,8 @@ namespace OutlookLocalAIChat.UI
                 _limitRounds.Value.ToString();
             _limitCallsValue.Text =
                 _limitCalls.Value.ToString();
+            _limitEmailsValue.Text =
+                _limitEmails.Value.ToString();
         }
 
         private TabPage BuildSupportPage()
@@ -1593,7 +1611,8 @@ namespace OutlookLocalAIChat.UI
                     _limitAnswer.Value * 1000,
                 LimitHistoryTurns = _limitTurns.Value,
                 LimitToolRounds = _limitRounds.Value,
-                LimitToolCallsPerRound = _limitCalls.Value
+                LimitToolCallsPerRound = _limitCalls.Value,
+                LimitWorkingSetMessages = _limitEmails.Value
             };
         }
 

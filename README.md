@@ -116,14 +116,16 @@ the tool-call probe allows up to 90 seconds.
    The sidebar opens with `Selected: subject` at the top. Common `RE:`, `FW:`,
    and `FWD:` prefixes are hidden in that display.
 2. To choose a bounded group first, enter `/search person or topic`. AI365
-   searches locally and keeps the newest ten matching Inbox or Sent Items
-   emails as the working set. No email body is sent during this command.
+   searches locally and keeps the newest matching Inbox or Sent Items
+   emails as the working set (up to the working-set limit - ten by
+   default, adjustable in the Limits tab). No email body is sent during this command.
 3. Review the listed subjects and send another `/search` to replace the set if
    it is wrong. Results appear in a collapsible working-set layer as ten
    distinct email cards with subject, sender, and date. Use `/search clear` to
    remove it. The layer collapses automatically when you send a normal AI
    prompt and can be reopened with **Show**.
-4. Alternatively, Ctrl+click one to ten emails in Outlook, then choose
+4. Alternatively, Ctrl+click emails in Outlook (up to the working-set
+   limit), then choose
    **Add email**, right-click **Send to AI365**, or drag the selected messages
    onto the AI365 pane. Multiple messages become the same locked working set.
 5. Use the **+** menu or drag files from Windows Explorer to add external
@@ -307,14 +309,14 @@ default and keeps the values this README describes. Untick it to adjust,
 at your own risk: the reading-budget multiplier (email bodies, attachments,
 and documents, up to x8), your message length (up to 16,000 characters),
 answer length (up to 48,000), history turns (up to 24), tool rounds and
-tool calls per round (up to 8 each). Every slider is hard-clamped in code -
-the settings file cannot push a value past those bounds. Raising limits
-sends more text to the model and can overflow a small local model's context
-window. Capability guardrails are not adjustable from here or anywhere
-else: the ten-email working set, one draft per request, and
-never-send/never-save stay fixed. With Gemini sign-in the reading budgets
-already scale x4 automatically; the larger of that and your multiplier
-wins.
+tool calls per round (up to 8 each), and how many emails the working set
+holds per request (3 to 50, ten by default). Every slider is hard-clamped
+in code - the settings file cannot push a value past those bounds. Raising
+limits sends more mailbox text to the model and can overflow a small local
+model's context window. Drafting guardrails are not adjustable from here
+or anywhere else: one draft per request and never-send/never-save stay
+fixed. With Gemini sign-in the reading budgets already scale x4
+automatically; the larger of that and your multiplier wins.
 
 ## Diagnostics and administration
 
