@@ -116,7 +116,12 @@ namespace OutlookLocalAIChat.Chat
                                         "first data row is row 4. A cell starting " +
                                         "with = becomes a live Excel formula and " +
                                         "may reference other sheets of this " +
-                                        "workbook (e.g. =SUM(Data!B2:B9)); " +
+                                        "workbook (e.g. =SUM(Data!B2:B9)). Use " +
+                                        "exact sheet names as returned by " +
+                                        "list_worksheets, in single quotes when " +
+                                        "they contain spaces ('My Data'!B2), and " +
+                                        "English function names with comma " +
+                                        "separators; " +
                                         "functions that reach the network or other " +
                                         "files are rejected and land as text. Plain " +
                                         "numbers and dates are typed automatically."

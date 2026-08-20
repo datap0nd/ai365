@@ -4173,6 +4173,15 @@ namespace GuardrailTests
                 !notTable.Html.Contains("<table") &&
                 notTable.Html.Contains("| lonely pipe line"),
                 "A non-table pipe line must stay plain text.");
+
+            var straySeparator = SafeDraftHtml.FormatContent(
+                "| A |\n| --- |\n| x |\n| --- |\n| y |",
+                new string[0]);
+            Assert(
+                straySeparator.Html.Contains(">y<") &&
+                !straySeparator.Html.Contains(">---<"),
+                "A stray separator row must be skipped, not rendered: " +
+                straySeparator.Html);
         }
 
         private static void RecipientWarningFlagsUnknownRecipients()

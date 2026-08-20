@@ -857,6 +857,7 @@
         var tbody = document.createElement("tbody");
         i += 2;
         while (i < lines.length && isTableRow(lines[i])) {
+          if (isTableSeparator(lines[i])) { i++; continue; }
           var bodyRow = document.createElement("tr");
           splitTableRow(lines[i]).forEach(function (cell, index) {
             var td = document.createElement("td");

@@ -243,6 +243,17 @@ namespace OutlookLocalAIChat.Outlook
                     break;
                 }
 
+                // A stray separator row inside the body is layout
+                // punctuation, never data.
+                if (ParseSeparatorCells(
+                        text,
+                        lines[index + consumed][0],
+                        lines[index + consumed][1]) != null)
+                {
+                    consumed++;
+                    continue;
+                }
+
                 output.Append("<tr>");
                 RenderTableRow(
                     output,

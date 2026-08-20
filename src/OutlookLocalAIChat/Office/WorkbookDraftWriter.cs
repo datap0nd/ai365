@@ -82,7 +82,7 @@ namespace OutlookLocalAIChat.Office
             // always starting at A3 (header row 3, first data row
             // 4).
             var boundedTitle = TextBoundary.SingleLine(
-                title,
+                SafeModelText.Format(title, 180).PlainText,
                 180);
             const int startRow = 3;
             if (boundedTitle.Length > 0)
@@ -151,6 +151,8 @@ namespace OutlookLocalAIChat.Office
                     columnCount]);
             target.Value2 = grid;
             var formulaCount = 0;
+            var liveFormulas =
+                new List<KeyValuePair<int[], string>>();
             foreach (var formula in formulas)
             {
                 dynamic cell = sheet.Cells[
@@ -160,6 +162,7 @@ namespace OutlookLocalAIChat.Office
                 {
                     cell.Formula = formula.Value;
                     formulaCount++;
+                    liveFormulas.Add(formula);
                 }
                 catch
                 {
@@ -171,6 +174,7 @@ namespace OutlookLocalAIChat.Office
                     {
                         cell.FormulaLocal = formula.Value;
                         formulaCount++;
+                        liveFormulas.Add(formula);
                     }
                     catch
                     {
@@ -181,6 +185,47 @@ namespace OutlookLocalAIChat.Office
                         catch
                         {
                         }
+                    }
+                }
+            }
+
+            // A formula that parses but evaluates to #NAME? or
+            // #REF! (unknown function, bad sheet reference) is
+            // definitely wrong: degrade it to visible text so the
+            // draft never shows silently broken live formulas.
+            // Data-dependent errors like #DIV/0! are left alone.
+            var brokenFormulas = 0;
+            if (liveFormulas.Count > 0)
+            {
+                try
+                {
+                    sheet.Calculate();
+                }
+                catch
+                {
+                }
+
+                foreach (var formula in liveFormulas)
+                {
+                    try
+                    {
+                        dynamic cell = sheet.Cells[
+                            startRow + formula.Key[0],
+                            formula.Key[1] + 1];
+                        object value = cell.Value2;
+                        // Excel error cells marshal as Int32 error
+                        // codes; real numbers arrive as Double.
+                        if (value is int &&
+                            ((int)value == 2023 ||
+                             (int)value == 2029))
+                        {
+                            cell.Value2 = "'" + formula.Value;
+                            formulaCount--;
+                            brokenFormulas++;
+                        }
+                    }
+                    catch
+                    {
                     }
                 }
             }
@@ -218,7 +263,18 @@ namespace OutlookLocalAIChat.Office
                     : string.Empty) +
                 " to the '" +
                 DraftSheetName +
-                "' sheet. Nothing was saved.";
+                "' sheet." +
+                (brokenFormulas > 0
+                    ? " " + brokenFormulas +
+                      (brokenFormulas == 1
+                          ? " formula evaluated"
+                          : " formulas evaluated") +
+                      " to #NAME? or #REF! and " +
+                      (brokenFormulas == 1 ? "was" : "were") +
+                      " kept as visible text - check the " +
+                      "function names and sheet references."
+                    : string.Empty) +
+                " Nothing was saved.";
         }
 
         // The chart definition for the draft sheet: it always uses
@@ -255,7 +311,9 @@ namespace OutlookLocalAIChat.Office
                 DraftChartTypes.Resolve(
                     Convert.ToString(typeValue)),
                 TextBoundary.SingleLine(
-                    Convert.ToString(titleValue),
+                    SafeModelText.Format(
+                        Convert.ToString(titleValue),
+                        180).PlainText,
                     180));
         }
 

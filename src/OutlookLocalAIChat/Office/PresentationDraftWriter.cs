@@ -196,8 +196,13 @@ namespace OutlookLocalAIChat.Office
                                 {
                                     try
                                     {
+                                        // Length 1: exactly this
+                                        // paragraph, never the rest
+                                        // of the text frame.
                                         textRange
-                                            .Paragraphs(line + 1)
+                                            .Paragraphs(
+                                                line + 1,
+                                                1)
                                             .IndentLevel =
                                             lines[line].Level;
                                     }
@@ -343,6 +348,10 @@ namespace OutlookLocalAIChat.Office
 
                 try
                 {
+                    // Alerts off so closing the embedded grid can
+                    // never raise a modal save prompt and hang the
+                    // draft.
+                    dataWorkbook.Application.DisplayAlerts = false;
                     dataWorkbook.Close(true);
                 }
                 catch
@@ -390,8 +399,13 @@ namespace OutlookLocalAIChat.Office
 
                 object titleValue;
                 map.TryGetValue("title", out titleValue);
+                // SafeModelText strips **bold** markers so slides
+                // never show literal asterisks - every other
+                // surface renders or removes them.
                 var title = TextBoundary.SingleLine(
-                    Convert.ToString(titleValue),
+                    SafeModelText.Format(
+                        Convert.ToString(titleValue),
+                        MaxTitleCharacters).PlainText,
                     MaxTitleCharacters);
                 if (title.Length == 0)
                 {
@@ -425,7 +439,10 @@ namespace OutlookLocalAIChat.Office
 
                             bullets.Add(new DraftBullet(
                                 TextBoundary.SingleLine(
-                                    raw,
+                                    SafeModelText.Format(
+                                        raw,
+                                        MaxBulletCharacters)
+                                        .PlainText,
                                     MaxBulletCharacters),
                                 1 + leading / 2));
                         }
@@ -558,7 +575,9 @@ namespace OutlookLocalAIChat.Office
                 DraftChartTypes.Resolve(
                     Convert.ToString(typeValue)),
                 TextBoundary.SingleLine(
-                    Convert.ToString(titleValue),
+                    SafeModelText.Format(
+                        Convert.ToString(titleValue),
+                        180).PlainText,
                     180),
                 categories,
                 series);

@@ -19,6 +19,7 @@ namespace OutlookLocalAIChat.Office
         internal const int MaxTitleCharacters = 180;
 
         // WdBuiltinStyle ids work in every localized Word.
+        private const int StyleNormal = -1;
         private const int StyleHeading1 = -2;
         private const int StyleHeading2 = -3;
         private const int StyleHeading3 = -4;
@@ -41,7 +42,9 @@ namespace OutlookLocalAIChat.Office
 
             var heading = DraftMarker;
             var boundedTitle = TextBoundary.SingleLine(
-                title,
+                SafeModelText.Format(
+                    title,
+                    MaxTitleCharacters).PlainText,
                 MaxTitleCharacters);
             if (boundedTitle.Length > 0)
             {
@@ -82,7 +85,7 @@ namespace OutlookLocalAIChat.Office
                                         row),
                                     0,
                                     null),
-                                0);
+                                StyleNormal);
                         }
                     }
 
@@ -117,6 +120,9 @@ namespace OutlookLocalAIChat.Office
 
         // Inserts one paragraph at the end of the document; style
         // and bold runs are cosmetic and can never fail the draft.
+        // The style is ALWAYS set explicitly - a paragraph inserted
+        // after a heading would otherwise inherit the heading style
+        // in Word, so normal text must be pinned back to Normal.
         private static void AppendParagraph(
             dynamic document,
             DraftTextLayout.Paragraph paragraph,
@@ -125,15 +131,12 @@ namespace OutlookLocalAIChat.Office
             var end = (int)document.Content.End - 1;
             dynamic range = document.Range(end, end);
             range.Text = paragraph.Text + "\r";
-            if (style != 0)
+            try
             {
-                try
-                {
-                    range.Style = style;
-                }
-                catch
-                {
-                }
+                range.Style = style;
+            }
+            catch
+            {
             }
 
             foreach (var bold in paragraph.BoldRanges)
@@ -245,7 +248,7 @@ namespace OutlookLocalAIChat.Office
                 case DraftTextLayout.KindNumbered:
                     return StyleListNumber;
                 default:
-                    return 0;
+                    return StyleNormal;
             }
         }
     }
