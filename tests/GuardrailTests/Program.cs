@@ -4038,6 +4038,29 @@ namespace GuardrailTests
                 "The update script must wait for every Office host to close, " +
                 "install silently with a bounded wait, and restart only the " +
                 "requested host.");
+
+            var excelOnly = SelfUpdater.BuildUpdateScript(
+                false,
+                true,
+                false,
+                false);
+            Assert(
+                excelOnly.Contains("EXCEL.EXE") &&
+                !excelOnly.Contains("OUTLOOK.EXE") &&
+                !excelOnly.Contains("POWERPNT.EXE") &&
+                !excelOnly.Contains("WINWORD.EXE"),
+                "A component-scoped update must wait only for its own hosts.");
+            var unknown = SelfUpdater.BuildUpdateScript(
+                false,
+                false,
+                false,
+                false);
+            Assert(
+                unknown.Contains("OUTLOOK.EXE") &&
+                unknown.Contains("EXCEL.EXE") &&
+                unknown.Contains("POWERPNT.EXE") &&
+                unknown.Contains("WINWORD.EXE"),
+                "An unknown component state must wait for every host.");
         }
 
         private static void DraftFormulasStayInsideTheWorkbook()

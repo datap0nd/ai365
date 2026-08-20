@@ -1107,10 +1107,10 @@ namespace OutlookLocalAIChat.UI
 
             var intro = SupportingText(
                 "Found a problem or have an idea? Describe it " +
-                "below and click Create report email. AI365 " +
-                "opens a pre-filled email to the creator " +
-                "(r.cunha@samsung.com) with your notes and the " +
-                "recent diagnostic log so you can review " +
+                "below and click Create report email. Settings " +
+                "closes and AI365 opens a pre-filled email to the " +
+                "creator (r.cunha@samsung.com) with your notes " +
+                "and the recent diagnostic log so you can review " +
                 "everything and send it yourself from Outlook. " +
                 "AI365 never sends anything on its own.");
             intro.ForeColor = SystemColors.ControlText;
@@ -1150,15 +1150,42 @@ namespace OutlookLocalAIChat.UI
             return page;
         }
 
+        // Outlook refuses to display a mail item while a modal
+        // dialog is open in its process ("Outlook cannot do this
+        // because a dialog box is open"), and this settings window
+        // IS that modal dialog when opened from the Outlook pane.
+        // The click therefore only records the request and closes
+        // the window; the pane opens the report email afterwards.
         private void SupportClick(
             object sender,
             EventArgs eventArgs)
         {
-            _error.Text = string.Empty;
-            // From the Excel/PowerPoint panes there is no Outlook
-            // host object, so the running Outlook (or a fresh
-            // instance) is used to open the report draft.
-            var outlookApplication = _outlookApplication;
+            SupportReportRequested = true;
+            SupportReportDescription = TextBoundary.PlainText(
+                _supportText.Text,
+                4000);
+            Close();
+        }
+
+        public bool SupportReportRequested { get; private set; }
+
+        public string SupportReportDescription
+        {
+            get;
+            private set;
+        }
+
+        // Opens the pre-filled, UNSENT report email in Outlook.
+        // Called by the panes after this dialog has closed. Returns
+        // null on success or a diagnostic message on failure.
+        public static string OpenSupportReport(
+            object preferredOutlook,
+            string description)
+        {
+            // From the Excel/PowerPoint/Word panes there is no
+            // Outlook host object, so the running Outlook (or a
+            // fresh instance) is used to open the report draft.
+            var outlookApplication = preferredOutlook;
             if (outlookApplication == null)
             {
                 try
@@ -1189,16 +1216,14 @@ namespace OutlookLocalAIChat.UI
 
             if (outlookApplication == null)
             {
-                _error.Text =
-                    "[OUTLOOK_NOT_READY] Outlook is not " +
+                return "[OUTLOOK_NOT_READY] Outlook is not " +
                     "available to open the report email.";
-                return;
             }
 
             try
             {
-                var description = TextBoundary.PlainText(
-                    _supportText.Text,
+                var bounded = TextBoundary.PlainText(
+                    description,
                     4000);
                 dynamic application = outlookApplication;
                 dynamic mail = application.CreateItem(0);
@@ -1208,21 +1233,18 @@ namespace OutlookLocalAIChat.UI
                     SelfUpdater.InstalledVersion();
                 mail.Body =
                     "What happened / feedback:\n" +
-                    (description.Length > 0
-                        ? description
+                    (bounded.Length > 0
+                        ? bounded
                         : "(no description entered)") +
                     "\n\n--- Recent AI365 diagnostic log " +
                     "(review before sending) ---\n" +
                     Log.Tail(120);
                 mail.Display(false);
-                _supportStatus.Text =
-                    "A report email opened in Outlook. Review it " +
-                    "and use Outlook's own controls to send it - " +
-                    "AI365 never sends anything itself.";
+                return null;
             }
             catch (Exception exception)
             {
-                _error.Text = DiagnosticDetails.ForException(
+                return DiagnosticDetails.ForException(
                     exception,
                     "SUPPORT_REPORT_FAILED");
             }

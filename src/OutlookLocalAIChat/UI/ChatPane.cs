@@ -2323,6 +2323,24 @@ namespace OutlookLocalAIChat.UI
                         "Settings saved - " + _settings.Model,
                         false);
                 }
+
+                // The support report opens only after the modal
+                // settings dialog is gone - Outlook refuses to
+                // display mail while a dialog box is open.
+                if (settingsWindow.SupportReportRequested)
+                {
+                    var reportError =
+                        SettingsWindow.OpenSupportReport(
+                            _outlookApplication,
+                            settingsWindow
+                                .SupportReportDescription);
+                    SetStatus(
+                        reportError == null
+                            ? "Report email opened - review and " +
+                              "send it yourself"
+                            : FirstLine(reportError),
+                        reportError != null);
+                }
             }
         }
 

@@ -102,11 +102,33 @@ namespace OutlookLocalAIChat.Utilities
         // The script receives the installer path as %1 so the file itself
         // stays pure ASCII regardless of the user's profile path. One
         // installer carries all four add-ins (Outlook, Excel,
-        // PowerPoint, and Word share a single assembly), so the script waits for
-        // every Office host to close before installing and the whole
-        // suite updates together.
+        // PowerPoint, and Word share a single assembly); the script
+        // waits only for the Office hosts whose AI365 component is
+        // actually installed, since only those loaded the DLL.
         public static string BuildUpdateScript()
         {
+            return BuildUpdateScript(true, true, true, true);
+        }
+
+        public static string BuildUpdateScript(
+            bool waitOutlook,
+            bool waitExcel,
+            bool waitPowerPoint,
+            bool waitWord)
+        {
+            if (!waitOutlook &&
+                !waitExcel &&
+                !waitPowerPoint &&
+                !waitWord)
+            {
+                // Unknown installation state: waiting for every
+                // host is the safe default.
+                waitOutlook = true;
+                waitExcel = true;
+                waitPowerPoint = true;
+                waitWord = true;
+            }
+
             var builder = new StringBuilder();
             builder.AppendLine("@echo off");
             builder.AppendLine("set \"installer=%~1\"");
@@ -114,22 +136,26 @@ namespace OutlookLocalAIChat.Utilities
             builder.AppendLine("set tries=0");
             builder.AppendLine(":wait");
             builder.AppendLine("set running=0");
-            builder.AppendLine(
-                "tasklist /FI \"IMAGENAME eq OUTLOOK.EXE\" | " +
-                "find /I \"OUTLOOK.EXE\" >nul");
-            builder.AppendLine("if not errorlevel 1 set running=1");
-            builder.AppendLine(
-                "tasklist /FI \"IMAGENAME eq EXCEL.EXE\" | " +
-                "find /I \"EXCEL.EXE\" >nul");
-            builder.AppendLine("if not errorlevel 1 set running=1");
-            builder.AppendLine(
-                "tasklist /FI \"IMAGENAME eq POWERPNT.EXE\" | " +
-                "find /I \"POWERPNT.EXE\" >nul");
-            builder.AppendLine("if not errorlevel 1 set running=1");
-            builder.AppendLine(
-                "tasklist /FI \"IMAGENAME eq WINWORD.EXE\" | " +
-                "find /I \"WINWORD.EXE\" >nul");
-            builder.AppendLine("if not errorlevel 1 set running=1");
+            if (waitOutlook)
+            {
+                AppendProcessWait(builder, "OUTLOOK.EXE");
+            }
+
+            if (waitExcel)
+            {
+                AppendProcessWait(builder, "EXCEL.EXE");
+            }
+
+            if (waitPowerPoint)
+            {
+                AppendProcessWait(builder, "POWERPNT.EXE");
+            }
+
+            if (waitWord)
+            {
+                AppendProcessWait(builder, "WINWORD.EXE");
+            }
+
             builder.AppendLine("if %running%==0 goto install");
             builder.AppendLine("set /a tries+=1");
             builder.AppendLine("if %tries% GEQ 150 exit /b 1");
@@ -142,6 +168,36 @@ namespace OutlookLocalAIChat.Utilities
                 "if not \"%restart%\"==\"\" start \"\" \"%restart%\"");
             builder.AppendLine("del \"%installer%\"");
             return builder.ToString();
+        }
+
+        private static void AppendProcessWait(
+            StringBuilder builder,
+            string executable)
+        {
+            builder.AppendLine(
+                "tasklist /FI \"IMAGENAME eq " + executable +
+                "\" | " +
+                "find /I \"" + executable + "\" >nul");
+            builder.AppendLine("if not errorlevel 1 set running=1");
+        }
+
+        // True when the given per-user Office add-in registration
+        // exists, meaning that host has the AI365 component
+        // installed and may hold the assembly loaded.
+        private static bool AddinRegistered(string subkeyPath)
+        {
+            try
+            {
+                using (var key = Microsoft.Win32.Registry
+                    .CurrentUser.OpenSubKey(subkeyPath))
+                {
+                    return key != null;
+                }
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         // hostApplication may be null when the update starts from the
@@ -160,7 +216,19 @@ namespace OutlookLocalAIChat.Utilities
                 ".cmd");
             File.WriteAllText(
                 scriptPath,
-                BuildUpdateScript(),
+                BuildUpdateScript(
+                    AddinRegistered(
+                        "Software\\Microsoft\\Office\\Outlook" +
+                        "\\Addins\\OutlookLocalAIChat.AddIn"),
+                    AddinRegistered(
+                        "Software\\Microsoft\\Office\\Excel" +
+                        "\\Addins\\AI365.ExcelAddIn"),
+                    AddinRegistered(
+                        "Software\\Microsoft\\Office\\PowerPoint" +
+                        "\\Addins\\AI365.PowerPointAddIn"),
+                    AddinRegistered(
+                        "Software\\Microsoft\\Office\\Word" +
+                        "\\Addins\\AI365.WordAddIn")),
                 Encoding.ASCII);
 
             // The script runs through cmd.exe invoked by full path,
