@@ -34,6 +34,17 @@ jobs:
         shell: pwsh
         run: ./scripts/Restore-StrongNameKey.ps1
 
+      # Every build gets a unique, user-checkable file version
+      # (2.0.<run number>): Settings shows it as "Installed
+      # version", so "do I have the latest build" is answerable.
+      # AssemblyVersion stays 1.1.0.0 - the COM registration in the
+      # installer pins it, so only the file version may move.
+      - name: Stamp build version
+        shell: pwsh
+        run: |
+          $file = "src/OutlookLocalAIChat/Properties/AssemblyInfo.cs"
+          (Get-Content $file) -replace 'AssemblyFileVersion\("[^"]+"\)', 'AssemblyFileVersion("2.0.${{ github.run_number }}.0")' | Set-Content $file
+
       - name: Restore NuGet packages
         run: msbuild OutlookLocalAIChat.sln /t:Restore /p:Configuration=Release
 
@@ -113,7 +124,7 @@ jobs:
         shell: pwsh
         run: |
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" `
-            "/DAppVersion=2.0.0" `
+            "/DAppVersion=2.0.${{ github.run_number }}" `
             "installer\OutlookLocalAIChat.iss"
 
       - name: Sign the installer
@@ -351,6 +362,8 @@ jobs:
           name: Latest
           body: |
             Built automatically from the latest commit on main.
+            Version: 2.0.${{ github.run_number }} (shown as
+            "Installed version" in AI365 Settings after updating)
             Commit: ${{ github.sha }}
           files: artifacts/AI365Setup.exe
           make_latest: true
