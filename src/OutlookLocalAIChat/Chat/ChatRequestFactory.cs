@@ -58,17 +58,23 @@ namespace OutlookLocalAIChat.Chat
             {
                 tools.Add(
                     DraftToolCatalog.CreateDefinition());
-                // The mailbox pane can hand content to the sibling
-                // Office apps as clearly marked drafts too - "build
-                // a slide of my day" works from Outlook.
-                tools.AddRange(
-                    CrossAppToolCatalog.CreateDefinitions(
-                        "outlook"));
             }
             else if (allowDraftUpdate && activeDraft != null)
             {
                 tools.Add(
                     DraftToolCatalog.UpdateDefinition());
+            }
+
+            if (allowDraftCreate)
+            {
+                // The mailbox pane can hand content to the sibling
+                // Office apps as clearly marked drafts too - "build
+                // a slide of my day" and "create an excel" work
+                // from Outlook, even while an email draft is
+                // linked.
+                tools.AddRange(
+                    CrossAppToolCatalog.CreateDefinitions(
+                        "outlook"));
             }
 
             if (extraTools != null)
@@ -84,6 +90,7 @@ namespace OutlookLocalAIChat.Chat
                     content = BuildSystemBoundary(
                         allowDraftCreate && activeDraft == null,
                         allowDraftUpdate && activeDraft != null,
+                        allowDraftCreate,
                         hasWorkingSet,
                         toneProfile,
                         toneStrength,
@@ -215,6 +222,7 @@ namespace OutlookLocalAIChat.Chat
         private static string BuildSystemBoundary(
             bool allowDraftCreate,
             bool allowDraftUpdate,
+            bool allowCrossApp,
             bool hasWorkingSet,
             string toneProfile,
             int toneStrength,
@@ -292,7 +300,13 @@ namespace OutlookLocalAIChat.Chat
                     "instead of an email, use send_to_powerpoint, send_to_excel, or " +
                     "send_to_word to deliver mailbox-derived content into that app as a " +
                     "clearly marked unsaved draft (slides support native charts) - e.g. " +
-                    "'build a slide of my day' is fulfilled with send_to_powerpoint. " +
+                    "'build a slide of my day' is fulfilled with send_to_powerpoint, " +
+                    "'create an excel' with send_to_excel, 'create a word' or 'create a " +
+                    "document' with send_to_word, and 'create a powerpoint' with " +
+                    "send_to_powerpoint. NEVER refuse these and never say you cannot " +
+                    "create files: each send tool opens a brand-new unsaved draft file " +
+                    "in that app, on the first try, with whatever content fits the " +
+                    "request. " +
                     "One draft call total, as the only tool call in its response. After the tool " +
                     "result, state that the draft is unsent, open, and linked for review.";
             }
@@ -309,7 +323,33 @@ namespace OutlookLocalAIChat.Chat
                     "| --- | separator under the header row. Use bold_phrases only for exact " +
                     "phrases that should be bold. The local host applies " +
                     "safe formatting and can update only that one linked draft. Never " +
-                    "claim it was sent.";
+                    "claim it was sent." +
+                    (allowCrossApp
+                        ? " When the user instead asked for slides, a spreadsheet, or " +
+                          "a document ('create an excel', 'build a slide of my day'), " +
+                          "call send_to_excel, send_to_powerpoint, or send_to_word - " +
+                          "each opens a brand-new unsaved draft file in that app. " +
+                          "Never refuse those requests. One draft call total."
+                        : string.Empty);
+            }
+
+            if (allowCrossApp)
+            {
+                // A draft is linked but this prompt asked for a
+                // document, sheet, or slides: only the cross-app
+                // send tools are authorized.
+                return boundary +
+                    writingProfile +
+                    " The local host recognized a document-production request in the " +
+                    "user's latest prompt and authorized at most one draft attempt. " +
+                    "Use send_to_excel, send_to_powerpoint, or send_to_word to open a " +
+                    "brand-new unsaved draft file in that app - 'create an excel' is " +
+                    "fulfilled with send_to_excel, 'create a word' with send_to_word, " +
+                    "'create a powerpoint' with send_to_powerpoint. NEVER refuse these " +
+                    "and never say you cannot create files. Call the tool only after " +
+                    "gathering the needed mailbox context, as the only tool call in " +
+                    "that response, carrying the complete deliverable. The linked " +
+                    "email draft is separate and stays untouched.";
             }
 
             return boundary +

@@ -249,17 +249,25 @@ namespace OutlookLocalAIChat.Office
                              CrossAppToolCatalog.SendToPowerPoint,
                              StringComparison.Ordinal))
                 {
+                    // Cross-app sends always open a brand-new
+                    // unsaved deck - the user was not looking at
+                    // PowerPoint when they asked, so nothing lands
+                    // inside whatever deck happens to be open.
                     status = PresentationDraftWriter.AddDraftSlides(
                         GetSiblingApplication(
                             "PowerPoint.Application"),
                         ParsedSlides(arguments),
-                        ParsedAfterSlide(arguments));
+                        ParsedAfterSlide(arguments),
+                        true);
                 }
                 else if (string.Equals(
                              name,
                              CrossAppToolCatalog.SendToExcel,
                              StringComparison.Ordinal))
                 {
+                    // Cross-app sends always open a brand-new
+                    // unsaved workbook - never a sheet slipped
+                    // into whatever workbook happens to be open.
                     status = WorkbookDraftWriter.WriteDraftSheet(
                         GetSiblingApplication(
                             "Excel.Application"),
@@ -268,7 +276,8 @@ namespace OutlookLocalAIChat.Office
                             "title",
                             string.Empty),
                         ParsedRows(arguments),
-                        ParsedChart(arguments));
+                        ParsedChart(arguments),
+                        true);
                 }
                 else if (string.Equals(
                              name,

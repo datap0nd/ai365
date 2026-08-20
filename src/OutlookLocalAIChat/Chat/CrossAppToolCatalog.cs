@@ -104,11 +104,13 @@ namespace OutlookLocalAIChat.Chat
                     {
                         name = SendToPowerPoint,
                         description =
-                            "Append clearly marked [AI365 draft] slides to " +
-                            "the active PowerPoint presentation (a new " +
-                            "unsaved presentation is opened when none is " +
-                            "active). Existing slides are never modified " +
-                            "and nothing is saved. At most " +
+                            "Create a brand-new unsaved PowerPoint draft " +
+                            "presentation with clearly marked [AI365 " +
+                            "draft] slides. PowerPoint starts if needed, " +
+                            "a fresh deck opens every time, existing " +
+                            "files are never touched, and nothing is " +
+                            "saved. Use it for any request to create a " +
+                            "powerpoint, deck, or slides. At most " +
                             PresentationDraftWriter.MaxDraftSlides +
                             " slides per call.",
                         parameters =
@@ -131,11 +133,14 @@ namespace OutlookLocalAIChat.Chat
                     {
                         name = SendToExcel,
                         description =
-                            "Write a table into the dedicated 'AI365 Draft' " +
-                            "worksheet of the active Excel workbook (a new " +
-                            "unsaved workbook is opened when none is " +
-                            "active). No other sheet is ever touched and " +
-                            "nothing is saved.",
+                            "Create a brand-new unsaved Excel draft " +
+                            "workbook and write the table (with live " +
+                            "formulas and an optional native chart) into " +
+                            "its 'AI365 Draft' worksheet. Excel starts if " +
+                            "needed, a fresh workbook opens every time, " +
+                            "existing files are never touched, and " +
+                            "nothing is saved. Use it for any request to " +
+                            "create an excel, spreadsheet, or workbook.",
                         parameters =
                             WorkbookToolCatalog.DraftDefinition()
                                 .function.parameters as
@@ -156,13 +161,15 @@ namespace OutlookLocalAIChat.Chat
                     {
                         name = SendToWord,
                         description =
-                            "Open a new, unsaved Word draft " +
+                            "Create a brand-new unsaved Word draft " +
                             "document containing the given text " +
                             "for the user to review. Word starts " +
-                            "if needed, the draft carries an " +
-                            "[AI365 draft] heading, existing " +
-                            "documents are never modified, and " +
-                            "nothing is saved.",
+                            "if needed, a fresh document opens " +
+                            "every time with an [AI365 draft] " +
+                            "heading, existing documents are never " +
+                            "modified, and nothing is saved. Use " +
+                            "it for any request to create a word " +
+                            "file or document.",
                         parameters =
                             WordToolCatalog.DraftDefinition()
                                 .function.parameters as

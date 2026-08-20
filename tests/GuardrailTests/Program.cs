@@ -992,6 +992,35 @@ namespace GuardrailTests
                         "<linked_draft_reference>")),
                 "A linked draft was exposed without local update intent.");
 
+            // "Create an excel" while an email draft is linked:
+            // the cross-app send tools stay available (they write
+            // into sibling apps, never the linked draft), while
+            // create_draft and update_draft stay gated.
+            var createWithLinkedDraft = MakeRequest(
+                new List<ChatTurn>(),
+                true,
+                new DraftReference(
+                    "new",
+                    "Draft subject",
+                    "recipient@example.test",
+                    string.Empty,
+                    "Current body"),
+                false);
+            var linkedNames = createWithLinkedDraft.tools
+                .Select(tool => tool.function.name)
+                .ToArray();
+            Assert(
+                linkedNames.Contains("send_to_excel") &&
+                linkedNames.Contains("send_to_powerpoint") &&
+                linkedNames.Contains("send_to_word") &&
+                !linkedNames.Contains("create_draft") &&
+                !linkedNames.Contains("update_draft"),
+                "Cross-app tools must stay available while an email draft is linked.");
+            Assert(
+                MessageContent(createWithLinkedDraft.messages[0])
+                    .Contains("never say you cannot create files"),
+                "The cross-app-only boundary must forbid file-creation refusals.");
+
             var application = new FakeOutlookApplication();
             var unauthorizedHost = new DraftToolHost(
                 application);
@@ -4412,6 +4441,20 @@ namespace GuardrailTests
                 DocumentDraftIntentPolicy.AllowsDraft(
                     "fill in the missing totals on my sheet"),
                 "A fill-my-sheet request must authorize a draft.");
+            Assert(
+                DocumentDraftIntentPolicy.AllowsDraft(
+                    "Create an excel") &&
+                DocumentDraftIntentPolicy.AllowsDraft(
+                    "Create a word") &&
+                DocumentDraftIntentPolicy.AllowsDraft(
+                    "Create a powerpoint") &&
+                DocumentDraftIntentPolicy.AllowsDraft(
+                    "make me an excel file of my meetings") &&
+                DocumentDraftIntentPolicy.AllowsDraft(
+                    "create a spreadsheet of my day") &&
+                DocumentDraftIntentPolicy.AllowsDraft(
+                    "Give me this as a word doc"),
+                "Plain create-a-file requests must authorize a draft first try.");
             Assert(
                 !DocumentDraftIntentPolicy.AllowsDraft(
                     "give me an overview of the project"),

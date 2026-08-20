@@ -38,6 +38,25 @@ namespace OutlookLocalAIChat.Office
             IReadOnlyList<IReadOnlyList<string>> rows,
             DraftSheetChart chart)
         {
+            return WriteDraftSheet(
+                excelApplication,
+                title,
+                rows,
+                chart,
+                false);
+        }
+
+        // inNewWorkbook forces a brand-new unsaved workbook - the
+        // cross-app send tools use it so content handed over from
+        // another app never lands quietly inside whatever workbook
+        // happens to be open.
+        internal static string WriteDraftSheet(
+            object excelApplication,
+            string title,
+            IReadOnlyList<IReadOnlyList<string>> rows,
+            DraftSheetChart chart,
+            bool inNewWorkbook)
+        {
             if (rows == null || rows.Count == 0)
             {
                 throw new InvalidOperationException(
@@ -45,10 +64,24 @@ namespace OutlookLocalAIChat.Office
             }
 
             dynamic application = excelApplication;
-            dynamic workbook = application.ActiveWorkbook;
+            dynamic workbook = inNewWorkbook
+                ? null
+                : application.ActiveWorkbook;
             if (workbook == null)
             {
                 workbook = application.Workbooks.Add();
+            }
+
+            if (inNewWorkbook)
+            {
+                try
+                {
+                    application.Visible = true;
+                    workbook.Activate();
+                }
+                catch
+                {
+                }
             }
 
             dynamic sheet = null;
@@ -278,7 +311,11 @@ namespace OutlookLocalAIChat.Office
                     : string.Empty) +
                 " to the '" +
                 DraftSheetName +
-                "' sheet." +
+                "' sheet" +
+                (inNewWorkbook
+                    ? " of a new unsaved draft workbook"
+                    : string.Empty) +
+                "." +
                 (brokenFormulas > 0
                     ? " " + brokenFormulas +
                       (brokenFormulas == 1

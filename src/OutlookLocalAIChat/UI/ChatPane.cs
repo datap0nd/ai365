@@ -1884,14 +1884,17 @@ namespace OutlookLocalAIChat.UI
                 _draftTools != null &&
                 _draftTools.HasActiveDraft;
             // Document-production phrasing ("build a slide of my
-            // day") also unlocks the one-shot draft so mailbox
-            // content can be handed to Excel/PowerPoint/Word.
+            // day", "create an excel") also unlocks the one-shot
+            // draft so mailbox content can be handed to Excel/
+            // PowerPoint/Word - even while an email draft is
+            // linked, since the cross-app tools write into sibling
+            // apps, never into the linked draft.
             var draftAuthorization =
                 new OneShotDraftAuthorization(
-                    !hasLinkedDraft &&
-                    (DraftIntentPolicy.AllowsCreate(prompt) ||
-                     DocumentDraftIntentPolicy.AllowsDraft(
-                         prompt)),
+                    (!hasLinkedDraft &&
+                     DraftIntentPolicy.AllowsCreate(prompt)) ||
+                    DocumentDraftIntentPolicy.AllowsDraft(
+                        prompt),
                     hasLinkedDraft &&
                     DraftIntentPolicy.AllowsUpdate(prompt));
             _diagnostics.BeginRequest(

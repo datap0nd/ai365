@@ -109,14 +109,30 @@ namespace OutlookLocalAIChat.Office
                 null);
         }
 
-        // afterSlide places the new slides after that slide number
-        // (0 = at the very start); null keeps the default append at
-        // the end. Existing slides are still never modified - only
-        // the insertion point moves.
         internal static string AddDraftSlides(
             object powerPointApplication,
             IReadOnlyList<DraftSlide> slides,
             int? afterSlide)
+        {
+            return AddDraftSlides(
+                powerPointApplication,
+                slides,
+                afterSlide,
+                false);
+        }
+
+        // afterSlide places the new slides after that slide number
+        // (0 = at the very start); null keeps the default append at
+        // the end. Existing slides are still never modified - only
+        // the insertion point moves. inNewPresentation forces a
+        // brand-new unsaved deck - the cross-app send tools use it
+        // so content handed over from another app never lands
+        // quietly inside whatever deck happens to be open.
+        internal static string AddDraftSlides(
+            object powerPointApplication,
+            IReadOnlyList<DraftSlide> slides,
+            int? afterSlide,
+            bool inNewPresentation)
         {
             if (slides == null || slides.Count == 0)
             {
@@ -126,12 +142,15 @@ namespace OutlookLocalAIChat.Office
 
             dynamic application = powerPointApplication;
             dynamic presentation = null;
-            try
+            if (!inNewPresentation)
             {
-                presentation = application.ActivePresentation;
-            }
-            catch
-            {
+                try
+                {
+                    presentation = application.ActivePresentation;
+                }
+                catch
+                {
+                }
             }
 
             if (presentation == null)
@@ -265,11 +284,13 @@ namespace OutlookLocalAIChat.Office
                 added++;
             }
 
-            var position = inserted
-                ? (anchor == 0
-                    ? "at the start of the presentation"
-                    : "after slide " + anchor)
-                : "at the end of the presentation";
+            var position = inNewPresentation
+                ? "in a new unsaved draft presentation"
+                : (inserted
+                    ? (anchor == 0
+                        ? "at the start of the presentation"
+                        : "after slide " + anchor)
+                    : "at the end of the presentation");
             return (inserted ? "Inserted " : "Appended ") +
                 added + " marked draft slides" +
                 (charts > 0

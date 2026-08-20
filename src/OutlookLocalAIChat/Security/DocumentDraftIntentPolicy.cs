@@ -117,7 +117,45 @@ namespace OutlookLocalAIChat.Security
             "write a report",
             "write a summary",
             "write a document",
-            "write the report"
+            "write the report",
+            "create an excel",
+            "create a excel",
+            "create excel",
+            "create a word",
+            "create word",
+            "create a powerpoint",
+            "create powerpoint",
+            "create a presentation",
+            "create a document",
+            "create a workbook",
+            "create a spreadsheet",
+            "create a deck",
+            "create a file",
+            "create a report",
+            "make an excel",
+            "make a word",
+            "make a powerpoint",
+            "make a presentation",
+            "make a document",
+            "make a workbook",
+            "make a spreadsheet",
+            "new excel",
+            "new word file",
+            "new word document",
+            "new powerpoint",
+            "new presentation",
+            "new workbook",
+            "new spreadsheet",
+            "new document",
+            "an excel file",
+            "an excel sheet",
+            "a word file",
+            "a word doc",
+            "a powerpoint file",
+            "a powerpoint deck",
+            "in excel",
+            "in word",
+            "in powerpoint"
         };
 
         // Editing verbs authorize a draft only together with a
@@ -157,7 +195,18 @@ namespace OutlookLocalAIChat.Security
             "graph",
             "highlight",
             "restructure",
-            "reorganize"
+            "reorganize",
+            "create",
+            "make",
+            "write",
+            "draft",
+            "add",
+            "insert",
+            "prepare",
+            "compose",
+            "start",
+            "open",
+            "give me"
         };
 
         private static readonly string[] DocumentReferences =
@@ -190,7 +239,17 @@ namespace OutlookLocalAIChat.Security
             "report",
             "summary",
             "analysis",
-            "email"
+            "email",
+            "excel",
+            "powerpoint",
+            "power point",
+            "word file",
+            "word doc",
+            "a word",
+            "file",
+            "xlsx",
+            "docx",
+            "pptx"
         };
 
         public static bool AllowsDraft(string userPrompt)

@@ -275,11 +275,13 @@ this document"), it goes there instead - still unsaved:
   check the address before sending. Email bodies support headings, lists,
   dividers, and `| cell | cell |` **tables** rendered as real bordered
   HTML tables.
-- `send_to_powerpoint` / `send_to_excel` / `send_to_word` draft into the
-  sibling app the same way, with the same formatting. The Outlook pane has
-  them too, so "build me a slide of my day" or "put these emails in excel"
-  works straight from your mailbox - the sibling app starts if needed and
-  receives a clearly marked, unsaved draft.
+- `send_to_powerpoint` / `send_to_excel` / `send_to_word` create a
+  **brand-new unsaved draft file every time** - the sibling app starts if
+  needed, a fresh workbook/deck/document opens, and nothing that happens
+  to be open in that app is ever touched. The Outlook pane has them too:
+  "create an excel", "create a word", "create a powerpoint", "build me a
+  slide of my day", or "put these emails in excel" all work straight from
+  your mailbox, first try.
 
 The add-in never calls Save, SaveAs, Delete, Print, Protect, Close, or Quit
 on your documents - saving stays a human action, so even a discarded draft
