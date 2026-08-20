@@ -58,6 +58,12 @@ namespace OutlookLocalAIChat.Chat
             {
                 tools.Add(
                     DraftToolCatalog.CreateDefinition());
+                // The mailbox pane can hand content to the sibling
+                // Office apps as clearly marked drafts too - "build
+                // a slide of my day" works from Outlook.
+                tools.AddRange(
+                    CrossAppToolCatalog.CreateDefinitions(
+                        "outlook"));
             }
             else if (allowDraftUpdate && activeDraft != null)
             {
@@ -282,7 +288,12 @@ namespace OutlookLocalAIChat.Chat
                     "in body: # heading, ## subheading, - list item, 1. numbered item, " +
                     "--- divider, and | cell | cell | table rows with a | --- | separator " +
                     "under the header row. Use bold_phrases only for exact phrases that should be " +
-                    "bold. After the tool " +
+                    "bold. When the user asked for slides, a spreadsheet, or a document " +
+                    "instead of an email, use send_to_powerpoint, send_to_excel, or " +
+                    "send_to_word to deliver mailbox-derived content into that app as a " +
+                    "clearly marked unsaved draft (slides support native charts) - e.g. " +
+                    "'build a slide of my day' is fulfilled with send_to_powerpoint. " +
+                    "One draft call total, as the only tool call in its response. After the tool " +
                     "result, state that the draft is unsent, open, and linked for review.";
             }
 
@@ -304,7 +315,9 @@ namespace OutlookLocalAIChat.Chat
             return boundary +
                 " The local host did not recognize an explicit draft or revision request " +
                 "in the user's latest prompt. Draft mutation is unavailable. Never claim " +
-                "that a draft was created or updated.";
+                "that a draft was created or updated. If the user wanted something " +
+                "produced, suggest an explicit rephrase such as 'draft a reply to ...', " +
+                "'build a slide of my day', or 'put this in excel'.";
         }
 
         private static string BuildImageBoundary(

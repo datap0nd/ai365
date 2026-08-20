@@ -928,7 +928,10 @@ namespace GuardrailTests
                 "create_draft",
                 "read_messages",
                 "read_thread",
-                "search_mailbox"
+                "search_mailbox",
+                "send_to_excel",
+                "send_to_powerpoint",
+                "send_to_word"
             };
             Assert(
                 names.SequenceEqual(expected),
@@ -4402,6 +4405,14 @@ namespace GuardrailTests
                     "put this table into word and format it properly"),
                 "A put-into-word request must authorize a draft.");
             Assert(
+                DocumentDraftIntentPolicy.AllowsDraft(
+                    "Build me a slide of my day"),
+                "The Outlook slide-of-my-day request must authorize a draft.");
+            Assert(
+                DocumentDraftIntentPolicy.AllowsDraft(
+                    "fill in the missing totals on my sheet"),
+                "A fill-my-sheet request must authorize a draft.");
+            Assert(
                 !DocumentDraftIntentPolicy.AllowsDraft(
                     "give me an overview of the project"),
                 "An overview request must not authorize a document draft.");
@@ -4498,6 +4509,57 @@ namespace GuardrailTests
                     "excel",
                     MailboxToolCatalog.SearchMailbox),
                 "Draft tool routing must be host-specific and exclusive.");
+
+            Assert(
+                DocumentDraftHost.IsDraftTool(
+                    "outlook",
+                    CrossAppToolCatalog.SendToExcel) &&
+                DocumentDraftHost.IsDraftTool(
+                    "outlook",
+                    CrossAppToolCatalog.SendToPowerPoint) &&
+                DocumentDraftHost.IsDraftTool(
+                    "outlook",
+                    CrossAppToolCatalog.SendToWord) &&
+                !DocumentDraftHost.IsDraftTool(
+                    "outlook",
+                    CrossAppToolCatalog.CreateEmailDraft) &&
+                !DocumentDraftHost.IsDraftTool(
+                    "outlook",
+                    WorkbookToolCatalog.WriteDraftSheet) &&
+                !DocumentDraftHost.IsDraftTool(
+                    "outlook",
+                    WorkbookToolCatalog.WriteCells),
+                "Outlook cross-app routing must cover exactly the three send tools.");
+
+            Assert(
+                DocumentDraftHost.IsDraftTool(
+                    "excel",
+                    WorkbookToolCatalog.WriteCells) &&
+                !DocumentDraftHost.IsDraftTool(
+                    "word",
+                    WorkbookToolCatalog.WriteCells) &&
+                !DocumentDraftHost.IsDraftTool(
+                    "powerpoint",
+                    WorkbookToolCatalog.WriteCells) &&
+                !WorkbookToolCatalog.IsApproved(
+                    WorkbookToolCatalog.WriteCells) &&
+                WorkbookToolCatalog.IsDraftTool(
+                    WorkbookToolCatalog.WriteCells),
+                "write_cells must stay an Excel-only authorized draft tool.");
+
+            var outlookCross = CrossAppToolCatalog
+                .CreateDefinitions("outlook")
+                .Select(tool => tool.function.name)
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToArray();
+            Assert(
+                outlookCross.SequenceEqual(new[]
+                {
+                    "send_to_excel",
+                    "send_to_powerpoint",
+                    "send_to_word"
+                }),
+                "Outlook cross-app tools changed unexpectedly.");
 
             var excelCross = CrossAppToolCatalog
                 .CreateDefinitions("excel")
@@ -4642,6 +4704,39 @@ namespace GuardrailTests
                     .Select(tool => tool.function.name)
                     .SequenceEqual(new[] { "read_document" }),
                 "Unauthorized Word requests must expose read tools only.");
+
+            var excelAuthorized = DocumentChatRequestFactory.Create(
+                "test-model",
+                "excel",
+                "Workbook: Book1",
+                new List<ChatTurn>(),
+                "fill in the missing totals on my sheet",
+                true);
+            var excelNames = excelAuthorized.tools
+                .Select(tool => tool.function.name)
+                .ToArray();
+            Assert(
+                excelNames.Contains("write_draft_sheet") &&
+                excelNames.Contains("write_cells"),
+                "Authorized Excel requests must offer both write surfaces.");
+            var excelJson = new JavaScriptSerializer()
+                .Serialize(excelAuthorized);
+            Assert(
+                excelJson.Contains("\"start_cell\"") &&
+                excelJson.Contains("ONLY when the user explicitly asked"),
+                "write_cells must carry its explicit-consent contract.");
+
+            var wordJson = new JavaScriptSerializer()
+                .Serialize(wordAuthorized);
+            Assert(
+                wordJson.Contains("\"placement\"") &&
+                wordJson.Contains("new_document"),
+                "The Word draft tool must offer placement modes.");
+            var slidesJson = new JavaScriptSerializer()
+                .Serialize(authorized);
+            Assert(
+                slidesJson.Contains("\"after_slide\""),
+                "The slide draft tool must offer an insertion point.");
 
             var withMcp = DocumentChatRequestFactory.Create(
                 "test-model",

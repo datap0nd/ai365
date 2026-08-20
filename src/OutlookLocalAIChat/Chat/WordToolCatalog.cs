@@ -64,21 +64,34 @@ namespace OutlookLocalAIChat.Chat
                 {
                     name = WriteDraftDocument,
                     description =
-                        "Create a new, unsaved Word document containing " +
-                        "the drafted text for the user to review. The " +
-                        "draft opens in its own window with an " +
-                        "[AI365 draft] heading; the user's existing " +
-                        "document is never modified and nothing is ever " +
-                        "saved. Call it only after gathering the needed " +
-                        "context, as the only tool call in that response.",
+                        "Write drafted text into Word for the user to " +
+                        "review. By default (placement 'end') it is " +
+                        "appended to the document the user is working " +
+                        "on; 'selection' replaces the current " +
+                        "selection; 'new_document' opens a separate " +
+                        "document headed [AI365 draft]. Nothing is " +
+                        "ever saved and Word's Undo reverts changes " +
+                        "to the active document. Call it only after " +
+                        "gathering the needed context, as the only " +
+                        "tool call in that response.",
                     parameters = ToolSchema.Build(
                         new Dictionary<string, object>
                         {
                             {
                                 "title",
                                 ToolSchema.String(
-                                    "Short title shown as the draft's " +
-                                    "heading.")
+                                    "Short title; used as the heading " +
+                                    "of a new_document draft.")
+                            },
+                            {
+                                "placement",
+                                ToolSchema.String(
+                                    "Where the text goes: 'end' " +
+                                    "(default, appended to the active " +
+                                    "document), 'selection' (replaces " +
+                                    "the current selection), or " +
+                                    "'new_document' (separate marked " +
+                                    "draft).")
                             },
                             {
                                 "body",

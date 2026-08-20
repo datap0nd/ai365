@@ -38,16 +38,25 @@ namespace OutlookLocalAIChat.Office
                 "chart"
             };
 
+        private static readonly HashSet<string> CellsArguments =
+            new HashSet<string>(StringComparer.Ordinal)
+            {
+                "start_cell",
+                "rows"
+            };
+
         private static readonly HashSet<string> SlideArguments =
             new HashSet<string>(StringComparer.Ordinal)
             {
-                "slides"
+                "slides",
+                "after_slide"
             };
 
         private static readonly HashSet<string> DocumentArguments =
             new HashSet<string>(StringComparer.Ordinal)
             {
                 "title",
+                "placement",
                 "body"
             };
 
@@ -80,7 +89,8 @@ namespace OutlookLocalAIChat.Office
                         StringComparison.Ordinal))
                 {
                     return hostKind == "excel" ||
-                           hostKind == "word";
+                           hostKind == "word" ||
+                           hostKind == "outlook";
                 }
 
                 if (string.Equals(
@@ -89,7 +99,8 @@ namespace OutlookLocalAIChat.Office
                         StringComparison.Ordinal))
                 {
                     return hostKind == "powerpoint" ||
-                           hostKind == "word";
+                           hostKind == "word" ||
+                           hostKind == "outlook";
                 }
 
                 if (string.Equals(
@@ -98,10 +109,16 @@ namespace OutlookLocalAIChat.Office
                         StringComparison.Ordinal))
                 {
                     return hostKind == "excel" ||
-                           hostKind == "powerpoint";
+                           hostKind == "powerpoint" ||
+                           hostKind == "outlook";
                 }
 
-                return true;
+                // create_email_draft: the Outlook pane has its own
+                // dedicated draft host, so only the document hosts
+                // route email drafts through here.
+                return hostKind == "excel" ||
+                       hostKind == "powerpoint" ||
+                       hostKind == "word";
             }
 
             if (hostKind == "excel")
@@ -206,12 +223,26 @@ namespace OutlookLocalAIChat.Office
                 }
                 else if (string.Equals(
                              name,
+                             WorkbookToolCatalog.WriteCells,
+                             StringComparison.Ordinal))
+                {
+                    status = WorkbookDraftWriter.WriteCells(
+                        _hostApplication,
+                        ToolArguments.GetString(
+                            arguments,
+                            "start_cell",
+                            string.Empty),
+                        ParsedRows(arguments));
+                }
+                else if (string.Equals(
+                             name,
                              PresentationToolCatalog.AddDraftSlides,
                              StringComparison.Ordinal))
                 {
                     status = PresentationDraftWriter.AddDraftSlides(
                         _hostApplication,
-                        ParsedSlides(arguments));
+                        ParsedSlides(arguments),
+                        ParsedAfterSlide(arguments));
                 }
                 else if (string.Equals(
                              name,
@@ -221,7 +252,8 @@ namespace OutlookLocalAIChat.Office
                     status = PresentationDraftWriter.AddDraftSlides(
                         GetSiblingApplication(
                             "PowerPoint.Application"),
-                        ParsedSlides(arguments));
+                        ParsedSlides(arguments),
+                        ParsedAfterSlide(arguments));
                 }
                 else if (string.Equals(
                              name,
@@ -249,13 +281,20 @@ namespace OutlookLocalAIChat.Office
                             arguments,
                             "title",
                             string.Empty),
-                        GetLongString(arguments, "body"));
+                        GetLongString(arguments, "body"),
+                        ToolArguments.GetString(
+                            arguments,
+                            "placement",
+                            "end"));
                 }
                 else if (string.Equals(
                              name,
                              CrossAppToolCatalog.SendToWord,
                              StringComparison.Ordinal))
                 {
+                    // Cross-app sends always land in a separate
+                    // marked draft document - the user was not
+                    // looking at Word when they asked.
                     status = WordDraftWriter.WriteDraftDocument(
                         GetSiblingApplication(
                             "Word.Application"),
@@ -263,7 +302,8 @@ namespace OutlookLocalAIChat.Office
                             arguments,
                             "title",
                             string.Empty),
-                        GetLongString(arguments, "body"));
+                        GetLongString(arguments, "body"),
+                        "new_document");
                 }
                 else
                 {
@@ -346,6 +386,21 @@ namespace OutlookLocalAIChat.Office
             return PresentationDraftWriter.ParseSlides(slidesValue);
         }
 
+        // Null when the model omitted after_slide, so the writer
+        // keeps its default append-at-the-end behavior.
+        private static int? ParsedAfterSlide(
+            IDictionary<string, object> arguments)
+        {
+            return arguments.ContainsKey("after_slide")
+                ? (int?)ToolArguments.GetInteger(
+                    arguments,
+                    "after_slide",
+                    0,
+                    0,
+                    1000)
+                : null;
+        }
+
         // Opens one unsent Outlook draft for review via the same
         // DraftService the Outlook pane uses: the draft is saved to
         // Drafts and displayed, never sent - sending stays a human
@@ -414,6 +469,13 @@ namespace OutlookLocalAIChat.Office
         {
             try
             {
+                if (_hostKind == "outlook")
+                {
+                    // The mailbox host has no single current
+                    // document file to attach.
+                    return string.Empty;
+                }
+
                 dynamic application = _hostApplication;
                 dynamic document;
                 if (_hostKind == "excel")
@@ -508,6 +570,13 @@ namespace OutlookLocalAIChat.Office
                     StringComparison.Ordinal))
             {
                 allowed = SheetArguments;
+            }
+            else if (string.Equals(
+                name,
+                WorkbookToolCatalog.WriteCells,
+                StringComparison.Ordinal))
+            {
+                allowed = CellsArguments;
             }
             else if (
                 string.Equals(

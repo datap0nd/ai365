@@ -106,6 +106,8 @@ namespace OutlookLocalAIChat.UI
         private AppSettings _settings;
         private MessageSnapshot _selectedMessage;
         private DraftToolHost _draftTools;
+        private OutlookLocalAIChat.Office.DocumentDraftHost
+            _crossAppTools;
         private McpToolHost _mcpTools;
         private CancellationTokenSource _requestCancellation;
         private string _lastAssistantText = string.Empty;
@@ -171,6 +173,10 @@ namespace OutlookLocalAIChat.UI
                 throw new ArgumentNullException(nameof(outlookApplication));
             _draftTools = new DraftToolHost(
                 _outlookApplication);
+            _crossAppTools =
+                new OutlookLocalAIChat.Office.DocumentDraftHost(
+                    "outlook",
+                    _outlookApplication);
             if (refreshSelection)
             {
                 RefreshSelectedMessage();
@@ -1877,10 +1883,15 @@ namespace OutlookLocalAIChat.UI
             var hasLinkedDraft =
                 _draftTools != null &&
                 _draftTools.HasActiveDraft;
+            // Document-production phrasing ("build a slide of my
+            // day") also unlocks the one-shot draft so mailbox
+            // content can be handed to Excel/PowerPoint/Word.
             var draftAuthorization =
                 new OneShotDraftAuthorization(
                     !hasLinkedDraft &&
-                    DraftIntentPolicy.AllowsCreate(prompt),
+                    (DraftIntentPolicy.AllowsCreate(prompt) ||
+                     DocumentDraftIntentPolicy.AllowsDraft(
+                         prompt)),
                     hasLinkedDraft &&
                     DraftIntentPolicy.AllowsUpdate(prompt));
             _diagnostics.BeginRequest(
@@ -2164,6 +2175,9 @@ namespace OutlookLocalAIChat.UI
                     var isDraftCall =
                         DraftToolCatalog.IsDraftTool(
                             toolCall?.function?.name);
+                    var isCrossAppCall =
+                        CrossAppToolCatalog.IsCrossAppTool(
+                            toolCall?.function?.name);
                     MailboxToolResult result;
                     if (isDraftCall)
                     {
@@ -2172,6 +2186,18 @@ namespace OutlookLocalAIChat.UI
                             mailboxTools.ResolveHandle,
                             draftAuthorization,
                             toolCalls.Count == 1);
+                    }
+                    else if (isCrossAppCall &&
+                             _crossAppTools != null)
+                    {
+                        // Mailbox content handed to Excel/
+                        // PowerPoint/Word as a clearly marked
+                        // draft, on the same one-shot permission.
+                        result = _crossAppTools.Execute(
+                            toolCall,
+                            draftAuthorization,
+                            toolCalls.Count == 1,
+                            prompt);
                     }
                     else if (McpToolHost.IsMcpTool(
                         toolCall?.function?.name))
@@ -2194,7 +2220,7 @@ namespace OutlookLocalAIChat.UI
                         "tool " +
                         (toolCall?.function?.name ?? "(null)") +
                         " -> " + result.StatusText);
-                    if (isDraftCall)
+                    if (isDraftCall || isCrossAppCall)
                     {
                         AppendDraftAction(result.StatusText);
                     }
@@ -2256,6 +2282,12 @@ namespace OutlookLocalAIChat.UI
             _draftTools = _outlookApplication == null
                 ? null
                 : new DraftToolHost(_outlookApplication);
+            _crossAppTools?.Dispose();
+            _crossAppTools = _outlookApplication == null
+                ? null
+                : new OutlookLocalAIChat.Office.DocumentDraftHost(
+                    "outlook",
+                    _outlookApplication);
             PostToWeb(new Dictionary<string, object>
             {
                 { "type", "clear" }
@@ -2382,6 +2414,8 @@ namespace OutlookLocalAIChat.UI
             _client.Dispose();
             _draftTools?.Dispose();
             _draftTools = null;
+            _crossAppTools?.Dispose();
+            _crossAppTools = null;
             _mcpTools?.Dispose();
             _mcpTools = null;
             _outlookApplication = null;

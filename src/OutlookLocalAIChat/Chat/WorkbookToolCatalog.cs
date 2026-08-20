@@ -5,14 +5,16 @@ using OutlookLocalAIChat.Office;
 namespace OutlookLocalAIChat.Chat
 {
     // Excel tool surface. Reads are bounded summaries and cell
-    // ranges; the single write surface is the clearly marked
-    // "AI365 Draft" worksheet handled by WorkbookDraftHost and is
-    // only offered when the user's own prompt authorized a draft.
+    // ranges; writes are offered only when the user's own prompt
+    // authorized a draft: the clearly marked "AI365 Draft"
+    // worksheet by default, or bounded writes into the active
+    // sheet when the user asked for their own sheet to change.
     public static class WorkbookToolCatalog
     {
         public const string ListWorksheets = "list_worksheets";
         public const string ReadCells = "read_cells";
         public const string WriteDraftSheet = "write_draft_sheet";
+        public const string WriteCells = "write_cells";
 
         public static readonly IReadOnlyList<string> ApprovedNames =
             new[]
@@ -202,9 +204,83 @@ namespace OutlookLocalAIChat.Chat
         public static bool IsDraftTool(string name)
         {
             return string.Equals(
-                name,
-                WriteDraftSheet,
-                StringComparison.Ordinal);
+                       name,
+                       WriteDraftSheet,
+                       StringComparison.Ordinal) ||
+                   string.Equals(
+                       name,
+                       WriteCells,
+                       StringComparison.Ordinal);
+        }
+
+        // Bounded writes into the ACTIVE worksheet - only for
+        // explicit change-my-sheet requests; the draft sheet stays
+        // the default surface.
+        public static ChatToolDefinition CellsDefinition()
+        {
+            return new ChatToolDefinition
+            {
+                type = "function",
+                function = new ChatToolFunctionDefinition
+                {
+                    name = WriteCells,
+                    description =
+                        "Write values and formulas directly into the " +
+                        "ACTIVE worksheet starting at start_cell, " +
+                        "overwriting that area in memory. Use it ONLY " +
+                        "when the user explicitly asked to change " +
+                        "their own sheet (fill, fix, update cells in " +
+                        "place); otherwise use write_draft_sheet. " +
+                        "Nothing is ever saved, but Excel cannot undo " +
+                        "add-in changes, so never write over data you " +
+                        "have not read first. Formula cells follow the " +
+                        "same = rules as write_draft_sheet. Call it " +
+                        "only as the only tool call in its response.",
+                    parameters = ToolSchema.Build(
+                        new Dictionary<string, object>
+                        {
+                            {
+                                "start_cell",
+                                ToolSchema.String(
+                                    "A1-style top-left target cell " +
+                                    "on the active sheet, e.g. B2.")
+                            },
+                            {
+                                "rows",
+                                new Dictionary<string, object>
+                                {
+                                    { "type", "array" },
+                                    {
+                                        "description",
+                                        "Rows of cell values to write, " +
+                                        "top-left at start_cell. At most " +
+                                        WorkbookDraftWriter.MaxDraftRows +
+                                        " rows of " +
+                                        WorkbookDraftWriter.MaxDraftColumns +
+                                        " cells. Cells starting with = " +
+                                        "become live formulas under the " +
+                                        "same safety rules as " +
+                                        "write_draft_sheet."
+                                    },
+                                    {
+                                        "items",
+                                        new Dictionary<string, object>
+                                        {
+                                            { "type", "array" },
+                                            {
+                                                "items",
+                                                ToolSchema.String(
+                                                    "One cell value as text.")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "start_cell",
+                        "rows")
+                }
+            };
         }
     }
 

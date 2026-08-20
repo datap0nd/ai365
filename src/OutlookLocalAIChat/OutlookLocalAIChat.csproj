@@ -126,6 +126,7 @@
     <Compile Include="UI\OfficeChatPane.cs" />
     <Compile Include="UI\SettingsWindow.cs" />
     <Compile Include="UI\SubjectDisplay.cs" />
+    <Compile Include="UI\TaskPaneRegistry.cs" />
     <Compile Include="Utilities\DiagnosticDetails.cs" />
     <Compile Include="Utilities\DiagnosticsRecorder.cs" />
     <Compile Include="Utilities\Log.cs" />

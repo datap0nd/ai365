@@ -136,6 +136,16 @@ namespace OutlookLocalAIChat.Chat
                                     }
                                 }
                             }
+                            ,
+                            {
+                                "after_slide",
+                                ToolSchema.Integer(
+                                    "Insert the new slides after this " +
+                                    "slide number (0 = at the very " +
+                                    "start). Omit to append at the end.",
+                                    0,
+                                    1000)
+                            }
                         },
                         "slides")
                 }

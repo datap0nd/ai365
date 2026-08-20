@@ -21,9 +21,16 @@ namespace OutlookLocalAIChat.Chat
         public static List<ChatToolDefinition> CreateDefinitions(
             string hostKind)
         {
-            var definitions = new List<ChatToolDefinition>
+            var definitions = new List<ChatToolDefinition>();
+            // The Outlook pane has its own richer create_draft /
+            // update_draft email tools; only the document panes get
+            // the cross-app email tool.
+            if (!string.Equals(
+                hostKind,
+                "outlook",
+                StringComparison.Ordinal))
             {
-                new ChatToolDefinition
+                definitions.Add(new ChatToolDefinition
                 {
                     type = "function",
                     function = new ChatToolFunctionDefinition
@@ -82,8 +89,8 @@ namespace OutlookLocalAIChat.Chat
                             },
                             "body")
                     }
-                }
-            };
+                });
+            }
 
             if (!string.Equals(
                 hostKind,

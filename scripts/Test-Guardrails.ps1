@@ -277,7 +277,8 @@ $officeGuardedFiles = @(
     (Join-Path $sourceRoot "ExcelAddIn.cs"),
     (Join-Path $sourceRoot "PowerPointAddIn.cs"),
     (Join-Path $sourceRoot "WordAddIn.cs"),
-    (Join-Path $sourceRoot "UI\OfficeChatPane.cs")
+    (Join-Path $sourceRoot "UI\OfficeChatPane.cs"),
+    (Join-Path $sourceRoot "UI\TaskPaneRegistry.cs")
 )
 foreach ($guardedFile in $officeGuardedFiles) {
     foreach ($pattern in $officeForbidden) {
@@ -314,7 +315,8 @@ $workbookToolNames = [regex]::Matches(
 if (Compare-Object $workbookToolNames (@(
     "list_worksheets",
     "read_cells",
-    "write_draft_sheet") | Sort-Object)) {
+    "write_draft_sheet",
+    "write_cells") | Sort-Object)) {
     throw "Workbook tool catalog contains an unexpected capability."
 }
 

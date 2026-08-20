@@ -122,6 +122,21 @@ namespace OutlookLocalAIChat.Office
                                 source[column],
                                 MaxCellCharacters)
                             : string.Empty;
+                    if (cell.Length > 0 &&
+                        cell[0] != '=' &&
+                        cell.IndexOf(
+                            "**",
+                            StringComparison.Ordinal) >= 0)
+                    {
+                        // Text cells never show literal bold
+                        // markers; formulas stay untouched.
+                        cell = TextBoundary.SingleLine(
+                            SafeModelText.Format(
+                                cell,
+                                MaxCellCharacters).PlainText,
+                            MaxCellCharacters);
+                    }
+
                     if (cell.Length > 0 && cell[0] == '=')
                     {
                         if (DraftFormulaPolicy.IsAllowedFormula(
@@ -275,6 +290,219 @@ namespace OutlookLocalAIChat.Office
                       "function names and sheet references."
                     : string.Empty) +
                 " Nothing was saved.";
+        }
+
+        // Writes a bounded grid into the ACTIVE worksheet starting
+        // at the given A1-style cell - the user explicitly asked to
+        // work on their own sheet. Existing cells in the target
+        // area are overwritten in memory; nothing is ever saved,
+        // but Excel cannot undo add-in changes, so the draft sheet
+        // stays the default surface.
+        internal static string WriteCells(
+            object excelApplication,
+            string startCell,
+            IReadOnlyList<IReadOnlyList<string>> rows)
+        {
+            if (rows == null || rows.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    "At least one row of cells is required.");
+            }
+
+            var anchorName = TextBoundary.SingleLine(
+                startCell,
+                12).Replace("$", string.Empty);
+            if (!IsCellName(anchorName))
+            {
+                throw new InvalidOperationException(
+                    "start_cell must be a single A1-style cell " +
+                    "such as B2.");
+            }
+
+            dynamic application = excelApplication;
+            dynamic sheet = application.ActiveSheet;
+            if (sheet == null)
+            {
+                throw new InvalidOperationException(
+                    "No worksheet is active.");
+            }
+
+            dynamic anchor = sheet.Range(anchorName);
+            int startRow = anchor.Row;
+            int startColumn = anchor.Column;
+            var rowCount = Math.Min(rows.Count, MaxDraftRows);
+            var written = 0;
+            var formulaCount = 0;
+            var brokenFormulas = 0;
+            var liveFormulas =
+                new List<KeyValuePair<int[], string>>();
+            for (var row = 0; row < rowCount; row++)
+            {
+                var source = rows[row];
+                if (source == null)
+                {
+                    continue;
+                }
+
+                var columnCount = Math.Min(
+                    source.Count,
+                    MaxDraftColumns);
+                for (var column = 0;
+                     column < columnCount;
+                     column++)
+                {
+                    var cell = TextBoundary.SingleLine(
+                        source[column],
+                        MaxCellCharacters);
+                    if (cell.Length > 0 &&
+                        cell[0] != '=' &&
+                        cell.IndexOf(
+                            "**",
+                            StringComparison.Ordinal) >= 0)
+                    {
+                        cell = TextBoundary.SingleLine(
+                            SafeModelText.Format(
+                                cell,
+                                MaxCellCharacters).PlainText,
+                            MaxCellCharacters);
+                    }
+
+                    dynamic target = sheet.Cells[
+                        startRow + row,
+                        startColumn + column];
+                    if (cell.Length > 0 && cell[0] == '=')
+                    {
+                        if (!DraftFormulaPolicy.IsAllowedFormula(
+                            cell))
+                        {
+                            target.Value2 = "'" + cell;
+                            written++;
+                            continue;
+                        }
+
+                        try
+                        {
+                            target.Formula = cell;
+                            formulaCount++;
+                            liveFormulas.Add(
+                                new KeyValuePair<int[], string>(
+                                    new[]
+                                    {
+                                        startRow + row,
+                                        startColumn + column
+                                    },
+                                    cell));
+                        }
+                        catch
+                        {
+                            try
+                            {
+                                target.FormulaLocal = cell;
+                                formulaCount++;
+                                liveFormulas.Add(
+                                    new KeyValuePair<int[], string>(
+                                        new[]
+                                        {
+                                            startRow + row,
+                                            startColumn + column
+                                        },
+                                        cell));
+                            }
+                            catch
+                            {
+                                try
+                                {
+                                    target.Value2 = "'" + cell;
+                                }
+                                catch
+                                {
+                                }
+                            }
+                        }
+
+                        written++;
+                        continue;
+                    }
+
+                    target.Value2 = cell;
+                    written++;
+                }
+            }
+
+            if (liveFormulas.Count > 0)
+            {
+                try
+                {
+                    sheet.Calculate();
+                }
+                catch
+                {
+                }
+
+                foreach (var formula in liveFormulas)
+                {
+                    try
+                    {
+                        dynamic cell = sheet.Cells[
+                            formula.Key[0],
+                            formula.Key[1]];
+                        object value = cell.Value2;
+                        if (value is int &&
+                            ((int)value == 2023 ||
+                             (int)value == 2029))
+                        {
+                            cell.Value2 = "'" + formula.Value;
+                            formulaCount--;
+                            brokenFormulas++;
+                        }
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+
+            return "Wrote " + written + " cells starting at " +
+                anchorName + " on the active sheet" +
+                (formulaCount > 0
+                    ? " including " + formulaCount +
+                      " live formulas"
+                    : string.Empty) +
+                "." +
+                (brokenFormulas > 0
+                    ? " " + brokenFormulas +
+                      " formula(s) evaluated to #NAME? or #REF! " +
+                      "and were kept as visible text."
+                    : string.Empty) +
+                " Nothing was saved, but Excel cannot undo " +
+                "add-in changes - close without saving to " +
+                "discard.";
+        }
+
+        private static bool IsCellName(string value)
+        {
+            var letters = 0;
+            var digits = 0;
+            foreach (var character in value)
+            {
+                if (char.IsLetter(character) && digits == 0)
+                {
+                    letters++;
+                }
+                else if (char.IsDigit(character) && letters > 0)
+                {
+                    digits++;
+                }
+                else
+                {
+                    return false;
+                }
+            }
+
+            return letters >= 1 &&
+                   letters <= 3 &&
+                   digits >= 1 &&
+                   digits <= 7;
         }
 
         // The chart definition for the draft sheet: it always uses

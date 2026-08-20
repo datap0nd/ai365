@@ -22,8 +22,8 @@ namespace OutlookLocalAIChat
     {
         private object _excelApplication;
         private object _ctpFactory;
-        private object _taskPane;
-        private OfficeChatPane _chatPane;
+        private readonly TaskPaneRegistry _panes =
+            new TaskPaneRegistry("excel");
 
         public void OnConnection(
             object application,
@@ -108,37 +108,12 @@ namespace OutlookLocalAIChat
                     return;
                 }
 
-                if (_taskPane == null)
-                {
-                    dynamic factory = _ctpFactory;
-                    _taskPane = factory.CreateCTP(
-                        "AI365.OfficePane",
-                        "AI365",
-                        Type.Missing);
-
-                    dynamic pane = _taskPane;
-                    pane.DockPosition = 2;
-                    pane.Width = 380;
-
-                    _chatPane = pane.ContentControl as
-                        OfficeChatPane ??
-                        OfficeChatPane.LastCreated;
-                    if (_chatPane == null)
-                    {
-                        throw new InvalidOperationException(
-                            "Excel created the sidebar but its chat control was unavailable.");
-                    }
-
-                    _chatPane.Initialize(
-                        "excel",
-                        _excelApplication);
-                    pane.Visible = true;
-                }
-                else
-                {
-                    dynamic pane = _taskPane;
-                    pane.Visible = true;
-                }
+                // One pane per Excel window: workbooks opened later
+                // get their own pane instead of silently un-hiding
+                // the first window's.
+                _panes.ShowForActiveWindow(
+                    _ctpFactory,
+                    _excelApplication);
             }
             catch (Exception exception)
             {
@@ -157,23 +132,15 @@ namespace OutlookLocalAIChat
         {
             try
             {
-                _chatPane?.Shutdown();
-                if (_taskPane != null)
-                {
-                    dynamic pane = _taskPane;
-                    pane.Visible = false;
-                }
+                _panes.CloseAll();
             }
             catch (Exception exception)
             {
                 Log.Error("ExcelCloseTaskPane", exception);
             }
 
-            Release(_taskPane);
             Release(_ctpFactory);
-            _taskPane = null;
             _ctpFactory = null;
-            _chatPane = null;
         }
 
         private static void Release(object value)

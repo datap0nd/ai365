@@ -223,14 +223,17 @@ document-shaped and read-only:
   selected into the bounded context tray; files and pictures work exactly as
   in Outlook.
 
-Writes exist only as clearly marked drafts, and only when your own latest
-message asks to produce something ("put this in a draft sheet", "build a
-slide with this", "do a bar chart with this in a slide", "put this table
-into word", "fix the formula in column B", "email this to ..."). Asking to
-edit, fix, chart, or move content all count - no confirmation round-trips.
-The revision always lands in the marked draft surface, never in your
-original file, and one draft call carries the complete deliverable (table
-plus formulas plus chart, or a full document with tables and analysis):
+Writes unlock only when your own latest message asks to produce something
+("put this in a draft sheet", "build a slide with this", "do a bar chart
+with this in a slide", "put this table into word", "fix the formula in
+column B", "email this to ..."). Asking to edit, fix, fill, chart, or move
+content all count - no confirmation round-trips. Every write stays in
+memory - the add-in has no save capability at all - and one draft call
+carries the complete deliverable (table plus formulas plus chart, or a
+full document with tables and analysis). By default output lands in a
+clearly marked draft surface; when you explicitly ask to change the file
+you are working on ("fill in the missing totals on my sheet", "continue
+this document"), it goes there instead - still unsaved:
 
 - `write_draft_sheet` fills the dedicated **AI365 Draft** worksheet
   (created at the end of the workbook; other sheets are never touched).
@@ -245,17 +248,26 @@ plus formulas plus chart, or a full document with tables and analysis):
   that could reach the network, native code, or other files (`WEBSERVICE`,
   `RTD`, `CALL`, `HYPERLINK`, external `[Book]` references) are rejected
   and land as visible text instead.
-- `add_draft_slides` appends slides whose titles carry the
-  **[AI365 draft]** marker; existing slides are never modified. Sub-bullets
-  indent with two leading spaces per level, and a slide can carry a
-  **native chart** built from data the model supplies - "do a bar chart
-  with this in a slide" draws a real PowerPoint chart, not a picture or a
-  text list.
-- `write_draft_document` opens a brand-new, unsaved Word document headed
-  **[AI365 draft]**; the open document is never modified. `#`/`##`/`###`
-  headings, `-`/`1.` lists, and `**bold**` render as real Word styles, and
-  `| cell | cell |` rows become **real formatted Word tables** - "put this
-  table into word with an analysis" produces a styled table plus prose.
+- `write_cells` (Excel only) writes values and live formulas **directly
+  into your active worksheet** starting at a cell you name - offered only
+  for explicit change-my-sheet requests ("fill in the missing totals",
+  "fix the formulas in column D"). Same formula safety rules; nothing is
+  saved, so closing without saving discards everything.
+- `add_draft_slides` adds slides whose titles carry the **[AI365 draft]**
+  marker; existing slides are never modified. By default new slides append
+  at the end, or ask for a position ("after slide 2", "at the start") and
+  they insert there. Sub-bullets indent with two leading spaces per level,
+  and a slide can carry a **native chart** built from data the model
+  supplies - "do a bar chart with this in a slide" draws a real PowerPoint
+  chart, not a picture or a text list.
+- `write_draft_document` writes into Word with a placement you control:
+  by default it **appends to the document you are working on** (Ctrl+Z
+  undoes it), "replace the selection" rewrites just what you selected, and
+  asking for a separate draft opens a brand-new unsaved document headed
+  **[AI365 draft]**. `#`/`##`/`###` headings, `-`/`1.` lists, and
+  `**bold**` render as real Word styles, and `| cell | cell |` rows become
+  **real formatted Word tables** - "put this table into word with an
+  analysis" produces a styled table plus prose.
 - `create_email_draft` opens an unsent Outlook draft for review - Outlook
   starts if needed, the draft can attach the current file when it is saved
   on disk, and sending stays impossible. When the model picks a recipient
@@ -264,14 +276,20 @@ plus formulas plus chart, or a full document with tables and analysis):
   dividers, and `| cell | cell |` **tables** rendered as real bordered
   HTML tables.
 - `send_to_powerpoint` / `send_to_excel` / `send_to_word` draft into the
-  sibling app the same way, with the same formatting.
+  sibling app the same way, with the same formatting. The Outlook pane has
+  them too, so "build me a slide of my day" or "put these emails in excel"
+  works straight from your mailbox - the sibling app starts if needed and
+  receives a clearly marked, unsaved draft.
 
 The add-in never calls Save, SaveAs, Delete, Print, Protect, Close, or Quit
 on your documents - saving stays a human action, so even a discarded draft
 sheet or slide costs nothing.
 
-Closing and reopening a pane keeps the conversation for as long as that
-Office application stays open; the chat lives only in process memory and is
+Office opens every document in its own window, so each window gets its own
+AI365 pane - the ribbon button works in a freshly created draft document
+too, not just the first window. Closing and reopening a pane keeps the
+conversation for as long as that Office application stays open; all windows
+of one app share the same chat, which lives only in process memory and is
 forgotten when the app closes (nothing is written to disk). **New chat**
 clears it immediately.
 

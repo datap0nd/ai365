@@ -103,6 +103,21 @@ namespace OutlookLocalAIChat.Office
             object powerPointApplication,
             IReadOnlyList<DraftSlide> slides)
         {
+            return AddDraftSlides(
+                powerPointApplication,
+                slides,
+                null);
+        }
+
+        // afterSlide places the new slides after that slide number
+        // (0 = at the very start); null keeps the default append at
+        // the end. Existing slides are still never modified - only
+        // the insertion point moves.
+        internal static string AddDraftSlides(
+            object powerPointApplication,
+            IReadOnlyList<DraftSlide> slides,
+            int? afterSlide)
+        {
             if (slides == null || slides.Count == 0)
             {
                 throw new InvalidOperationException(
@@ -125,6 +140,23 @@ namespace OutlookLocalAIChat.Office
                 presentation = application.Presentations.Add(-1);
             }
 
+            var existing = (int)presentation.Slides.Count;
+            var anchor = existing;
+            if (afterSlide.HasValue)
+            {
+                anchor = afterSlide.Value;
+                if (anchor < 0)
+                {
+                    anchor = 0;
+                }
+
+                if (anchor > existing)
+                {
+                    anchor = existing;
+                }
+            }
+
+            var inserted = anchor < existing;
             var added = 0;
             var charts = 0;
             foreach (var slide in slides)
@@ -134,7 +166,7 @@ namespace OutlookLocalAIChat.Office
                     break;
                 }
 
-                var index = (int)presentation.Slides.Count + 1;
+                var index = anchor + added + 1;
                 // 2 = ppLayoutText (title plus body placeholder);
                 // 11 = ppLayoutTitleOnly for chart-only slides so
                 // the chart gets the full body area.
@@ -233,16 +265,20 @@ namespace OutlookLocalAIChat.Office
                 added++;
             }
 
-            return "Appended " + added +
-                " marked draft slides" +
+            var position = inserted
+                ? (anchor == 0
+                    ? "at the start of the presentation"
+                    : "after slide " + anchor)
+                : "at the end of the presentation";
+            return (inserted ? "Inserted " : "Appended ") +
+                added + " marked draft slides" +
                 (charts > 0
                     ? " with " + charts +
                       (charts == 1
                           ? " native chart"
                           : " native charts")
                     : string.Empty) +
-                " at the end of the presentation. Nothing was " +
-                "saved.";
+                " " + position + ". Nothing was saved.";
         }
 
         // Draws one native chart on the slide and fills its data
@@ -498,7 +534,9 @@ namespace OutlookLocalAIChat.Office
                     }
 
                     categories.Add(TextBoundary.SingleLine(
-                        Convert.ToString(category),
+                        SafeModelText.Format(
+                            Convert.ToString(category),
+                            80).PlainText,
                         80));
                 }
             }
@@ -560,7 +598,9 @@ namespace OutlookLocalAIChat.Office
 
                     series.Add(new DraftChartSeries(
                         TextBoundary.SingleLine(
-                            Convert.ToString(nameValue),
+                            SafeModelText.Format(
+                                Convert.ToString(nameValue),
+                                80).PlainText,
                             80),
                         values));
                 }

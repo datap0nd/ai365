@@ -31,6 +31,24 @@ namespace OutlookLocalAIChat.Office
             string title,
             string body)
         {
+            return WriteDraftDocument(
+                wordApplication,
+                title,
+                body,
+                "new_document");
+        }
+
+        // placement: "end" appends to the user's active document,
+        // "selection" replaces the current selection, and
+        // "new_document" opens a separate marked draft. Writes to
+        // the active document are in-memory only - nothing is ever
+        // saved, and Word's Undo reverts them.
+        internal static string WriteDraftDocument(
+            object wordApplication,
+            string title,
+            string body,
+            string placement)
+        {
             var boundedBody = TextBoundary.PlainText(
                 body,
                 MaxDraftCharacters);
@@ -53,14 +71,57 @@ namespace OutlookLocalAIChat.Office
 
             var blocks = DraftTextLayout.ParseBlocks(boundedBody);
             dynamic application = wordApplication;
-            dynamic document = application.Documents.Add();
-            AppendParagraph(
-                document,
-                new DraftTextLayout.Paragraph(
-                    heading,
-                    0,
-                    null),
-                StyleHeading1);
+            var mode = string.Equals(
+                placement,
+                "selection",
+                StringComparison.Ordinal)
+                ? 1
+                : (string.Equals(
+                       placement,
+                       "new_document",
+                       StringComparison.Ordinal)
+                    ? 2
+                    : 0);
+            dynamic document = null;
+            if (mode != 2)
+            {
+                try
+                {
+                    document = application.ActiveDocument;
+                }
+                catch
+                {
+                }
+
+                if (document == null)
+                {
+                    mode = 2;
+                }
+            }
+
+            if (mode == 1)
+            {
+                var replaced = ReplaceSelection(
+                    application,
+                    document,
+                    blocks);
+                return "Replaced the selection with " + replaced +
+                    " characters in the active document. Nothing " +
+                    "was saved - Ctrl+Z undoes it.";
+            }
+
+            if (mode == 2)
+            {
+                document = application.Documents.Add();
+                AppendParagraph(
+                    document,
+                    new DraftTextLayout.Paragraph(
+                        heading,
+                        0,
+                        null),
+                    StyleHeading1);
+            }
+
             var tables = 0;
             foreach (var block in blocks)
             {
@@ -109,6 +170,18 @@ namespace OutlookLocalAIChat.Office
             {
             }
 
+            if (mode == 0)
+            {
+                return "Appended " + boundedBody.Length +
+                    " characters" +
+                    (tables > 0
+                        ? " and " + tables +
+                          (tables == 1 ? " table" : " tables")
+                        : string.Empty) +
+                    " at the end of the active document. Nothing " +
+                    "was saved - Ctrl+Z undoes it.";
+            }
+
             return "Opened a new unsaved Word draft document of " +
                 boundedBody.Length + " characters" +
                 (tables > 0
@@ -116,6 +189,68 @@ namespace OutlookLocalAIChat.Office
                       (tables == 1 ? " table" : " tables")
                     : string.Empty) +
                 ". Nothing was saved.";
+        }
+
+        // Replaces the current selection with the drafted text
+        // (paragraph breaks and inline bold kept; headings, lists,
+        // and tables land as plain lines in this mode). Assigning
+        // Range.Text never deletes anything the replacement does
+        // not cover, and Word's Undo restores the selection.
+        private static int ReplaceSelection(
+            dynamic application,
+            dynamic document,
+            System.Collections.Generic.IReadOnlyList<object> blocks)
+        {
+            dynamic range = application.Selection.Range;
+            var start = (int)range.Start;
+            var text = new System.Text.StringBuilder();
+            var boldRanges =
+                new List<DraftTextLayout.BoldRange>();
+            foreach (var block in blocks)
+            {
+                var table = block as DraftTextLayout.Table;
+                if (table != null)
+                {
+                    foreach (var row in table.Rows)
+                    {
+                        text.Append(string.Join("  |  ", row));
+                        text.Append('\r');
+                    }
+
+                    continue;
+                }
+
+                var paragraph =
+                    (DraftTextLayout.Paragraph)block;
+                foreach (var bold in paragraph.BoldRanges)
+                {
+                    boldRanges.Add(
+                        new DraftTextLayout.BoldRange(
+                            text.Length + bold.Start,
+                            bold.Length));
+                }
+
+                text.Append(paragraph.Text);
+                text.Append('\r');
+            }
+
+            var replacement = text.ToString().TrimEnd('\r');
+            range.Text = replacement;
+            foreach (var bold in boldRanges)
+            {
+                try
+                {
+                    document.Range(
+                        start + bold.Start,
+                        start + bold.Start + bold.Length)
+                        .Font.Bold = 1;
+                }
+                catch
+                {
+                }
+            }
+
+            return replacement.Length;
         }
 
         // Inserts one paragraph at the end of the document; style
@@ -193,7 +328,9 @@ namespace OutlookLocalAIChat.Office
                     {
                         wordTable.Cell(row + 1, column + 1)
                             .Range.Text = TextBoundary.SingleLine(
-                                cells[column],
+                                SafeModelText.Format(
+                                    cells[column],
+                                    500).PlainText,
                                 500);
                     }
                 }
