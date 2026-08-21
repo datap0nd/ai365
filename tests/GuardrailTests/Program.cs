@@ -270,6 +270,9 @@ namespace GuardrailTests
                     "Corporate slide theme is hardcoded",
                     CorporateThemeIsHardcoded);
                 Run(
+                    "Transport follows the selected model",
+                    TransportFollowsSelectedModel);
+                Run(
                     "One request builds one deliverable",
                     DraftBudgetBuildsOneDeliverable);
                 Run(
@@ -4284,6 +4287,73 @@ namespace GuardrailTests
                 drafting.max_tokens.Value >= 2000 &&
                 !reading.max_tokens.HasValue,
                 "Draft turns need an explicit response budget.");
+        }
+
+        // The model picker is the only thing that decides where a
+        // request goes. The Gemini tick decides which models are
+        // OFFERED, nothing else - mixing the two is what sent qwen
+        // prompts to Google and gemini ids to a local server (HTTP
+        // 400).
+        private static void TransportFollowsSelectedModel()
+        {
+            Assert(
+                GeminiCodeAssistGateway.IsGeminiModel(
+                    "gemini-2.5-flash") &&
+                GeminiCodeAssistGateway.IsGeminiModel(
+                    "GEMINI-3-PRO-PREVIEW") &&
+                GeminiCodeAssistGateway.IsGeminiModel(
+                    "models/gemini-2.5-pro") &&
+                !GeminiCodeAssistGateway.IsGeminiModel(
+                    "qwen3-27b") &&
+                !GeminiCodeAssistGateway.IsGeminiModel(
+                    "gemma3-12b") &&
+                !GeminiCodeAssistGateway.IsGeminiModel("") &&
+                !GeminiCodeAssistGateway.IsGeminiModel(null),
+                "Gemini model classification is wrong.");
+            foreach (var known in
+                GeminiCodeAssistGateway.KnownModels)
+            {
+                Assert(
+                    GeminiCodeAssistGateway.IsGeminiModel(known),
+                    "A known Gemini model was not classified: " +
+                    known);
+            }
+
+            // A local model stays usable while Gemini sign-in is on.
+            var mixed = new AppSettings
+            {
+                BaseUrl = "https://ai.example.test/v1",
+                ApiKey = "key",
+                Model = "qwen3-27b",
+                UseGeminiSignIn = true
+            };
+            Assert(
+                mixed.IsConfigured &&
+                mixed.HasEndpointCredentials,
+                "A local model must stay usable with Gemini enabled.");
+
+            // A Gemini model needs no endpoint credentials.
+            var google = new AppSettings
+            {
+                Model = "gemini-2.5-flash",
+                UseGeminiSignIn = true
+            };
+            Assert(
+                google.IsConfigured &&
+                !google.HasEndpointCredentials,
+                "A Gemini model must be usable without an endpoint.");
+
+            // A Gemini model with the tick off is not configured -
+            // the pane must say so instead of posting a gemini id to
+            // a local server.
+            var stranded = new AppSettings
+            {
+                Model = "gemini-2.5-flash",
+                UseGeminiSignIn = false
+            };
+            Assert(
+                !stranded.IsConfigured,
+                "A Gemini model without sign-in must not count as configured.");
         }
 
         private static void CorporateThemeIsHardcoded()

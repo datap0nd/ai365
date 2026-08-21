@@ -114,7 +114,9 @@ namespace OutlookLocalAIChat.UI
         {
             LastCreated = this;
             _settings = _settingsStore.Load();
-            ContextScale.Apply(_settings.UseGeminiSignIn);
+            ContextScale.Apply(
+                GeminiCodeAssistGateway.IsGeminiModel(
+                    _settings.Model));
             _settings.ApplyLimits();
             _mcpTools = new McpToolHost(_settings.McpServers);
             _client.GeminiGateway.StatusListener =
@@ -1314,6 +1316,10 @@ namespace OutlookLocalAIChat.UI
             var activeModel = ModelRouting.ResolveForRequest(
                 _settings,
                 imagesExpected);
+            // Reading budgets follow the model this request will
+            // actually use, including a temporary vision switch.
+            ContextScale.Apply(
+                GeminiCodeAssistGateway.IsGeminiModel(activeModel));
             WorkbookToolHost workbookTools = null;
             PresentationToolHost presentationTools = null;
             WordToolHost wordTools = null;
@@ -1599,7 +1605,8 @@ namespace OutlookLocalAIChat.UI
                     _settings =
                         settingsWindow.SavedSettings;
                     ContextScale.Apply(
-                        _settings.UseGeminiSignIn);
+                        GeminiCodeAssistGateway.IsGeminiModel(
+                            _settings.Model));
                     _settings.ApplyLimits();
                     _mcpTools?.Dispose();
                     _mcpTools = new McpToolHost(

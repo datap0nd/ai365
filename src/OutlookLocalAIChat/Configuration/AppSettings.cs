@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using OutlookLocalAIChat.Chat;
 using OutlookLocalAIChat.Security;
 
 namespace OutlookLocalAIChat.Configuration
@@ -97,7 +98,8 @@ namespace OutlookLocalAIChat.Configuration
         {
             get
             {
-                if (UseGeminiSignIn)
+                if (UseGeminiSignIn &&
+                    GeminiCodeAssistGateway.IsGeminiModel(Model))
                 {
                     return Model.Trim().Length > 0;
                 }
@@ -105,6 +107,23 @@ namespace OutlookLocalAIChat.Configuration
                 Uri endpoint;
                 return Model.Trim().Length > 0 &&
                        ApiKey.Trim().Length > 0 &&
+                       TryGetChatCompletionsUri(
+                           BaseUrl,
+                           AllowInsecureHttp,
+                           out endpoint);
+            }
+        }
+
+        // True when the OpenAI-compatible endpoint alone is usable.
+        // Unlike HasConnectionSettings this ignores the Gemini tick,
+        // so the picker can offer local models alongside Gemini
+        // ones.
+        public bool HasEndpointCredentials
+        {
+            get
+            {
+                Uri endpoint;
+                return ApiKey.Trim().Length > 0 &&
                        TryGetChatCompletionsUri(
                            BaseUrl,
                            AllowInsecureHttp,

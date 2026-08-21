@@ -2100,9 +2100,12 @@ namespace OutlookLocalAIChat.UI
 
             var gemini = _useGeminiSignIn.Checked;
             var baseline = _commonControlsEnabled;
-            _endpoint.Enabled = baseline && !gemini;
-            _apiKey.Enabled = baseline && !gemini;
-            _allowInsecureHttp.Enabled = baseline && !gemini;
+            // Both transports coexist: the tick only adds Gemini
+            // models to the picker, so the endpoint stays editable
+            // and usable for local models at the same time.
+            _endpoint.Enabled = baseline;
+            _apiKey.Enabled = baseline;
+            _allowInsecureHttp.Enabled = baseline;
             _useGeminiSignIn.Enabled = baseline && !_signingIn;
             _geminiProject.Enabled = baseline && gemini;
             _googleSignIn.Enabled =
@@ -2110,7 +2113,8 @@ namespace OutlookLocalAIChat.UI
             if (!gemini)
             {
                 _googleStatus.Text =
-                    "Off - AI365 talks to the endpoint below.";
+                    "Off - only the endpoint's own models are " +
+                    "offered.";
             }
             else if (_signingIn)
             {
@@ -2122,7 +2126,10 @@ namespace OutlookLocalAIChat.UI
             {
                 _googleStatus.Text =
                     "Signed in with Google. Click Save to keep " +
-                    "this sign-in.";
+                    "this sign-in. Gemini models now appear in " +
+                    "the model list alongside your endpoint's " +
+                    "own models - the model you pick decides " +
+                    "where each request goes.";
             }
             else
             {

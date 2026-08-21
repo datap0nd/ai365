@@ -70,6 +70,43 @@ namespace OutlookLocalAIChat.Chat
                 "gemini-2.5-pro"
             };
 
+        // The single source of truth for "is this a Google model".
+        // Transport is chosen from the SELECTED MODEL, never from a
+        // mode switch, so the model picker is always the decider: a
+        // gemini-* id goes to the Gemini gateway and every other id
+        // goes to the configured OpenAI-compatible endpoint.
+        public static bool IsGeminiModel(string model)
+        {
+            var name = (model ?? string.Empty).Trim();
+            if (name.Length == 0)
+            {
+                return false;
+            }
+
+            if (name.StartsWith(
+                "gemini",
+                StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith(
+                    "models/gemini",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            foreach (var known in KnownModels)
+            {
+                if (string.Equals(
+                    known,
+                    name,
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private readonly JavaScriptSerializer _serializer =
             new JavaScriptSerializer
             {

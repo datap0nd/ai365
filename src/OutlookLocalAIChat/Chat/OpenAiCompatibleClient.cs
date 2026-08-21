@@ -67,7 +67,7 @@ namespace OutlookLocalAIChat.Chat
                 Action<string> onTextDelta,
                 CancellationToken cancellationToken)
         {
-            if (settings != null && settings.UseGeminiSignIn)
+            if (RoutesToGemini(settings, requestModel))
             {
                 return await _gemini.GenerateStreamAsync(
                     _httpClient,
@@ -81,6 +81,38 @@ namespace OutlookLocalAIChat.Chat
                 settings,
                 requestModel,
                 cancellationToken).ConfigureAwait(true);
+        }
+
+        // Transport follows the model the user picked, never the
+        // Gemini tick: that switch only decides whether Gemini
+        // models are offered at all. Picking qwen while Gemini
+        // sign-in is on must reach the local endpoint, and picking
+        // a gemini model must reach Google - the mismatch was what
+        // produced HTTP 400s from a local server being handed a
+        // gemini id.
+        private static bool RoutesToGemini(
+            AppSettings settings,
+            ChatCompletionRequest requestModel)
+        {
+            var model = requestModel?.model;
+            if (!GeminiCodeAssistGateway.IsGeminiModel(model))
+            {
+                return false;
+            }
+
+            if (settings == null || !settings.UseGeminiSignIn)
+            {
+                throw new AiEndpointException(
+                    "GEMINI_MODEL_NOT_ENABLED",
+                    "The selected model '" +
+                    TextBoundary.SingleLine(model, 80) +
+                    "' is a Google Gemini model, but Gemini " +
+                    "sign-in is off. Turn on Gemini sign-in in " +
+                    "Settings, or pick one of your endpoint's own " +
+                    "models.");
+            }
+
+            return true;
         }
 
         public async Task<ChatCompletionResponseMessage> CompleteAsync(
@@ -100,7 +132,7 @@ namespace OutlookLocalAIChat.Chat
                 throw new ArgumentNullException(nameof(requestModel));
             }
 
-            if (settings.UseGeminiSignIn)
+            if (RoutesToGemini(settings, requestModel))
             {
                 return await _gemini.GenerateAsync(
                     _httpClient,
@@ -250,6 +282,11 @@ namespace OutlookLocalAIChat.Chat
             }
         }
 
+        // The Gemini tick only decides whether Google models are
+        // OFFERED. With it on, the picker lists the Gemini models
+        // AND the endpoint's own models together, so switching to a
+        // local model is a picker choice rather than a settings
+        // change.
         public async Task<IReadOnlyList<string>> GetModelsAsync(
             AppSettings settings,
             CancellationToken cancellationToken)
@@ -259,14 +296,72 @@ namespace OutlookLocalAIChat.Chat
                 throw new ArgumentNullException(nameof(settings));
             }
 
-            if (settings.UseGeminiSignIn)
+            if (!settings.UseGeminiSignIn)
             {
-                return await _gemini.VerifySignInAsync(
-                    _httpClient,
+                return await FetchEndpointModelsAsync(
                     settings,
                     cancellationToken).ConfigureAwait(true);
             }
 
+            var offered = new List<string>();
+            Exception geminiFailure = null;
+            try
+            {
+                offered.AddRange(
+                    await _gemini.VerifySignInAsync(
+                        _httpClient,
+                        settings,
+                        cancellationToken).ConfigureAwait(true));
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                // Not signed in yet, or Google is unreachable: the
+                // endpoint's own models must still be offered.
+                geminiFailure = exception;
+            }
+
+            if (settings.HasEndpointCredentials)
+            {
+                try
+                {
+                    offered.AddRange(
+                        await FetchEndpointModelsAsync(
+                            settings,
+                            cancellationToken)
+                            .ConfigureAwait(true));
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception)
+                {
+                    // An unreachable local endpoint must never hide
+                    // the Gemini models that do work.
+                }
+            }
+
+            if (offered.Count == 0 && geminiFailure != null)
+            {
+                throw geminiFailure;
+            }
+
+            return offered
+                .Where(item =>
+                    !string.IsNullOrWhiteSpace(item))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private async Task<IReadOnlyList<string>>
+            FetchEndpointModelsAsync(
+                AppSettings settings,
+                CancellationToken cancellationToken)
+        {
             Uri endpoint;
             if (!AppSettings.TryGetModelsUri(
                 settings.BaseUrl,

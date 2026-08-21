@@ -5,6 +5,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Web.Script.Serialization;
+using OutlookLocalAIChat.Chat;
 using OutlookLocalAIChat.Security;
 
 namespace OutlookLocalAIChat.Configuration
@@ -126,7 +127,16 @@ namespace OutlookLocalAIChat.Configuration
                 throw new InvalidOperationException("Enter a model name.");
             }
 
-            if (!settings.UseGeminiSignIn)
+            // The endpoint is required whenever the selected model
+            // is not a Gemini model - the Gemini tick no longer
+            // decides the transport, the model does - and a typed
+            // endpoint is always validated even alongside Gemini.
+            var needsEndpoint =
+                !GeminiCodeAssistGateway.IsGeminiModel(
+                    settings.Model) ||
+                !settings.UseGeminiSignIn;
+            if (needsEndpoint ||
+                settings.BaseUrl.Trim().Length > 0)
             {
                 Uri endpoint;
                 if (!AppSettings.TryGetChatCompletionsUri(
@@ -138,7 +148,8 @@ namespace OutlookLocalAIChat.Configuration
                         "Use HTTPS, loopback HTTP, or explicitly allow insecure HTTP.");
                 }
 
-                if (settings.ApiKey.Trim().Length == 0)
+                if (needsEndpoint &&
+                    settings.ApiKey.Trim().Length == 0)
                 {
                     throw new InvalidOperationException("Enter an API key.");
                 }
