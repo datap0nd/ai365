@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Http;
@@ -129,36 +130,66 @@ namespace OutlookLocalAIChat.Utilities
                 waitWord = true;
             }
 
+            var hosts = new List<string>();
+            if (waitOutlook)
+            {
+                hosts.Add("OUTLOOK.EXE");
+            }
+
+            if (waitExcel)
+            {
+                hosts.Add("EXCEL.EXE");
+            }
+
+            if (waitPowerPoint)
+            {
+                hosts.Add("POWERPNT.EXE");
+            }
+
+            if (waitWord)
+            {
+                hosts.Add("WINWORD.EXE");
+            }
+
             var builder = new StringBuilder();
             builder.AppendLine("@echo off");
             builder.AppendLine("set \"installer=%~1\"");
             builder.AppendLine("set \"restart=%~2\"");
             builder.AppendLine("set tries=0");
+            // Ask each host to close itself first. The user was
+            // warned to save, and a polite close still lets Office
+            // run its own shutdown; anything still standing after
+            // the grace period below is closed for real.
+            foreach (var host in hosts)
+            {
+                builder.AppendLine(
+                    "taskkill /IM " + host + " >nul 2>&1");
+            }
+
             builder.AppendLine(":wait");
             builder.AppendLine("set running=0");
-            if (waitOutlook)
+            foreach (var host in hosts)
             {
-                AppendProcessWait(builder, "OUTLOOK.EXE");
-            }
-
-            if (waitExcel)
-            {
-                AppendProcessWait(builder, "EXCEL.EXE");
-            }
-
-            if (waitPowerPoint)
-            {
-                AppendProcessWait(builder, "POWERPNT.EXE");
-            }
-
-            if (waitWord)
-            {
-                AppendProcessWait(builder, "WINWORD.EXE");
+                AppendProcessWait(builder, host);
             }
 
             builder.AppendLine("if %running%==0 goto install");
             builder.AppendLine("set /a tries+=1");
             builder.AppendLine("if %tries% GEQ 150 exit /b 1");
+            // After about thirty seconds a host is almost certainly
+            // sitting on a save prompt, so it gets closed forcibly
+            // rather than stalling the update forever - which is
+            // exactly how installs silently never happened before.
+            builder.AppendLine("if %tries% GEQ 15 goto force");
+            builder.AppendLine("timeout /T 2 /NOBREAK >nul");
+            builder.AppendLine("goto wait");
+            builder.AppendLine(":force");
+            foreach (var host in hosts)
+            {
+                builder.AppendLine(
+                    "taskkill /F /IM " + host + " >nul 2>&1");
+            }
+
             builder.AppendLine("timeout /T 2 /NOBREAK >nul");
             builder.AppendLine("goto wait");
             builder.AppendLine(":install");

@@ -482,19 +482,34 @@ namespace OutlookLocalAIChat.UI
             var confirm = MessageBox.Show(
                 this,
                 "AI365 will download the latest version and install it " +
-                "silently once Outlook, Excel, PowerPoint, and Word are " +
-                "closed. " +
+                "silently. Outlook, Excel, PowerPoint, and Word are " +
+                "closed automatically so the update can finish" +
                 (_outlookApplication != null
-                    ? "Outlook closes and reopens automatically; close " +
-                      "Excel, PowerPoint, and Word yourself if they are " +
-                      "open. "
-                    : "Close the Office apps yourself to let the update " +
-                      "finish. ") +
-                "One update refreshes all four AI365 add-ins. Continue?",
+                    ? ", and Outlook reopens with the new version"
+                    : string.Empty) +
+                ". One update refreshes all four AI365 add-ins. " +
+                "Continue?",
                 "Update AI365",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Question);
             if (confirm != DialogResult.Yes)
+            {
+                return;
+            }
+
+            // Second, deliberate warning: the update closes the
+            // Office apps itself, so unsaved work must be saved
+            // first. Waiting for the user to close them by hand is
+            // what left installs silently unfinished.
+            var closeConfirm = MessageBox.Show(
+                this,
+                "This will close all Office apps (Outlook, Excel, " +
+                "PowerPoint, and Word).\r\n\r\n" +
+                "Please save any unsaved work before continuing.",
+                "AI365 will close your Office apps",
+                MessageBoxButtons.OKCancel,
+                MessageBoxIcon.Warning);
+            if (closeConfirm != DialogResult.OK)
             {
                 return;
             }
@@ -512,10 +527,10 @@ namespace OutlookLocalAIChat.UI
                         _updateCancellation.Token);
                 _updateStatus.ForeColor = SuccessText;
                 _updateStatus.Text = _outlookApplication != null
-                    ? "Update downloaded. Outlook will close and " +
-                      "reopen with the new version."
-                    : "Update downloaded. Close Outlook, Excel, " +
-                      "PowerPoint, and Word to let it install.";
+                    ? "Update downloaded. The Office apps close now " +
+                      "and Outlook reopens with the new version."
+                    : "Update downloaded. The Office apps close now " +
+                      "and the update installs automatically.";
                 SelfUpdater.LaunchUpdateAndQuitHost(
                     _outlookApplication,
                     installerPath,

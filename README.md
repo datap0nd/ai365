@@ -56,10 +56,18 @@ Entra ID.
    the generated drafting instructions, edit them, and enable the profile.
 
 To update later, open **Settings** in any AI365 pane and click
-**Update AI365**. After a confirmation it downloads the latest release
-installer, waits for Outlook, Excel, PowerPoint, and Word to close (Outlook closes
-and reopens automatically when the update starts there), and installs
-silently for your Windows account. One update refreshes the whole suite.
+**Update AI365**. You confirm twice - the second dialog warns that the
+Office apps are about to close, so save your work first - and AI365 then
+downloads the latest installer, **closes Outlook, Excel, PowerPoint, and
+Word itself**, and installs silently for your Windows account. Only the
+apps that actually have AI365 installed are closed; a host still sitting
+on a save prompt after about thirty seconds is closed forcibly, so an
+update can never stall unfinished. Outlook reopens automatically when the
+update was started there. One update refreshes the whole suite.
+
+Settings shows the **Installed version** (for example `2.0.27.0`); the
+release page states the version it publishes, so you can confirm an
+update actually landed.
 
 Examples:
 

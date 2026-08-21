@@ -4070,6 +4070,11 @@ namespace GuardrailTests
                 script.Contains("POWERPNT.EXE") &&
                 script.Contains("WINWORD.EXE") &&
                 script.Contains("if %tries% GEQ 150 exit /b 1") &&
+                // The update closes the hosts itself: politely
+                // first, forcibly once a save prompt has stalled it.
+                script.Contains("taskkill /IM OUTLOOK.EXE") &&
+                script.Contains("taskkill /F /IM WINWORD.EXE") &&
+                script.Contains("if %tries% GEQ 15 goto force") &&
                 script.Contains(
                     "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART") &&
                 script.Contains(
@@ -4091,6 +4096,11 @@ namespace GuardrailTests
                 !excelOnly.Contains("POWERPNT.EXE") &&
                 !excelOnly.Contains("WINWORD.EXE"),
                 "A component-scoped update must wait only for its own hosts.");
+            Assert(
+                excelOnly.Contains("taskkill /IM EXCEL.EXE") &&
+                excelOnly.Contains("taskkill /F /IM EXCEL.EXE") &&
+                !excelOnly.Contains("taskkill /IM OUTLOOK.EXE"),
+                "A component-scoped update must close only its own hosts.");
             var unknown = SelfUpdater.BuildUpdateScript(
                 false,
                 false,
