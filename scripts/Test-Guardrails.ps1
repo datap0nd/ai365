@@ -176,6 +176,12 @@ $addInSource = Get-Content $addInPath -Raw
 if (-not $addInSource.Contains("_chatPane?.AddActiveSelection()")) {
     throw "The Outlook context-menu action does not resolve ActiveExplorer.Selection."
 }
+# Opening the pane must never pull the selected email in on its own:
+# mailbox context is only ever added by a deliberate user action.
+if ($addInSource -notmatch
+    '(?s)OnOpenChat\(object control\).{0,400}?OpenChat\(control,\s*false\)') {
+    throw "Opening the Outlook pane must not capture the selected email."
+}
 
 $toneFactorySource = Get-Content $toneFactoryPath -Raw
 $settingsWindowSource = Get-Content $settingsWindowPath -Raw

@@ -212,7 +212,11 @@ namespace OutlookLocalAIChat.UI
                 }
 
                 var settings = _webView.CoreWebView2.Settings;
-                settings.AreDefaultContextMenusEnabled = false;
+                // Right-click works: copy, paste, select all, and
+                // the usual editing actions. Devtools stay off and
+                // the page still cannot navigate, so the menu adds
+                // convenience without widening the boundary.
+                settings.AreDefaultContextMenusEnabled = true;
                 settings.AreDevToolsEnabled = false;
                 settings.IsStatusBarEnabled = false;
                 settings.AreBrowserAcceleratorKeysEnabled = false;

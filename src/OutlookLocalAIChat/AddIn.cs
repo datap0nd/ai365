@@ -108,7 +108,11 @@ namespace OutlookLocalAIChat
 
         public void OnOpenChat(object control)
         {
-            OpenChat(control, true);
+            // Opening the pane never captures whatever happens to be
+            // selected: context is always something the user adds
+            // deliberately, by dragging emails onto the pane, using
+            // Add email, or right-clicking Send to AI365.
+            OpenChat(control, false);
         }
 
         private void OpenChat(

@@ -129,10 +129,14 @@ the tool-call probe allows up to 90 seconds.
 
 ## Use
 
-1. Open **AI365**. The chat appears as a sidebar inside Outlook.
-   You can also right-click selected email messages and choose **Send to AI365**.
-   The sidebar opens with `Selected: subject` at the top. Common `RE:`, `FW:`,
-   and `FWD:` prefixes are hidden in that display.
+1. Open **AI365**. The chat appears as a sidebar inside Outlook and starts
+   with **no context** - opening the pane never pulls in whatever email
+   happens to be selected. You add context deliberately: drag messages onto
+   the pane, use **Add email**, right-click messages and choose **Send to
+   AI365**, or run `/search`. Common `RE:`, `FW:`, and `FWD:` prefixes are
+   hidden where a subject is shown.
+   Right-click works inside the pane for the usual copy, paste, and select-all
+   actions.
 2. To choose a bounded group first, enter `/search person or topic`. AI365
    searches locally and keeps the newest matching Inbox or Sent Items
    emails as the working set (up to the working-set limit - ten by
